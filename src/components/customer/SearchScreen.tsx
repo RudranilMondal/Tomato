@@ -267,9 +267,78 @@ export const SearchScreen: React.FC = () => {
                 Restaurants Matching "{query}" ({matchingRestaurants.length})
               </h4>
               {matchingRestaurants.length === 0 && matchingDishes.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--color-text-muted)' }}>
-                  <p style={{ fontSize: '14px', fontWeight: 600 }}>No results found for "{query}"</p>
-                  <p style={{ fontSize: '12px', marginTop: '4px' }}>Try searching for "Biryani", "Pizza", or "Burgers"</p>
+                /* Fix #4 — Rich empty state with illustration + CTA */
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '48px 24px',
+                    textAlign: 'center'
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '90px',
+                      height: '90px',
+                      borderRadius: '50%',
+                      backgroundColor: 'var(--color-surface-muted)',
+                      border: '2px dashed var(--color-border)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '38px',
+                      marginBottom: '20px'
+                    }}
+                  >
+                    😕
+                  </div>
+                  <h3 style={{ fontSize: '17px', fontWeight: 800, color: 'var(--color-text-main)' }}>
+                    No results for "{query}"
+                  </h3>
+                  <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '8px', maxWidth: '240px', lineHeight: 1.5 }}>
+                    We couldn't find any restaurants or dishes matching your search.
+                  </p>
+                  <button
+                    onClick={() => setQuery('')}
+                    style={{
+                      marginTop: '20px',
+                      backgroundColor: 'var(--color-primary)',
+                      color: '#FFFFFF',
+                      padding: '10px 24px',
+                      borderRadius: 'var(--radius-full)',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      boxShadow: '0 4px 12px var(--color-primary-glow)'
+                    }}
+                  >
+                    Clear Search
+                  </button>
+                  <div style={{ marginTop: '24px', width: '100%' }}>
+                    <p style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-muted)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Try instead
+                    </p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
+                      {['Biryani', 'Pizza', 'Burgers', 'Dosa'].map((tag) => (
+                        <button
+                          key={tag}
+                          onClick={() => setQuery(tag)}
+                          style={{
+                            padding: '7px 14px',
+                            borderRadius: 'var(--radius-full)',
+                            backgroundColor: 'var(--color-surface-muted)',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            color: 'var(--color-text-main)',
+                            border: '1px solid var(--color-border)'
+                          }}
+                        >
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>

@@ -9,7 +9,8 @@ import {
   Moon,
   Sun,
   Play,
-  Monitor
+  Monitor,
+  LayoutGrid
 } from 'lucide-react';
 
 export const NavigationHeader: React.FC = () => {
@@ -26,28 +27,49 @@ export const NavigationHeader: React.FC = () => {
     startDemo
   } = useTomattto();
 
-  const navItems: { mode: AppMode; label: string; icon: React.ReactNode; badge?: number }[] = [
+  const [isMobileScreen, setIsMobileScreen] = React.useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
+
+  React.useEffect(() => {
+    const handleResize = () => {
+      setIsMobileScreen(window.innerWidth <= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const navItems: { mode: AppMode; label: string; shortLabel: string; icon: React.ReactNode; badge?: number | string }[] = [
     {
       mode: 'customer',
       label: 'Customer App',
-      icon: <Smartphone size={17} />
+      shortLabel: 'Customer',
+      icon: <Smartphone size={16} />
     },
     {
       mode: 'partner',
       label: 'Restaurant Partner',
-      icon: <Store size={17} />,
+      shortLabel: 'Partner',
+      icon: <Store size={16} />,
       badge: incomingOrder ? 1 : undefined
     },
     {
       mode: 'rider',
       label: 'Delivery Rider',
-      icon: <Bike size={17} />,
+      shortLabel: 'Rider',
+      icon: <Bike size={16} />,
       badge: riderDeliveryRequest ? 1 : undefined
     },
     {
       mode: 'admin',
       label: 'Admin Panel',
-      icon: <LayoutDashboard size={17} />
+      shortLabel: 'Admin',
+      icon: <LayoutDashboard size={16} />
+    },
+    {
+      mode: 'quad_view',
+      label: 'Ecosystem 360°',
+      shortLabel: '360°',
+      icon: <LayoutGrid size={16} />,
+      badge: 'LIVE'
     }
   ];
 
@@ -59,10 +81,12 @@ export const NavigationHeader: React.FC = () => {
         zIndex: 1000,
         backgroundColor: 'var(--color-surface)',
         borderBottom: '1px solid var(--color-border)',
-        padding: '10px 20px',
+        padding: isMobileScreen ? '8px 12px' : '10px 20px',
         display: 'flex',
+        flexWrap: isMobileScreen ? 'wrap' : 'nowrap',
         alignItems: 'center',
         justifyContent: 'space-between',
+        gap: isMobileScreen ? '8px' : '16px',
         boxShadow: 'var(--shadow-sm)'
       }}
     >
@@ -121,14 +145,21 @@ export const NavigationHeader: React.FC = () => {
 
       {/* Center App Switcher Tabs */}
       <div
+        className="no-scrollbar"
         style={{
           display: 'flex',
           alignItems: 'center',
           backgroundColor: 'var(--color-surface-muted)',
-          padding: '4px',
+          padding: '3px',
           borderRadius: 'var(--radius-full)',
-          gap: '4px',
-          border: '1px solid var(--color-border-subtle)'
+          gap: '3px',
+          border: '1px solid var(--color-border-subtle)',
+          overflowX: 'auto',
+          maxWidth: '100%',
+          flexShrink: 1,
+          order: isMobileScreen ? 3 : 2,
+          width: isMobileScreen ? '100%' : 'auto',
+          justifyContent: isMobileScreen ? 'flex-start' : 'center'
         }}
       >
         {navItems.map((item) => {
@@ -140,28 +171,30 @@ export const NavigationHeader: React.FC = () => {
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
-                padding: '8px 16px',
+                gap: '6px',
+                padding: isMobileScreen ? '6px 10px' : '8px 16px',
                 borderRadius: 'var(--radius-full)',
-                fontSize: '13px',
+                fontSize: isMobileScreen ? '12px' : '13px',
                 fontWeight: isActive ? 700 : 500,
                 color: isActive ? '#FFFFFF' : 'var(--color-text-main)',
                 backgroundColor: isActive ? 'var(--color-primary)' : 'transparent',
                 boxShadow: isActive ? '0 4px 12px var(--color-primary-glow)' : 'none',
                 position: 'relative',
-                transition: 'all 0.2s ease'
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap',
+                flexShrink: 0
               }}
             >
               {item.icon}
-              <span>{item.label}</span>
+              <span>{isMobileScreen ? item.shortLabel : item.label}</span>
               {item.badge && (
                 <span
                   style={{
                     backgroundColor: isActive ? '#FFFFFF' : 'var(--color-primary)',
                     color: isActive ? 'var(--color-primary)' : '#FFFFFF',
-                    fontSize: '10px',
+                    fontSize: '9px',
                     fontWeight: 800,
-                    padding: '2px 6px',
+                    padding: '2px 5px',
                     borderRadius: '10px',
                     lineHeight: 1
                   }}
@@ -175,26 +208,27 @@ export const NavigationHeader: React.FC = () => {
       </div>
 
       {/* Right Controls: Guided Demo, Frame Toggle, Dark Mode */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', order: isMobileScreen ? 2 : 3 }}>
         {/* 5-Min Guided Demo Button */}
         <button
           onClick={startDemo}
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '6px',
+            gap: '5px',
             backgroundColor: isDemoActive ? 'var(--color-primary-light)' : 'var(--color-surface)',
             color: 'var(--color-primary)',
             border: '1.5px solid var(--color-primary)',
-            padding: '7px 14px',
+            padding: isMobileScreen ? '6px 10px' : '7px 14px',
             borderRadius: 'var(--radius-full)',
-            fontSize: '12px',
+            fontSize: '11px',
             fontWeight: 700,
-            cursor: 'pointer'
+            cursor: 'pointer',
+            whiteSpace: 'nowrap'
           }}
         >
-          <Play size={14} fill="currentColor" />
-          <span>5-Min Client Demo</span>
+          <Play size={13} fill="currentColor" />
+          <span>{isMobileScreen ? 'Demo' : '5-Min Client Demo'}</span>
         </button>
 
         {/* Mobile Device Frame Toggle (visible in customer & rider app) */}

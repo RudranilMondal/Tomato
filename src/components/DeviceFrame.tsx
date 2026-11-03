@@ -9,6 +9,15 @@ interface DeviceFrameProps {
 export const DeviceFrame: React.FC<DeviceFrameProps> = ({ children }) => {
   const { isPhoneFrame } = useTomattto();
   const [time, setTime] = useState('9:41');
+  const [isMobileScreen, setIsMobileScreen] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 540);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileScreen(window.innerWidth <= 540);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     const updateTime = () => {
@@ -20,15 +29,16 @@ export const DeviceFrame: React.FC<DeviceFrameProps> = ({ children }) => {
     return () => clearInterval(timer);
   }, []);
 
-  if (!isPhoneFrame) {
+  if (!isPhoneFrame || isMobileScreen) {
     return (
       <div
         style={{
-          maxWidth: '480px',
+          width: '100%',
+          maxWidth: isMobileScreen ? '100%' : '480px',
           margin: '0 auto',
           minHeight: 'calc(100vh - 65px)',
           backgroundColor: 'var(--color-surface)',
-          boxShadow: 'var(--shadow-md)',
+          boxShadow: isMobileScreen ? 'none' : 'var(--shadow-md)',
           position: 'relative'
         }}
       >

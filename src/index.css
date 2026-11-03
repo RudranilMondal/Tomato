@@ -176,3 +176,78 @@ input, textarea, select {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Responsive Media Queries */
+@media (max-width: 768px) {
+  .hide-on-mobile {
+    display: none !important;
+  }
+  .show-on-mobile {
+    display: flex !important;
+  }
+  .mobile-flex-col {
+    flex-direction: column !important;
+  }
+  .mobile-w-full {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .mobile-p-sm {
+    padding: 10px 12px !important;
+  }
+  .mobile-grid-1 {
+    grid-template-columns: 1fr !important;
+  }
+  .mobile-grid-2 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .mobile-scroll-x {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+}
+
+@media (min-width: 769px) {
+  .show-on-mobile {
+    display: none !important;
+  }
+}
+
+/* ==========================================
+   Fix #1 — Active nav dot pulse entrance
+   Fix #2 — Banner fade transition
+   Fix #5 — Quantity stepper scale pop
+   ========================================== */
+
+@keyframes nav-dot-pop {
+  0%   { transform: translateX(-50%) scale(0); opacity: 0; }
+  60%  { transform: translateX(-50%) scale(1.4); opacity: 1; }
+  100% { transform: translateX(-50%) scale(1); opacity: 1; }
+}
+
+@keyframes banner-fade-in {
+  from { opacity: 0; transform: translateX(8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes qty-pop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.45); }
+  100% { transform: scale(1); }
+}
+
+/* Craving Roulette Mini Wheel Animation */
+@keyframes miniWheelSpin {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.mini-wheel-disc {
+  animation: miniWheelSpin 16s linear infinite;
+  transition: transform 0.4s ease;
+}
+
+.craving-card:hover .mini-wheel-disc {
+  animation: miniWheelSpin 2.5s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}

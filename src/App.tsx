@@ -6,6 +6,7 @@ import { CustomerApp } from './components/customer/CustomerApp';
 import { PartnerApp } from './components/partner/PartnerApp';
 import { RiderApp } from './components/rider/RiderApp';
 import { AdminApp } from './components/admin/AdminApp';
+import { EcosystemQuadView } from './components/EcosystemQuadView';
 import { DemoWalkthroughBar } from './components/DemoWalkthroughBar';
 
 export const AppContent: React.FC = () => {
@@ -33,6 +34,8 @@ export const AppContent: React.FC = () => {
         )}
 
         {appMode === 'admin' && <AdminApp />}
+
+        {appMode === 'quad_view' && <EcosystemQuadView />}
       </main>
 
       {/* 5-Minute Guided Demo floating assistant */}

@@ -11,8 +11,11 @@ import {
   ShieldCheck,
   Trash2,
   Clock,
-  ArrowRight
+  ArrowRight,
+  Calendar
 } from 'lucide-react';
+import { OffersModal } from './OffersModal';
+import { ScheduleOrderModal } from './ScheduleOrderModal';
 
 interface CartScreenProps {
   onOpenPayment: () => void;
@@ -36,6 +39,17 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onOpenPayment }) => {
   const [couponError, setCouponError] = useState('');
   const [tip, setTip] = useState<number>(30);
   const [deliveryInstruction, setDeliveryInstruction] = useState<string>('Leave at door');
+  const [isOffersModalOpen, setIsOffersModalOpen] = useState(false);
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const [scheduledTime, setScheduledTime] = useState<string | null>(null);
+  // Fix #5 — track which cart item's quantity was just changed for pulse animation
+  const [pulsedId, setPulsedId] = useState<string | null>(null);
+
+  const handleQuantityChange = (cartItemId: string, delta: number) => {
+    updateQuantity(cartItemId, delta);
+    setPulsedId(cartItemId);
+    setTimeout(() => setPulsedId(null), 200);
+  };
 
   if (cart.length === 0 || !selectedRestaurant) {
     return (
@@ -153,22 +167,54 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onOpenPayment }) => {
         </button>
       </div>
 
-      {/* Delivery ETA Strip */}
+      {/* Delivery ETA & Schedule Strip */}
       <div
+        onClick={() => setIsScheduleModalOpen(true)}
         style={{
-          padding: '8px 16px',
-          backgroundColor: 'var(--color-surface-elevated)',
+          padding: '9px 16px',
+          backgroundColor: scheduledTime ? 'rgba(255, 75, 58, 0.12)' : 'var(--color-surface-elevated)',
           borderBottom: '1px solid var(--color-border-subtle)',
           display: 'flex',
           alignItems: 'center',
-          gap: '8px',
+          justifyContent: 'space-between',
           fontSize: '12px',
           fontWeight: 600,
-          color: 'var(--color-text-main)'
+          color: 'var(--color-text-main)',
+          cursor: 'pointer'
         }}
       >
-        <Clock size={14} color="var(--color-primary)" />
-        <span>Standard Delivery in <b>22-26 mins</b></span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {scheduledTime ? (
+            <Calendar size={14} color="var(--color-primary)" />
+          ) : (
+            <Clock size={14} color="var(--color-primary)" />
+          )}
+          <span>
+            {scheduledTime ? (
+              <span>
+                Scheduled for <b style={{ color: 'var(--color-primary)' }}>{scheduledTime}</b>
+              </span>
+            ) : (
+              <span>
+                Standard Delivery in <b>22-26 mins</b>
+              </span>
+            )}
+          </span>
+        </div>
+
+        <span
+          style={{
+            fontSize: '11px',
+            fontWeight: 700,
+            color: 'var(--color-primary)',
+            backgroundColor: 'var(--color-surface)',
+            padding: '2px 8px',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--color-border)'
+          }}
+        >
+          {scheduledTime ? 'Change' : 'Schedule ➔'}
+        </span>
       </div>
 
       {/* Scrollable Content */}
@@ -251,16 +297,25 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onOpenPayment }) => {
                   }}
                 >
                   <button
-                    onClick={() => updateQuantity(cartItem.id, -1)}
+                    onClick={() => handleQuantityChange(cartItem.id, -1)}
                     style={{ color: 'var(--color-primary)', display: 'flex' }}
                   >
                     <Minus size={13} />
                   </button>
-                  <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--color-primary)' }}>
+                  <span
+                    style={{
+                      fontSize: '12px',
+                      fontWeight: 800,
+                      color: 'var(--color-primary)',
+                      display: 'inline-block',
+                      transition: 'transform 0.15s ease',
+                      transform: pulsedId === cartItem.id ? 'scale(1.4)' : 'scale(1)'
+                    }}
+                  >
                     {cartItem.quantity}
                   </span>
                   <button
-                    onClick={() => updateQuantity(cartItem.id, 1)}
+                    onClick={() => handleQuantityChange(cartItem.id, 1)}
                     style={{ color: 'var(--color-primary)', display: 'flex' }}
                   >
                     <Plus size={13} />
@@ -298,9 +353,25 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onOpenPayment }) => {
             marginBottom: '14px'
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-            <Tag size={16} color="var(--color-primary)" />
-            <h4 style={{ fontSize: '13px', fontWeight: 800 }}>Coupons & Offers</h4>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Tag size={16} color="var(--color-primary)" />
+              <h4 style={{ fontSize: '13px', fontWeight: 800 }}>Coupons & Offers</h4>
+            </div>
+
+            <button
+              onClick={() => setIsOffersModalOpen(true)}
+              style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                color: 'var(--color-primary)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              View all offers
+            </button>
           </div>
 
           {appliedCoupon ? (
@@ -601,6 +672,20 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onOpenPayment }) => {
           <ArrowRight size={16} />
         </button>
       </div>
+
+      {/* Offers & Coupons Explorer Modal */}
+      <OffersModal
+        isOpen={isOffersModalOpen}
+        onClose={() => setIsOffersModalOpen(false)}
+      />
+
+      {/* Schedule Order Time Slot Modal */}
+      <ScheduleOrderModal
+        isOpen={isScheduleModalOpen}
+        onClose={() => setIsScheduleModalOpen(false)}
+        selectedSchedule={scheduledTime}
+        onSelectSchedule={(slot) => setScheduledTime(slot)}
+      />
     </div>
   );
 };

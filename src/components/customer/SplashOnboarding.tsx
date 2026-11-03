@@ -180,26 +180,46 @@ export const SplashOnboarding: React.FC = () => {
             <ChevronRight size={18} />
           </button>
         ) : (
-          <button
-            onClick={() => setCustomerScreen('home')}
-            style={{
-              width: '100%',
-              backgroundColor: 'var(--color-primary)',
-              color: '#FFFFFF',
-              padding: '14px',
-              borderRadius: 'var(--radius-md)',
-              fontSize: '15px',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              boxShadow: 'var(--shadow-glow)'
-            }}
-          >
-            <span>Explore Restaurants</span>
-            <ArrowRight size={18} />
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <button
+              onClick={() => setCustomerScreen('auth')}
+              style={{
+                width: '100%',
+                backgroundColor: 'var(--color-primary)',
+                color: '#FFFFFF',
+                padding: '14px',
+                borderRadius: 'var(--radius-md)',
+                fontSize: '15px',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                boxShadow: 'var(--shadow-glow)',
+                cursor: 'pointer'
+              }}
+            >
+              <span>Get Started / Log In</span>
+              <ArrowRight size={18} />
+            </button>
+
+            <button
+              onClick={() => setCustomerScreen('home')}
+              style={{
+                width: '100%',
+                backgroundColor: 'var(--color-surface-muted)',
+                color: 'var(--color-text-main)',
+                padding: '12px',
+                borderRadius: 'var(--radius-md)',
+                fontSize: '13px',
+                fontWeight: 600,
+                border: '1px solid var(--color-border)',
+                cursor: 'pointer'
+              }}
+            >
+              Explore as Guest
+            </button>
+          </div>
         )}
       </div>
     </div>

@@ -11,14 +11,22 @@ import {
   Store,
   ChevronDown,
   ChevronUp,
-  Star
+  Star,
+  FileText
 } from 'lucide-react';
+import { RiderChatModal } from './RiderChatModal';
+import { RiderCallModal } from './RiderCallModal';
+import { OrderReviewModal } from './OrderReviewModal';
+import { InvoiceModal } from './InvoiceModal';
 
 export const OrderTrackingScreen: React.FC = () => {
   const { currentOrder, setCustomerScreen } = useTomattto();
   const [riderProgress, setRiderProgress] = useState(30); // percentage along route
   const [showItems, setShowItems] = useState(false);
-  const [showCallAlert, setShowCallAlert] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isCallOpen, setIsCallOpen] = useState(false);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
 
   // Animate mock rider moving smoothly along the route
   useEffect(() => {
@@ -377,7 +385,7 @@ export const OrderTrackingScreen: React.FC = () => {
             {/* Call / Chat Actions */}
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
-                onClick={() => setShowCallAlert(true)}
+                onClick={() => setIsCallOpen(true)}
                 style={{
                   width: '36px',
                   height: '36px',
@@ -388,28 +396,70 @@ export const OrderTrackingScreen: React.FC = () => {
                   alignItems: 'center',
                   justifyContent: 'center'
                 }}
+                title="Call Rider"
               >
                 <Phone size={16} />
               </button>
 
               <button
-                onClick={() => alert(`Opening chat with ${currentOrder.rider?.name}`)}
+                onClick={() => setIsChatOpen(true)}
                 style={{
                   width: '36px',
                   height: '36px',
                   borderRadius: '50%',
-                  backgroundColor: 'var(--color-surface-muted)',
-                  color: 'var(--color-text-main)',
+                  backgroundColor: 'var(--color-primary-light)',
+                  color: 'var(--color-primary)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center'
                 }}
+                title="Chat with Rider"
               >
                 <MessageSquare size={16} />
               </button>
             </div>
           </div>
         )}
+
+        {/* Rate Order & Food Banner Action */}
+        <div
+          onClick={() => setIsReviewOpen(true)}
+          style={{
+            marginBottom: '16px',
+            padding: '12px 16px',
+            borderRadius: 'var(--radius-lg)',
+            background: 'linear-gradient(135deg, var(--color-surface) 0%, var(--color-surface-muted) 100%)',
+            border: '1px solid var(--color-border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            cursor: 'pointer',
+            boxShadow: 'var(--shadow-sm)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '20px' }}>⭐</span>
+            <div>
+              <h5 style={{ fontSize: '13px', fontWeight: 800 }}>Rate Your Feast & Rider</h5>
+              <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                Share feedback for {currentOrder.restaurant.name}
+              </span>
+            </div>
+          </div>
+
+          <button
+            style={{
+              padding: '6px 12px',
+              borderRadius: 'var(--radius-sm)',
+              backgroundColor: 'var(--color-primary)',
+              color: '#FFFFFF',
+              fontSize: '11px',
+              fontWeight: 700
+            }}
+          >
+            Rate
+          </button>
+        </div>
 
         {/* Order Stepper Progress */}
         <div
@@ -520,70 +570,65 @@ export const OrderTrackingScreen: React.FC = () => {
                   <span style={{ fontWeight: 600 }}>₹{item.itemTotal}</span>
                 </div>
               ))}
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsInvoiceOpen(true);
+                }}
+                style={{
+                  marginTop: '8px',
+                  width: '100%',
+                  padding: '8px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  backgroundColor: 'var(--color-surface-muted)',
+                  color: 'var(--color-text-main)',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  border: '1px solid var(--color-border)'
+                }}
+              >
+                <FileText size={13} color="var(--color-primary)" />
+                <span>Download Official Tax Invoice</span>
+              </button>
             </div>
           )}
         </div>
       </div>
 
-      {/* Simulated Call Notification */}
-      {showCallAlert && (
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            backgroundColor: 'rgba(0,0,0,0.6)',
-            zIndex: 100,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px'
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: 'var(--color-surface)',
-              borderRadius: 'var(--radius-lg)',
-              padding: '20px',
-              textAlign: 'center',
-              maxWidth: '300px'
-            }}
-          >
-            <div
-              style={{
-                width: '48px',
-                height: '48px',
-                borderRadius: '50%',
-                backgroundColor: 'var(--color-veg-bg)',
-                color: 'var(--color-veg)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 12px'
-              }}
-            >
-              <Phone size={24} />
-            </div>
-            <h4 style={{ fontSize: '15px', fontWeight: 800 }}>Calling Vikram Singh</h4>
-            <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-              Connecting through Tomattto Secure Masked Proxy...
-            </p>
-            <button
-              onClick={() => setShowCallAlert(false)}
-              style={{
-                marginTop: '16px',
-                backgroundColor: '#E74C3C',
-                color: '#FFFFFF',
-                padding: '8px 20px',
-                borderRadius: 'var(--radius-full)',
-                fontSize: '12px',
-                fontWeight: 700
-              }}
-            >
-              End Call
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Rider Chat Modal */}
+      <RiderChatModal
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        onCallRider={() => {
+          setIsChatOpen(false);
+          setIsCallOpen(true);
+        }}
+      />
+
+      {/* Simulated Live Call Screen */}
+      <RiderCallModal
+        isOpen={isCallOpen}
+        onClose={() => setIsCallOpen(false)}
+      />
+
+      {/* Post-Order Rating & Review Sheet */}
+      <OrderReviewModal
+        isOpen={isReviewOpen}
+        onClose={() => setIsReviewOpen(false)}
+        orderId={currentOrder.id}
+      />
+
+      {/* Tax Invoice Modal */}
+      <InvoiceModal
+        isOpen={isInvoiceOpen}
+        onClose={() => setIsInvoiceOpen(false)}
+        order={currentOrder}
+      />
     </div>
   );
 };

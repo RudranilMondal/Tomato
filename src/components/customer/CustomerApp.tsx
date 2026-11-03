@@ -9,6 +9,7 @@ import { OrderSuccessScreen } from './OrderSuccessScreen';
 import { OrderTrackingScreen } from './OrderTrackingScreen';
 import { OrdersHistoryScreen } from './OrdersHistoryScreen';
 import { ProfileScreen } from './ProfileScreen';
+import { AuthScreen } from './AuthScreen';
 import { LocationModal } from './LocationModal';
 import { DishCustomizerModal } from './DishCustomizerModal';
 import { PaymentModal } from './PaymentModal';
@@ -21,9 +22,13 @@ export const CustomerApp: React.FC = () => {
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
-  // If splash / onboarding screen
+  // If splash / onboarding screen or auth
   if (customerScreen === 'splash' || customerScreen === 'onboarding') {
     return <SplashOnboarding />;
+  }
+
+  if (customerScreen === 'auth') {
+    return <AuthScreen />;
   }
 
   const renderActiveScreen = () => {
@@ -127,6 +132,22 @@ export const CustomerApp: React.FC = () => {
               >
                 <div style={{ position: 'relative' }}>
                   {tab.icon}
+                  {/* Fix #1 — Active indicator dot below icon */}
+                  {isActive && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        bottom: '-5px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        width: '4px',
+                        height: '4px',
+                        borderRadius: '50%',
+                        backgroundColor: 'var(--color-primary)',
+                        animation: 'nav-dot-pop 0.25s ease forwards'
+                      }}
+                    />
+                  )}
                   {tab.badge !== undefined && tab.badge > 0 && (
                     <span
                       style={{

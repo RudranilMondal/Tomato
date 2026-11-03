@@ -1,9 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTomattto } from '../../context/TomatttoContext';
-import { ShoppingBag, ArrowLeft, RotateCcw, ChevronRight } from 'lucide-react';
+import { ShoppingBag, ArrowLeft, RotateCcw, ChevronRight, Star, FileText } from 'lucide-react';
+import { OrderReviewModal } from './OrderReviewModal';
+import { InvoiceModal } from './InvoiceModal';
+import { Order } from '../../types';
 
 export const OrdersHistoryScreen: React.FC = () => {
   const { allOrders, setCustomerScreen, setCurrentOrder } = useTomattto();
+  const [reviewOrderId, setReviewOrderId] = useState<string | null>(null);
+  const [invoiceOrder, setInvoiceOrder] = useState<Order | null>(null);
 
   return (
     <div style={{ flex: 1, backgroundColor: 'var(--color-bg)', display: 'flex', flexDirection: 'column' }}>
@@ -90,7 +95,47 @@ export const OrdersHistoryScreen: React.FC = () => {
                 >
                   <span style={{ fontSize: '13px', fontWeight: 800 }}>₹{order.totalAmount}</span>
 
-                  <div style={{ display: 'flex', gap: '8px' }}>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button
+                      onClick={() => setInvoiceOrder(order)}
+                      style={{
+                        padding: '6px 10px',
+                        borderRadius: 'var(--radius-sm)',
+                        backgroundColor: 'var(--color-surface-muted)',
+                        color: 'var(--color-text-main)',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        border: '1px solid var(--color-border)'
+                      }}
+                      title="View & Download Tax Invoice"
+                    >
+                      <FileText size={11} />
+                      <span>Invoice</span>
+                    </button>
+
+                    <button
+                      onClick={() => setReviewOrderId(order.id)}
+                      style={{
+                        padding: '6px 10px',
+                        borderRadius: 'var(--radius-sm)',
+                        backgroundColor: 'var(--color-surface-muted)',
+                        color: '#D35400',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        border: '1px solid var(--color-border)'
+                      }}
+                      title="Rate Food & Rider"
+                    >
+                      <Star size={11} fill="#D35400" />
+                      <span>Rate</span>
+                    </button>
+
                     <button
                       onClick={() => {
                         setCurrentOrder(order);
@@ -140,6 +185,21 @@ export const OrdersHistoryScreen: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Review Modal for Past Order */}
+      <OrderReviewModal
+        isOpen={reviewOrderId !== null}
+        onClose={() => setReviewOrderId(null)}
+        orderId={reviewOrderId || undefined}
+      />
+
+      {/* Tax Invoice Modal */}
+      <InvoiceModal
+        isOpen={invoiceOrder !== null}
+        onClose={() => setInvoiceOrder(null)}
+        order={invoiceOrder}
+      />
     </div>
   );
 };
+

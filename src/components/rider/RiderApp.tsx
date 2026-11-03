@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
 import { useTomattto } from '../../context/TomatttoContext';
+import { RiderRouteModal } from './RiderRouteModal';
+import { RiderProofModal } from './RiderProofModal';
+import { RiderEarningsModal } from './RiderEarningsModal';
+import { RiderSosModal } from './RiderSosModal';
+import { RiderTripsModal } from './RiderTripsModal';
+import { RiderKycModal } from './RiderKycModal';
+import { RiderProfileModal } from './RiderProfileModal';
+import { RiderOnboardingWizard } from './RiderOnboardingWizard';
 import {
   Bike,
   Power,
@@ -12,7 +20,20 @@ import {
   TrendingUp,
   ShieldCheck,
   Star,
-  ArrowRight
+  ArrowRight,
+  ShieldAlert,
+  Camera,
+  Map,
+  FileCheck,
+  ClipboardList,
+  Flame,
+  Zap,
+  Award,
+  Fuel,
+  Sparkles,
+  UserCheck,
+  RefreshCw,
+  User
 } from 'lucide-react';
 
 export const RiderApp: React.FC = () => {
@@ -28,11 +49,26 @@ export const RiderApp: React.FC = () => {
     riderCompleteDelivery,
     riderEarningsToday,
     riderTripsToday,
-    currentOrder
+    triggerSimulatedDeliveryRequest,
+    currentOrder,
+    riderOnboardingStatus,
+    resetRiderOnboarding
   } = useTomattto();
 
   const [enteredOtp, setEnteredOtp] = useState('');
   const [otpError, setOtpError] = useState('');
+  const [isRouteModalOpen, setIsRouteModalOpen] = useState(false);
+  const [isProofModalOpen, setIsProofModalOpen] = useState(false);
+  const [isEarningsModalOpen, setIsEarningsModalOpen] = useState(false);
+  const [isSosModalOpen, setIsSosModalOpen] = useState(false);
+  const [isTripsModalOpen, setIsTripsModalOpen] = useState(false);
+  const [isKycModalOpen, setIsKycModalOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+
+  // If rider is not approved yet, display the full onboarding wizard & status screen
+  if (riderOnboardingStatus !== 'approved') {
+    return <RiderOnboardingWizard />;
+  }
 
   const order = activeRiderOrder || riderDeliveryRequest || currentOrder;
 
@@ -68,14 +104,27 @@ export const RiderApp: React.FC = () => {
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div
+            onClick={() => setIsProfileModalOpen(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              cursor: 'pointer',
+              padding: '4px 6px',
+              borderRadius: 'var(--radius-md)',
+              transition: 'background-color 0.15s'
+            }}
+            title="Click to view full Rider Profile & KYC details"
+          >
             <div
               style={{
-                width: '40px',
-                height: '40px',
+                width: '42px',
+                height: '42px',
                 borderRadius: '50%',
                 overflow: 'hidden',
-                border: '2px solid var(--color-primary)'
+                border: '2px solid var(--color-primary)',
+                position: 'relative'
               }}
             >
               <img
@@ -103,33 +152,91 @@ export const RiderApp: React.FC = () => {
                   <span>4.9</span>
                   <Star size={9} fill="#D35400" />
                 </span>
+                <span
+                  style={{
+                    fontSize: '9px',
+                    fontWeight: 800,
+                    backgroundColor: 'rgba(255, 75, 58, 0.15)',
+                    color: 'var(--color-primary)',
+                    padding: '1px 5px',
+                    borderRadius: '4px'
+                  }}
+                >
+                  Profile ➔
+                </span>
               </div>
               <span style={{ fontSize: '11px', color: '#A5A5B2' }}>KA 03 EN 4592 • Honda Shine</span>
             </div>
           </div>
 
-          {/* Shift Toggle */}
-          <button
-            onClick={() => setIsRiderOnline(!isRiderOnline)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '6px 12px',
-              borderRadius: 'var(--radius-full)',
-              backgroundColor: isRiderOnline ? 'var(--color-veg)' : 'rgba(255,255,255,0.15)',
-              color: '#FFFFFF',
-              fontSize: '11px',
-              fontWeight: 700
-            }}
-          >
-            <Power size={13} />
-            <span>{isRiderOnline ? 'ON DUTY' : 'GO ONLINE'}</span>
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {/* Test Onboarding Flow Toggle */}
+            <button
+              onClick={resetRiderOnboarding}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '6px 10px',
+                borderRadius: 'var(--radius-full)',
+                backgroundColor: 'rgba(255, 75, 58, 0.15)',
+                color: 'var(--color-primary)',
+                border: '1px solid rgba(255, 75, 58, 0.4)',
+                fontSize: '11px',
+                fontWeight: 800,
+                cursor: 'pointer'
+              }}
+              title="Click to test the Rider Onboarding & KYC submission workflow"
+            >
+              <RefreshCw size={12} />
+              <span>Test Onboarding</span>
+            </button>
+
+            {/* SOS Emergency button */}
+            <button
+              onClick={() => setIsSosModalOpen(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '6px 10px',
+                borderRadius: 'var(--radius-full)',
+                backgroundColor: 'rgba(231, 76, 60, 0.2)',
+                color: '#FF6B6B',
+                border: '1.5px solid #FF6B6B',
+                fontSize: '11px',
+                fontWeight: 800
+              }}
+              title="Emergency SOS"
+            >
+              <ShieldAlert size={13} />
+              <span>SOS</span>
+            </button>
+
+            {/* Shift Toggle */}
+            <button
+              onClick={() => setIsRiderOnline(!isRiderOnline)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                borderRadius: 'var(--radius-full)',
+                backgroundColor: isRiderOnline ? 'var(--color-veg)' : 'rgba(255,255,255,0.15)',
+                color: '#FFFFFF',
+                fontSize: '11px',
+                fontWeight: 700
+              }}
+            >
+              <Power size={13} />
+              <span>{isRiderOnline ? 'ON DUTY' : 'GO ONLINE'}</span>
+            </button>
+          </div>
         </div>
 
-        {/* Daily Stats Bar */}
+        {/* Daily Stats Bar (clickable to open passbook) */}
         <div
+          onClick={() => setIsEarningsModalOpen(true)}
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(2, 1fr)',
@@ -137,13 +244,14 @@ export const RiderApp: React.FC = () => {
             marginTop: '14px',
             backgroundColor: 'rgba(255,255,255,0.06)',
             padding: '10px 14px',
-            borderRadius: 'var(--radius-md)'
+            borderRadius: 'var(--radius-md)',
+            cursor: 'pointer'
           }}
         >
           <div>
-            <span style={{ fontSize: '10px', color: '#A5A5B2' }}>Today's Earnings</span>
+            <span style={{ fontSize: '10px', color: '#A5A5B2' }}>Today's Earnings (Tap for passbook)</span>
             <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--color-veg)' }}>
-              ₹{riderEarningsToday}
+              ₹{riderEarningsToday} ➔
             </div>
           </div>
 
@@ -153,6 +261,75 @@ export const RiderApp: React.FC = () => {
               {riderTripsToday} deliveries
             </div>
           </div>
+        </div>
+
+        {/* Quick Action Pills */}
+        <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+          <button
+            onClick={() => setIsProfileModalOpen(true)}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              padding: '7px 10px',
+              borderRadius: 'var(--radius-sm)',
+              backgroundColor: 'rgba(255, 75, 58, 0.15)',
+              color: '#FFFFFF',
+              fontSize: '11px',
+              fontWeight: 700,
+              border: '1px solid rgba(255, 75, 58, 0.4)',
+              cursor: 'pointer'
+            }}
+          >
+            <User size={13} color="var(--color-primary)" />
+            <span>Full Profile</span>
+          </button>
+
+          <button
+            onClick={() => setIsTripsModalOpen(true)}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              padding: '7px 10px',
+              borderRadius: 'var(--radius-sm)',
+              backgroundColor: 'rgba(255,255,255,0.08)',
+              color: '#FFFFFF',
+              fontSize: '11px',
+              fontWeight: 700,
+              border: '1px solid rgba(255,255,255,0.1)',
+              cursor: 'pointer'
+            }}
+          >
+            <ClipboardList size={13} color="var(--color-primary)" />
+            <span>Trips</span>
+          </button>
+
+          <button
+            onClick={() => setIsKycModalOpen(true)}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              padding: '7px 10px',
+              borderRadius: 'var(--radius-sm)',
+              backgroundColor: 'rgba(255,255,255,0.08)',
+              color: '#FFFFFF',
+              fontSize: '11px',
+              fontWeight: 700,
+              border: '1px solid rgba(255,255,255,0.1)',
+              cursor: 'pointer'
+            }}
+          >
+            <FileCheck size={13} color="var(--color-veg)" />
+            <span>KYC & Docs</span>
+          </button>
         </div>
       </div>
 
@@ -296,13 +473,31 @@ export const RiderApp: React.FC = () => {
               >
                 ↱
               </div>
-              <div>
+              <div style={{ flex: 1 }}>
                 <span style={{ fontSize: '12px', color: '#A5A5B2' }}>In 250 metres</span>
                 <h5 style={{ fontSize: '15px', fontWeight: 800 }}>Turn right onto 100ft Road</h5>
                 <span style={{ fontSize: '11px', color: 'var(--color-veg)', fontWeight: 700 }}>
                   Fastest route • 4 mins away
                 </span>
               </div>
+
+              <button
+                onClick={() => setIsRouteModalOpen(true)}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  backgroundColor: 'rgba(255,255,255,0.12)',
+                  color: '#FFFFFF',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                <Map size={13} />
+                <span>Map</span>
+              </button>
             </div>
 
             {/* OTP Verification Box */}
@@ -387,33 +582,227 @@ export const RiderApp: React.FC = () => {
           </div>
         )}
 
-        {/* Idle State when no order active */}
+        {/* Rich Idle State when searching for orders */}
         {!activeRiderOrder && !riderDeliveryRequest && (
-          <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--color-text-muted)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', paddingBottom: '20px' }}>
+            {/* Live Radar Banner */}
             <div
               style={{
-                width: '64px',
-                height: '64px',
-                borderRadius: '50%',
-                backgroundColor: 'var(--color-veg-bg)',
-                color: 'var(--color-veg)',
+                backgroundColor: 'var(--color-surface)',
+                borderRadius: 'var(--radius-lg)',
+                padding: '16px',
+                border: '1px solid var(--color-border)',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 16px'
+                justifyContent: 'space-between',
+                boxShadow: 'var(--shadow-sm)'
               }}
             >
-              <Bike size={32} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div
+                  style={{
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '50%',
+                    backgroundColor: 'rgba(46, 204, 113, 0.15)',
+                    color: 'var(--color-veg)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    animation: 'pulseGlow 2s infinite'
+                  }}
+                >
+                  <Bike size={22} />
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--color-veg)' }} />
+                    <h4 style={{ fontSize: '14px', fontWeight: 800 }}>Radar Searching...</h4>
+                  </div>
+                  <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+                    Stationed at Indiranagar 100ft Rd Hub
+                  </p>
+                </div>
+              </div>
+
+              {/* Instant Test Simulation Button */}
+              <button
+                onClick={triggerSimulatedDeliveryRequest}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: 'var(--radius-sm)',
+                  backgroundColor: 'var(--color-primary)',
+                  color: '#FFFFFF',
+                  fontSize: '11px',
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 4px 12px var(--color-primary-glow)'
+                }}
+              >
+                <Zap size={13} fill="#FFFFFF" />
+                <span>Simulate Order (₹65)</span>
+              </button>
             </div>
-            <h4 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--color-text-main)' }}>
-              You're Online & Searching
-            </h4>
-            <p style={{ fontSize: '12px', marginTop: '6px', maxWidth: '240px', margin: '6px auto 0' }}>
-              Stationed near Indiranagar high-demand zone. Orders will ring here automatically!
-            </p>
+
+            {/* Daily Incentive Milestone Card */}
+            <div
+              style={{
+                backgroundColor: 'var(--color-surface)',
+                borderRadius: 'var(--radius-lg)',
+                padding: '16px',
+                border: '1px solid var(--color-border)',
+                boxShadow: 'var(--shadow-sm)'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Award size={16} color="#F39C12" />
+                  <span style={{ fontSize: '13px', fontWeight: 800 }}>Daily Peak Milestone</span>
+                </div>
+                <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--color-veg)' }}>
+                  ₹350 Bonus Reward
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--color-text-muted)', marginBottom: '6px' }}>
+                <span>Completed: <b>{riderTripsToday} / 6 Trips</b></span>
+                <span>{Math.max(0, 6 - riderTripsToday)} more to reach target</span>
+              </div>
+
+              {/* Progress Bar */}
+              <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--color-surface-muted)', borderRadius: '4px', overflow: 'hidden' }}>
+                <div
+                  style={{
+                    width: `${Math.min(100, (riderTripsToday / 6) * 100)}%`,
+                    height: '100%',
+                    backgroundColor: 'var(--color-veg)',
+                    borderRadius: '4px',
+                    transition: 'width 0.3s ease'
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Live Demand Hotspots & Surge Bonuses */}
+            <div
+              style={{
+                backgroundColor: 'var(--color-surface)',
+                borderRadius: 'var(--radius-lg)',
+                padding: '16px',
+                border: '1px solid var(--color-border)',
+                boxShadow: 'var(--shadow-sm)'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Flame size={16} color="var(--color-primary)" />
+                  <span style={{ fontSize: '13px', fontWeight: 800 }}>Bengaluru Demand Hotspots</span>
+                </div>
+                <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', fontWeight: 700 }}>LIVE GPS</span>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {[
+                  { zone: 'Indiranagar 100ft Rd', demand: 'Very High', surge: '+₹30 / trip', color: 'var(--color-primary)' },
+                  { zone: 'Koramangala 5th Block', demand: 'High', surge: '+₹25 / trip', color: '#F39C12' },
+                  { zone: 'MG Road / Brigade Metro', demand: 'Moderate', surge: '+₹15 / trip', color: '#3498DB' }
+                ].map((spot, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '10px 12px',
+                      borderRadius: 'var(--radius-md)',
+                      backgroundColor: 'var(--color-surface-muted)',
+                      border: '1px solid var(--color-border-subtle)',
+                      fontSize: '12px'
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 700 }}>{spot.zone}</div>
+                      <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
+                        Demand: <b style={{ color: spot.color }}>{spot.demand}</b>
+                      </div>
+                    </div>
+
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 800,
+                        backgroundColor: 'rgba(46, 204, 113, 0.15)',
+                        color: 'var(--color-veg)',
+                        padding: '3px 8px',
+                        borderRadius: '4px'
+                      }}
+                    >
+                      {spot.surge}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
           </div>
         )}
       </div>
+
+      {/* Turn-by-Turn Route Navigation Map Modal */}
+      <RiderRouteModal
+        isOpen={isRouteModalOpen}
+        order={order}
+        step={riderStep}
+        onClose={() => setIsRouteModalOpen(false)}
+      />
+
+      {/* Proof of Delivery Photo Modal */}
+      {activeRiderOrder && (
+        <RiderProofModal
+          isOpen={isProofModalOpen}
+          orderId={activeRiderOrder.id}
+          onClose={() => setIsProofModalOpen(false)}
+          onConfirmDelivery={() => {
+            riderCompleteDelivery(activeRiderOrder.deliveryOtp);
+          }}
+        />
+      )}
+
+      {/* Rider Earnings Passbook Modal */}
+      <RiderEarningsModal
+        isOpen={isEarningsModalOpen}
+        onClose={() => setIsEarningsModalOpen(false)}
+        earningsToday={riderEarningsToday}
+        tripsToday={riderTripsToday}
+      />
+
+      {/* Emergency SOS Modal */}
+      <RiderSosModal
+        isOpen={isSosModalOpen}
+        onClose={() => setIsSosModalOpen(false)}
+      />
+
+      {/* Trips Log Modal */}
+      <RiderTripsModal
+        isOpen={isTripsModalOpen}
+        onClose={() => setIsTripsModalOpen(false)}
+        tripsToday={riderTripsToday}
+        earningsToday={riderEarningsToday}
+      />
+
+      {/* KYC & Verified Documents Modal */}
+      <RiderKycModal
+        isOpen={isKycModalOpen}
+        onClose={() => setIsKycModalOpen(false)}
+      />
+
+      {/* Comprehensive Rider Profile Modal */}
+      <RiderProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+      />
     </div>
   );
 };

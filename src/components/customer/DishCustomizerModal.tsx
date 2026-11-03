@@ -36,29 +36,36 @@ export const DishCustomizerModal: React.FC = () => {
   return (
     <div
       style={{
-        position: 'absolute',
+        position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(0,0,0,0.6)',
-        backdropFilter: 'blur(4px)',
-        zIndex: 100,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        backdropFilter: 'blur(5px)',
+        zIndex: 99999,
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'flex-end',
+        alignItems: 'center',
         animation: 'fadeIn 0.2s ease'
       }}
+      onClick={() => setCustomizingItem(null)}
     >
       <div
         style={{
           backgroundColor: 'var(--color-surface)',
           borderTopLeftRadius: 'var(--radius-xl)',
           borderTopRightRadius: 'var(--radius-xl)',
-          padding: '20px',
-          maxHeight: '90%',
+          padding: '20px 20px calc(16px + env(safe-area-inset-bottom, 0px))',
+          maxHeight: '85vh',
+          width: '100%',
+          maxWidth: '480px',
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: 'var(--shadow-lg)',
+          boxShadow: 'var(--shadow-xl)',
+          border: '1px solid var(--color-border)',
+          borderBottom: 'none',
           animation: 'slideUp 0.25s ease'
         }}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header with Dish Name & Close */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>

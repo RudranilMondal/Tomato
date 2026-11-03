@@ -1,4 +1,4 @@
-export type AppMode = 'customer' | 'partner' | 'rider' | 'admin';
+export type AppMode = 'customer' | 'partner' | 'rider' | 'admin' | 'quad_view';
 
 export type DietaryType = 'veg' | 'non_veg' | 'egg';
 
@@ -63,6 +63,8 @@ export interface Restaurant {
   cuisines: string[];
   offerText?: string;
   categories: MenuCategory[];
+  commissionRate?: number;
+  status?: 'active' | 'pending' | 'suspended';
 }
 
 export interface CartItem {
@@ -148,3 +150,73 @@ export interface UserProfile {
     isDefault: boolean;
   }[];
 }
+
+export interface WalletTransaction {
+  id: string;
+  type: 'credit' | 'debit';
+  amount: number;
+  title: string;
+  date: string;
+}
+
+export interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  time: string;
+  read: boolean;
+  type: 'offer' | 'order' | 'system';
+}
+
+export interface OrderReview {
+  orderId: string;
+  restaurantRating: number;
+  riderRating: number;
+  tags: string[];
+  comment: string;
+  createdAt: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  sender: 'user' | 'rider' | 'support';
+  text: string;
+  time: string;
+}
+
+export type RiderOnboardingStatus = 'not_started' | 'under_review' | 'approved' | 'rejected';
+
+export interface RiderKycDocuments {
+  aadhaarFront: string | null;
+  aadhaarBack: string | null;
+  panFront: string | null;
+  panBack: string | null;
+  drivingLicenseFront: string | null;
+  drivingLicenseBack: string | null;
+}
+
+export interface RiderBankDetails {
+  accountHolderName: string;
+  bankName: string;
+  accountNumber: string;
+  ifscCode: string;
+  upiId: string;
+}
+
+export interface RiderOnboardingApplication {
+  id: string;
+  fullName: string;
+  profilePhoto: string;
+  phone: string;
+  email?: string;
+  residentialAddress: string;
+  bloodGroup: 'A+' | 'A-' | 'B+' | 'B-' | 'O+' | 'O-' | 'AB+' | 'AB-';
+  gender: 'Male' | 'Female' | 'Other';
+  dob: string;
+  documents: RiderKycDocuments;
+  bankDetails: RiderBankDetails;
+  status: RiderOnboardingStatus;
+  submittedAt: string;
+  rejectionReason?: string;
+}
+
