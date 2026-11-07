@@ -21,6 +21,7 @@ import {
   RiderBankDetails
 } from '../types';
 import { RESTAURANTS, COUPONS, INITIAL_USER, SAMPLE_RIDER } from '../data/mockData';
+import { supabase } from '../lib/supabase';
 
 export type CustomerScreen =
   | 'splash'
@@ -127,7 +128,9 @@ interface TomatttoContextType {
   setVegOnlyFilter: (v: boolean) => void;
 
   // Order Placement & Lifecycle
-  placeOrder: (paymentMethod: 'upi' | 'card' | 'cod') => void;
+  isPlacingOrder: boolean;
+  orderError: string | null;
+  placeOrder: (paymentMethod: 'upi' | 'card' | 'cod') => Promise<boolean>;
 
   // Partner State
   incomingOrder: Order | null;
@@ -207,7 +210,9 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [coupons, setCoupons] = useState<Coupon[]>(COUPONS);
-  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(COUPONS[0]); // default 50% promo for excitement
+  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(COUPONS[0]);
+  const [isPlacingOrder, setIsPlacingOrder] = useState<boolean>(false);
+  const [orderError, setOrderError] = useState<string | null>(null); // default 50% promo for excitement
   const [user, setUser] = useState<UserProfile>(INITIAL_USER);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(true);
   const [userAddresses, setUserAddresses] = useState(INITIAL_USER.addresses);
@@ -635,63 +640,149 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   // Place Order
-  const placeOrder = (paymentMethod: 'upi' | 'card' | 'cod') => {
-    if (!selectedRestaurant || cart.length === 0) return;
+  const placeOrder = async (paymentMethod: 'upi' | 'card' | 'cod'): Promise<boolean> => {
+    if (!selectedRestaurant || cart.length === 0 || isPlacingOrder) return false;
 
-    const discountAmount = appliedCoupon
-      ? Math.min(appliedCoupon.maxDiscount, (cartTotal * appliedCoupon.discountPercentage) / 100)
-      : 0;
-    const deliveryFee = appliedCoupon?.code === 'FREESHIP' ? 0 : 35;
-    const platformFee = 5;
-    const taxAmount = Math.round(cartTotal * 0.05);
-    const tipAmount = 30;
-    const totalAmount = cartTotal - discountAmount + deliveryFee + platformFee + taxAmount + tipAmount;
+    setIsPlacingOrder(true);
+    setOrderError(null);
 
-    const newOrder: Order = {
-      id: `TOM-${Math.floor(100000 + Math.random() * 900000)}`,
-      createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      customerName: user.name,
-      customerPhone: user.phone,
-      restaurant: selectedRestaurant,
-      items: [...cart],
-      status: 'placed',
-      itemTotal: cartTotal,
-      deliveryFee,
-      platformFee,
-      taxAmount,
-      discountAmount,
-      tipAmount,
-      totalAmount,
-      appliedCoupon: appliedCoupon || undefined,
-      paymentMethod,
-      deliveryAddress: {
-        label: 'Home',
-        addressLine: selectedAddress
-      },
-      rider: SAMPLE_RIDER,
-      pickupOtp: `${Math.floor(1000 + Math.random() * 9000)}`,
-      deliveryOtp: `${Math.floor(1000 + Math.random() * 9000)}`,
-      estimatedDeliveryTime: '24 mins'
-    };
-
-    setCurrentOrder(newOrder);
-    setAllOrders((prev) => [newOrder, ...prev]);
-    setIncomingOrder(newOrder); // Dispatches directly to Restaurant Partner App!
-    setPartnerOrders((prev) => [newOrder, ...prev]);
-    clearCart();
-
-    // Trigger celebration confetti
     try {
-      confetti({
-        particleCount: 80,
-        spread: 60,
-        origin: { y: 0.6 }
-      });
-    } catch {
-      // ignore
-    }
+      // Check if Supabase client is configured with real credentials
+      if (supabase) {
+        // Prepare payload strictly with item IDs, quantities, variants, and addons (NO trusted prices)
+        const rpcItems = cart.map((item) => ({
+          menu_item_id: item.menuItem.id,
+          quantity: item.quantity,
+          variant_id: item.selectedVariant?.id || null,
+          addons: (item.selectedAddons || []).map((a) => ({ id: a.id }))
+        }));
 
-    setCustomerScreen('order_success');
+        const rpcPayload = {
+          p_restaurant_id: selectedRestaurant.id,
+          p_delivery_address: {
+            street: selectedAddress || '100ft Road, Indiranagar',
+            city: 'Bengaluru',
+            pincode: '560038',
+            label: 'Home'
+          },
+          p_items: rpcItems,
+          p_payment_method: paymentMethod,
+          p_coupon_code: appliedCoupon ? appliedCoupon.code : null,
+          p_tip_amount: 30.00,
+          p_delivery_instructions: null,
+          p_special_cooking_instructions: null
+        };
+
+        const { data, error } = await supabase.rpc('create_order', rpcPayload);
+
+        if (error) {
+          console.error('Supabase create_order RPC error:', error);
+          setOrderError(error.message || 'Failed to place order securely.');
+          setIsPlacingOrder(false);
+          return false;
+        }
+
+        if (data) {
+          // Construct authoritative order from the DB response
+          const serverOrder: Order = {
+            id: data.order_id || `TOM-${Math.floor(100000 + Math.random() * 900000)}`,
+            createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            customerName: user.name,
+            customerPhone: user.phone,
+            restaurant: selectedRestaurant,
+            items: [...cart],
+            status: (data.status || 'placed') as OrderStatus,
+            itemTotal: Number(data.item_total ?? cartTotal),
+            deliveryFee: Number(data.delivery_fee ?? 35),
+            platformFee: Number(data.platform_fee ?? 5),
+            taxAmount: Number(data.tax_amount ?? Math.round(cartTotal * 0.05)),
+            discountAmount: Number(data.discount_amount ?? 0),
+            tipAmount: Number(data.tip_amount ?? 30),
+            totalAmount: Number(data.total_amount ?? cartTotal),
+            appliedCoupon: appliedCoupon || undefined,
+            paymentMethod,
+            deliveryAddress: {
+              label: 'Home',
+              addressLine: selectedAddress
+            },
+            rider: SAMPLE_RIDER,
+            pickupOtp: `${Math.floor(1000 + Math.random() * 9000)}`,
+            deliveryOtp: `${Math.floor(1000 + Math.random() * 9000)}`,
+            estimatedDeliveryTime: '30-35 mins'
+          };
+
+          setCurrentOrder(serverOrder);
+          setAllOrders((prev) => [serverOrder, ...prev]);
+          setIncomingOrder(serverOrder);
+          setPartnerOrders((prev) => [serverOrder, ...prev]);
+          clearCart();
+
+          try {
+            confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
+          } catch {}
+
+          setCustomerScreen('order_success');
+          setIsPlacingOrder(false);
+          return true;
+        }
+      }
+
+      // Fallback for offline demo mode when Supabase credentials are placeholder
+      const discountAmount = appliedCoupon
+        ? Math.min(appliedCoupon.maxDiscount, (cartTotal * appliedCoupon.discountPercentage) / 100)
+        : 0;
+      const deliveryFee = appliedCoupon?.code === 'FREESHIP' ? 0 : 35;
+      const platformFee = 5;
+      const taxAmount = Math.round(cartTotal * 0.05);
+      const tipAmount = 30;
+      const totalAmount = cartTotal - discountAmount + deliveryFee + platformFee + taxAmount + tipAmount;
+
+      const demoOrder: Order = {
+        id: `TOM-${Math.floor(100000 + Math.random() * 900000)}`,
+        createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        customerName: user.name,
+        customerPhone: user.phone,
+        restaurant: selectedRestaurant,
+        items: [...cart],
+        status: 'placed',
+        itemTotal: cartTotal,
+        deliveryFee,
+        platformFee,
+        taxAmount,
+        discountAmount,
+        tipAmount,
+        totalAmount,
+        appliedCoupon: appliedCoupon || undefined,
+        paymentMethod,
+        deliveryAddress: {
+          label: 'Home',
+          addressLine: selectedAddress
+        },
+        rider: SAMPLE_RIDER,
+        pickupOtp: `${Math.floor(1000 + Math.random() * 9000)}`,
+        deliveryOtp: `${Math.floor(1000 + Math.random() * 9000)}`,
+        estimatedDeliveryTime: '24 mins'
+      };
+
+      setCurrentOrder(demoOrder);
+      setAllOrders((prev) => [demoOrder, ...prev]);
+      setIncomingOrder(demoOrder);
+      setPartnerOrders((prev) => [demoOrder, ...prev]);
+      clearCart();
+
+      try {
+        confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
+      } catch {}
+
+      setCustomerScreen('order_success');
+      setIsPlacingOrder(false);
+      return true;
+    } catch (err: any) {
+      console.error('Error during checkout:', err);
+      setOrderError(err.message || 'An unexpected error occurred.');
+      setIsPlacingOrder(false);
+      return false;
+    }
   };
 
   // Partner Actions
@@ -1203,6 +1294,8 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         vegOnlyFilter,
         setVegOnlyFilter,
         placeOrder,
+        isPlacingOrder,
+        orderError,
         incomingOrder,
         partnerOrders,
         partnerAcceptOrder,

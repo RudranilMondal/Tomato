@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS profiles (
 
 -- 3. SAVED ADDRESSES
 CREATE TABLE IF NOT EXISTS addresses (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   label TEXT NOT NULL DEFAULT 'Home', -- 'Home', 'Work', 'Other'
   address_line1 TEXT NOT NULL,
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS addresses (
 
 -- 4. RESTAURANTS
 CREATE TABLE IF NOT EXISTS restaurants (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
   name TEXT NOT NULL,
   slug TEXT UNIQUE NOT NULL,
@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS restaurants (
 
 -- 5. CUISINES
 CREATE TABLE IF NOT EXISTS cuisines (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT UNIQUE NOT NULL,
   icon_url TEXT,
   banner_image TEXT,
@@ -100,7 +100,7 @@ CREATE TABLE IF NOT EXISTS restaurant_cuisines (
 
 -- 7. MENU CATEGORIES
 CREATE TABLE IF NOT EXISTS categories (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   sort_order INTEGER DEFAULT 0,
@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS categories (
 
 -- 8. MENU ITEMS
 CREATE TABLE IF NOT EXISTS menu_items (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
   category_id UUID NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -126,14 +126,14 @@ CREATE TABLE IF NOT EXISTS menu_items (
 
 -- 9. ITEM VARIANTS & ADD-ONS
 CREATE TABLE IF NOT EXISTS item_variants (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   item_id UUID NOT NULL REFERENCES menu_items(id) ON DELETE CASCADE,
   name TEXT NOT NULL, -- e.g. "Regular", "Large"
   price NUMERIC(10,2) NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS item_addons (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   item_id UUID NOT NULL REFERENCES menu_items(id) ON DELETE CASCADE,
   name TEXT NOT NULL, -- e.g. "Extra Cheese", "Raita"
   price NUMERIC(10,2) NOT NULL DEFAULT 0.00
@@ -153,7 +153,7 @@ CREATE TABLE IF NOT EXISTS coupons (
 
 -- 11. RIDERS
 CREATE TABLE IF NOT EXISTS riders (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   vehicle_type TEXT DEFAULT 'Bike',
   vehicle_number TEXT NOT NULL,
@@ -167,7 +167,7 @@ CREATE TABLE IF NOT EXISTS riders (
 
 -- 12. ORDERS
 CREATE TABLE IF NOT EXISTS orders (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   customer_id UUID NOT NULL REFERENCES profiles(id),
   restaurant_id UUID NOT NULL REFERENCES restaurants(id),
   rider_id UUID REFERENCES riders(id),
@@ -200,7 +200,7 @@ CREATE TABLE IF NOT EXISTS orders (
 
 -- 13. ORDER ITEMS
 CREATE TABLE IF NOT EXISTS order_items (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
   menu_item_id UUID NOT NULL REFERENCES menu_items(id),
   name TEXT NOT NULL,
@@ -212,7 +212,7 @@ CREATE TABLE IF NOT EXISTS order_items (
 
 -- 14. ORDER STATUS HISTORY
 CREATE TABLE IF NOT EXISTS order_status_history (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
   status order_status NOT NULL,
   note TEXT,
@@ -221,7 +221,7 @@ CREATE TABLE IF NOT EXISTS order_status_history (
 
 -- 15. REVIEWS & RATINGS
 CREATE TABLE IF NOT EXISTS reviews (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id UUID REFERENCES orders(id),
   customer_id UUID NOT NULL REFERENCES profiles(id),
   restaurant_id UUID NOT NULL REFERENCES restaurants(id),

@@ -8,7 +8,7 @@ interface PaymentModalProps {
 }
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose }) => {
-  const { placeOrder, cartTotal, appliedCoupon } = useTomattto();
+  const { placeOrder, isPlacingOrder, orderError, cartTotal, appliedCoupon } = useTomattto();
   const [selectedMethod, setSelectedMethod] = useState<'upi' | 'card' | 'cod'>('upi');
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -23,13 +23,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose }) =
   const tipAmount = 30;
   const finalPayable = cartTotal - discountAmount + deliveryFee + platformFee + taxAmount + tipAmount;
 
-  const handlePay = () => {
+  const handlePay = async () => {
+    if (isProcessing || isPlacingOrder) return;
     setIsProcessing(true);
-    setTimeout(() => {
-      setIsProcessing(false);
+    const success = await placeOrder(selectedMethod);
+    setIsProcessing(false);
+    if (success) {
       onClose();
-      placeOrder(selectedMethod);
-    }, 700);
+    }
   };
 
   return (
@@ -252,10 +253,27 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose }) =
           <span>PCI-DSS 256-bit encrypted checkout</span>
         </div>
 
+        {orderError && (
+          <div
+            style={{
+              padding: '10px 14px',
+              borderRadius: 'var(--radius-md)',
+              backgroundColor: 'rgba(231, 76, 60, 0.1)',
+              border: '1px solid rgba(231, 76, 60, 0.3)',
+              color: '#C0392B',
+              fontSize: '12px',
+              fontWeight: 600,
+              marginBottom: '12px',
+              textAlign: 'center'
+            }}
+          >
+            {orderError}
+          </div>
+        )}
         {/* Pay Button */}
         <button
           onClick={handlePay}
-          disabled={isProcessing}
+          disabled={isProcessing || isPlacingOrder}
           style={{
             width: '100%',
             backgroundColor: 'var(--color-primary)',
@@ -272,7 +290,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose }) =
             opacity: isProcessing ? 0.7 : 1
           }}
         >
-          {isProcessing ? (
+          {(isProcessing || isPlacingOrder) ? (
             <span>Authorising Payment...</span>
           ) : (
             <span>Pay ₹{finalPayable} & Place Order</span>

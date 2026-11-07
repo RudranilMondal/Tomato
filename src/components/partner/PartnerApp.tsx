@@ -5,6 +5,8 @@ import { AddDishModal } from './AddDishModal';
 import { KitchenTicketModal } from './KitchenTicketModal';
 import { RejectOrderModal } from './RejectOrderModal';
 import { OutletProfileModal } from './OutletProfileModal';
+import { RestaurantOnboardingWizard } from './RestaurantOnboardingWizard';
+import { PartnerApplicationStatus } from './PartnerApplicationStatus';
 import {
   Store,
   Clock,
@@ -50,7 +52,7 @@ export const PartnerApp: React.FC = () => {
     triggerSimulatedCustomerOrder
   } = useTomattto();
 
-  const [activeTab, setActiveTab] = useState<'orders' | 'menu' | 'earnings' | 'reviews' | 'marketing' | 'analytics'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'menu' | 'earnings' | 'reviews' | 'marketing' | 'analytics' | 'application_status'>('orders');
   const [isOnline, setIsOnline] = useState(true);
   const [isRushMode, setIsRushMode] = useState(false);
   const [isAutoAccept, setIsAutoAccept] = useState(false);
@@ -59,6 +61,7 @@ export const PartnerApp: React.FC = () => {
   const [inspectedOrder, setInspectedOrder] = useState<Order | null>(null);
   const [rejectOrderId, setRejectOrderId] = useState<string | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [isMobileScreen, setIsMobileScreen] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
 
   useEffect(() => {
@@ -123,6 +126,11 @@ export const PartnerApp: React.FC = () => {
     }
   }, [incomingOrder]);
 
+  // If user opens the Become a Restaurant Partner Onboarding Wizard
+  if (isOnboardingOpen) {
+    return <RestaurantOnboardingWizard onBack={() => setIsOnboardingOpen(false)} />;
+  }
+
   return (
     <div
       style={{
@@ -181,8 +189,51 @@ export const PartnerApp: React.FC = () => {
             </div>
           </div>
 
-          {/* Right Header Buttons: KYC Profile & Online Toggle */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* Right Header Buttons: Become Partner, KYC Profile & Online Toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => setIsOnboardingOpen(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '7px 14px',
+                borderRadius: 'var(--radius-full)',
+                backgroundColor: 'var(--color-primary)',
+                color: '#FFFFFF',
+                fontSize: '11px',
+                fontWeight: 800,
+                border: 'none',
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px var(--color-primary-glow)'
+              }}
+              title="Register a new restaurant or outlet with Tomattto"
+            >
+              <Plus size={13} />
+              <span>Become a Partner</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('application_status')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '7px 12px',
+                borderRadius: 'var(--radius-full)',
+                backgroundColor: activeTab === 'application_status' ? 'var(--color-primary)' : 'rgba(255, 255, 255, 0.08)',
+                color: '#FFFFFF',
+                fontSize: '11px',
+                fontWeight: 700,
+                border: '1px solid rgba(255,255,255,0.15)',
+                cursor: 'pointer'
+              }}
+              title="Track Application Status"
+            >
+              <FileText size={13} color={activeTab === 'application_status' ? '#FFFFFF' : '#60A5FA'} />
+              <span>Application Status</span>
+            </button>
+
             <button
               onClick={() => setIsProfileModalOpen(true)}
               style={{
@@ -277,7 +328,8 @@ export const PartnerApp: React.FC = () => {
             { id: 'marketing', label: 'Promotions & Ads', icon: <Tag size={14} /> },
             { id: 'analytics', label: 'Live Analytics', icon: <BarChart2 size={14} /> },
             { id: 'earnings', label: 'Payouts', icon: <DollarSign size={14} /> },
-            { id: 'reviews', label: 'Reviews (4.7 ★)', icon: <MessageSquare size={14} /> }
+            { id: 'reviews', label: 'Reviews (4.7 ★)', icon: <MessageSquare size={14} /> },
+            { id: 'application_status', label: 'Application Status', icon: <FileText size={14} /> }
           ].map((tab) => {
             const isActive = activeTab === tab.id;
             return (
@@ -1349,6 +1401,14 @@ export const PartnerApp: React.FC = () => {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Tab 7: Restaurant Partner Application Status (Demo / Tracking) */}
+        {activeTab === 'application_status' && (
+          <PartnerApplicationStatus
+            onBack={() => setActiveTab('orders')}
+            onOpenWizard={() => setIsOnboardingOpen(true)}
+          />
         )}
       </div>
 
