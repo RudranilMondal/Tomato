@@ -22,6 +22,8 @@ import {
 } from '../types';
 import { RESTAURANTS, COUPONS, INITIAL_USER, SAMPLE_RIDER } from '../data/mockData';
 import { supabase } from '../lib/supabase';
+import { Session, User } from '@supabase/supabase-js';
+import { DemoRiderUser } from '../lib/demoAuth';
 
 export type CustomerScreen =
   | 'splash'
@@ -78,6 +80,15 @@ interface TomatttoContextType {
   logoutUser: () => void;
   user: UserProfile;
   updateUserProfile: (updates: Partial<UserProfile>) => void;
+  // Supabase Auth & Shared Session
+  supabaseSession: Session | null;
+  supabaseUser: User | null;
+  demoRiderUser: DemoRiderUser | null;
+  setDemoRiderUser: (user: DemoRiderUser | null) => void;
+  activeRiderApplicant: { id: string; phone: string; fullName?: string; isDemo?: boolean } | null;
+  isSupabaseLoading: boolean;
+  signOutSupabase: () => Promise<void>;
+  initializeRiderProfile: (userId: string, phone: string, fullName?: string) => Promise<boolean>;
   selectedAddress: string;
   setSelectedAddress: (addr: string) => void;
   userAddresses: UserProfile['addresses'];
@@ -176,6 +187,8 @@ interface TomatttoContextType {
   // Rider Onboarding & KYC
   riderOnboardingStatus: RiderOnboardingStatus;
   setRiderOnboardingStatus: (status: RiderOnboardingStatus) => void;
+  persistedRiderApp: any | null;
+  fetchUserRiderApplication: (userId?: string) => Promise<any>;
   allRiderApplications: RiderOnboardingApplication[];
   submitRiderOnboarding: (app: Omit<RiderOnboardingApplication, 'id' | 'status' | 'submittedAt'>) => void;
   approveRiderKyc: (appId: string) => void;
@@ -217,6 +230,135 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(true);
   const [userAddresses, setUserAddresses] = useState(INITIAL_USER.addresses);
   const [selectedAddress, setSelectedAddress] = useState<string>(INITIAL_USER.addresses[0].line);
+
+  // Supabase Auth & Session Synchronization
+  const [supabaseSession, setSupabaseSession] = useState<Session | null>(null);
+  const [supabaseUser, setSupabaseUser] = useState<User | null>(null);
+  const [demoRiderUser, setDemoRiderUser] = useState<DemoRiderUser | null>(null);
+  const [isSupabaseLoading, setIsSupabaseLoading] = useState<boolean>(true);
+
+  const activeRiderApplicant = supabaseUser
+    ? { id: supabaseUser.id, phone: supabaseUser.phone || '', fullName: undefined, isDemo: false }
+    : demoRiderUser
+    ? { id: demoRiderUser.id, phone: demoRiderUser.phone, fullName: demoRiderUser.fullName, isDemo: true }
+    : null;
+
+  useEffect(() => {
+    if (!supabase) {
+      setIsSupabaseLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    // In @supabase/supabase-js v2, onAuthStateChange immediately evaluates stored session
+    // and fires INITIAL_SESSION/SIGNED_IN/SIGNED_OUT reliably without racing with getSession().
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!isMounted) return;
+      setSupabaseSession(session);
+      setSupabaseUser(session?.user ?? null);
+      setIsSupabaseLoading(false);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const signOutSupabase = async () => {
+    if (supabase) {
+      try {
+        await supabase.auth.signOut();
+      } catch (err) {
+        console.error('Supabase signOut error:', err);
+      }
+    }
+    setSupabaseSession(null);
+    setSupabaseUser(null);
+    setDemoRiderUser(null);
+    setRiderOnboardingStatus('not_started');
+  };
+
+  const initializeRiderProfile = async (
+    userId: string,
+    phone: string,
+    fullName?: string
+  ): Promise<boolean> => {
+    if (!supabase) {
+      console.error('initializeRiderProfile: Supabase client is not available.');
+      return false;
+    }
+
+    try {
+      // 1. Query for an existing profile by the authenticated user's ID
+      const { data: existingById, error: fetchByIdErr } = await supabase
+        .from('profiles')
+        .select('id, role, full_name, phone')
+        .eq('id', userId)
+        .maybeSingle();
+
+      // Distinguish a genuine "not found" (which returns data=null, error=null in maybeSingle)
+      // from RLS/network/query errors.
+      if (fetchByIdErr) {
+        console.error('initializeRiderProfile: Database query error checking user profile:', fetchByIdErr);
+        return false;
+      }
+
+      // If a profile already exists for this authenticated user ID, do not overwrite; succeed safely.
+      if (existingById) {
+        return true;
+      }
+
+      // 2. Pre-emptively verify if this phone number is already registered under another profile ID
+      const { data: existingByPhone, error: fetchByPhoneErr } = await supabase
+        .from('profiles')
+        .select('id, phone')
+        .eq('phone', phone)
+        .maybeSingle();
+
+      if (fetchByPhoneErr) {
+        console.error('initializeRiderProfile: Database query error checking phone uniqueness:', fetchByPhoneErr);
+        return false;
+      }
+
+      if (existingByPhone && existingByPhone.id !== userId) {
+        console.error(
+          `initializeRiderProfile: Phone number ${phone} is already linked to another account (${existingByPhone.id}). Rejecting duplicate association.`
+        );
+        return false;
+      }
+
+      // 3. Safely create profile with default 'customer' role.
+      // Database trigger trg_protect_profile_fields guarantees role='customer' and validates auth.uid() = id.
+      const { error: insertErr } = await supabase.from('profiles').insert({
+        id: userId,
+        phone: phone,
+        full_name: fullName || 'Delivery Applicant',
+        role: 'customer',
+        is_active: true
+      });
+
+      if (insertErr) {
+        if (insertErr.code === '23505') {
+          console.error(
+            `initializeRiderProfile: Unique constraint violation (23505) inserting profile for phone ${phone}:`,
+            insertErr.message
+          );
+        } else {
+          console.error('initializeRiderProfile: Failed to insert applicant profile:', insertErr);
+        }
+        return false;
+      }
+
+      return true;
+    } catch (err) {
+      console.error('initializeRiderProfile: Unexpected exception during profile initialization:', err);
+      return false;
+    }
+  };
 
   const loginUser = (details?: { name?: string; phone?: string; email?: string; address?: string }) => {
     if (details) {
@@ -262,6 +404,13 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       email: ''
     }));
     setCustomerScreen('auth');
+    if (supabase) {
+      supabase.auth.signOut().catch(() => {});
+    }
+    setSupabaseSession(null);
+    setSupabaseUser(null);
+    setDemoRiderUser(null);
+    setRiderOnboardingStatus('not_started');
   };
 
   const updateUserProfile = (updates: Partial<UserProfile>) => {
@@ -523,6 +672,63 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Rider Onboarding & KYC Applications
   const [riderOnboardingStatus, setRiderOnboardingStatus] = useState<RiderOnboardingStatus>('approved');
+  const [persistedRiderApp, setPersistedRiderApp] = useState<any | null>(null);
+
+  const fetchUserRiderApplication = async (userId?: string) => {
+    const targetUid = userId || supabaseUser?.id;
+    if (!supabase || !targetUid) return null;
+    try {
+      let { data, error } = await supabase
+        .from('rider_applications')
+        .select('*, rider_documents(*), rider_payout_details(*)')
+        .eq('user_id', targetUid)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error && error.message?.includes('rider_payout_details')) {
+        const retry = await supabase
+          .from('rider_applications')
+          .select('*, rider_documents(*)')
+          .eq('user_id', targetUid)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        data = retry.data;
+        error = retry.error;
+      }
+
+      if (!error && data) {
+        setPersistedRiderApp(data);
+        if (data.status === 'draft') {
+          setRiderOnboardingStatus('draft');
+        } else if (data.status === 'submitted' || data.status === 'in_review') {
+          setRiderOnboardingStatus('under_review');
+        } else if (data.status === 'action_required') {
+          setRiderOnboardingStatus('action_required');
+        } else if (data.status === 'rejected') {
+          setRiderOnboardingStatus('rejected');
+        } else if (data.status === 'approved' || data.status === 'verified') {
+          setRiderOnboardingStatus('approved');
+        }
+        return data;
+      }
+    } catch (err) {
+      console.error('Error fetching rider application from Supabase:', err);
+    }
+    return null;
+  };
+
+  useEffect(() => {
+    if (supabaseUser) {
+      fetchUserRiderApplication(supabaseUser.id);
+    } else {
+      setPersistedRiderApp(null);
+      // Demo rider Vikram Singh defaults to approved dashboard
+      setRiderOnboardingStatus('approved');
+    }
+  }, [supabaseUser]);
+
   const [allRiderApplications, setAllRiderApplications] = useState<RiderOnboardingApplication[]>([
     {
       id: 'APP-RDR-8921',
@@ -540,7 +746,9 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         panFront: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600&auto=format&fit=crop&q=80',
         panBack: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600&auto=format&fit=crop&q=80',
         drivingLicenseFront: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80',
-        drivingLicenseBack: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80'
+        drivingLicenseBack: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80',
+        vehicleRc: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=600&auto=format&fit=crop&q=80',
+        bankProof: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=600&auto=format&fit=crop&q=80'
       },
       bankDetails: {
         accountHolderName: 'Vikram Singh',
@@ -1031,6 +1239,7 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       prev.map((a) => (a.id === appId ? { ...a, status: 'approved' } : a))
     );
     setRiderOnboardingStatus('approved');
+    setIsRiderOnline(true);
     try {
       confetti({ particleCount: 100, spread: 80, origin: { y: 0.5 } });
     } catch {
@@ -1263,6 +1472,14 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         logoutUser,
         user,
         updateUserProfile,
+        supabaseSession,
+        supabaseUser,
+        demoRiderUser,
+        setDemoRiderUser,
+        activeRiderApplicant,
+        isSupabaseLoading,
+        signOutSupabase,
+        initializeRiderProfile,
         selectedAddress,
         setSelectedAddress,
         userAddresses,
@@ -1324,6 +1541,8 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         riderTripsToday,
         riderOnboardingStatus,
         setRiderOnboardingStatus,
+        persistedRiderApp,
+        fetchUserRiderApplication,
         allRiderApplications,
         submitRiderOnboarding,
         approveRiderKyc,

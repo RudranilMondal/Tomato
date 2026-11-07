@@ -8,6 +8,7 @@ import { RiderTripsModal } from './RiderTripsModal';
 import { RiderKycModal } from './RiderKycModal';
 import { RiderProfileModal } from './RiderProfileModal';
 import { RiderOnboardingWizard } from './RiderOnboardingWizard';
+import { RiderAuthModal } from './RiderAuthModal';
 import {
   Bike,
   Power,
@@ -33,7 +34,8 @@ import {
   Sparkles,
   UserCheck,
   RefreshCw,
-  User
+  User,
+  UserPlus
 } from 'lucide-react';
 
 export const RiderApp: React.FC = () => {
@@ -52,7 +54,12 @@ export const RiderApp: React.FC = () => {
     triggerSimulatedDeliveryRequest,
     currentOrder,
     riderOnboardingStatus,
-    resetRiderOnboarding
+    resetRiderOnboarding,
+    supabaseSession,
+    supabaseUser,
+    activeRiderApplicant,
+    demoRiderUser,
+    signOutSupabase
   } = useTomattto();
 
   const [enteredOtp, setEnteredOtp] = useState('');
@@ -64,10 +71,21 @@ export const RiderApp: React.FC = () => {
   const [isTripsModalOpen, setIsTripsModalOpen] = useState(false);
   const [isKycModalOpen, setIsKycModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+  const [isOnboardingPreview, setIsOnboardingPreview] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
-  // If rider is not approved yet, display the full onboarding wizard & status screen
-  if (riderOnboardingStatus !== 'approved') {
-    return <RiderOnboardingWizard />;
+  // If rider onboarding wizard is open, display the onboarding wizard & status screen
+  if (isOnboardingOpen) {
+    return (
+      <RiderOnboardingWizard
+        isPreviewMode={isOnboardingPreview}
+        onBack={() => {
+          setIsOnboardingOpen(false);
+          setIsOnboardingPreview(false);
+        }}
+      />
+    );
   }
 
   const order = activeRiderOrder || riderDeliveryRequest || currentOrder;
@@ -99,11 +117,14 @@ export const RiderApp: React.FC = () => {
         style={{
           backgroundColor: '#1E1E24',
           color: '#FFFFFF',
-          padding: '16px',
-          boxShadow: 'var(--shadow-sm)'
+          padding: '16px 16px 14px 16px',
+          boxShadow: 'var(--shadow-sm)',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.08)'
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        {/* Top Profile & Status Bar */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+          {/* Left: Avatar & Rider Details */}
           <div
             onClick={() => setIsProfileModalOpen(true)}
             style={{
@@ -111,9 +132,8 @@ export const RiderApp: React.FC = () => {
               alignItems: 'center',
               gap: '10px',
               cursor: 'pointer',
-              padding: '4px 6px',
-              borderRadius: 'var(--radius-md)',
-              transition: 'background-color 0.15s'
+              minWidth: 0,
+              flex: 1
             }}
             title="Click to view full Rider Profile & KYC details"
           >
@@ -123,8 +143,8 @@ export const RiderApp: React.FC = () => {
                 height: '42px',
                 borderRadius: '50%',
                 overflow: 'hidden',
-                border: '2px solid var(--color-primary)',
-                position: 'relative'
+                border: '2px solid rgba(255, 255, 255, 0.2)',
+                flexShrink: 0
               }}
             >
               <img
@@ -133,83 +153,89 @@ export const RiderApp: React.FC = () => {
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
             </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <h4 style={{ fontSize: '15px', fontWeight: 800 }}>Vikram Singh</h4>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'nowrap' }}>
+                <h4
+                  style={{
+                    fontSize: '15px',
+                    fontWeight: 700,
+                    color: '#FFFFFF',
+                    margin: 0,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}
+                >
+                  Vikram Singh
+                </h4>
                 <span
                   style={{
-                    backgroundColor: 'var(--color-rating-bg)',
-                    color: '#D35400',
+                    backgroundColor: 'rgba(243, 156, 18, 0.15)',
+                    color: '#F39C12',
                     fontSize: '10px',
                     fontWeight: 800,
                     padding: '1px 5px',
                     borderRadius: '4px',
-                    display: 'flex',
+                    display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '2px'
+                    gap: '2px',
+                    flexShrink: 0
                   }}
                 >
                   <span>4.9</span>
-                  <Star size={9} fill="#D35400" />
+                  <Star size={9} fill="#F39C12" />
                 </span>
                 <span
                   style={{
                     fontSize: '9px',
-                    fontWeight: 800,
-                    backgroundColor: 'rgba(255, 75, 58, 0.15)',
-                    color: 'var(--color-primary)',
+                    fontWeight: 700,
+                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                    color: '#9CA3AF',
                     padding: '1px 5px',
-                    borderRadius: '4px'
+                    borderRadius: '4px',
+                    letterSpacing: '0.4px',
+                    flexShrink: 0
                   }}
                 >
-                  Profile ➔
+                  DEMO
                 </span>
               </div>
-              <span style={{ fontSize: '11px', color: '#A5A5B2' }}>KA 03 EN 4592 • Honda Shine</span>
+              <p
+                style={{
+                  fontSize: '11px',
+                  color: '#9CA3AF',
+                  margin: '2px 0 0',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}
+              >
+                KA 03 EN 4592 • Honda Shine
+              </p>
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {/* Test Onboarding Flow Toggle */}
-            <button
-              onClick={resetRiderOnboarding}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '6px 10px',
-                borderRadius: 'var(--radius-full)',
-                backgroundColor: 'rgba(255, 75, 58, 0.15)',
-                color: 'var(--color-primary)',
-                border: '1px solid rgba(255, 75, 58, 0.4)',
-                fontSize: '11px',
-                fontWeight: 800,
-                cursor: 'pointer'
-              }}
-              title="Click to test the Rider Onboarding & KYC submission workflow"
-            >
-              <RefreshCw size={12} />
-              <span>Test Onboarding</span>
-            </button>
-
+          {/* Right: Compact Utility Actions (SOS + Shift Status) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
             {/* SOS Emergency button */}
             <button
               onClick={() => setIsSosModalOpen(true)}
               style={{
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
-                gap: '4px',
-                padding: '6px 10px',
+                gap: '3px',
+                padding: '6px 9px',
                 borderRadius: 'var(--radius-full)',
-                backgroundColor: 'rgba(231, 76, 60, 0.2)',
+                backgroundColor: 'rgba(231, 76, 60, 0.15)',
                 color: '#FF6B6B',
-                border: '1.5px solid #FF6B6B',
+                border: '1px solid rgba(231, 76, 60, 0.3)',
                 fontSize: '11px',
-                fontWeight: 800
+                fontWeight: 700,
+                cursor: 'pointer'
               }}
               title="Emergency SOS"
             >
-              <ShieldAlert size={13} />
+              <ShieldAlert size={12} />
               <span>SOS</span>
             </button>
 
@@ -217,117 +243,314 @@ export const RiderApp: React.FC = () => {
             <button
               onClick={() => setIsRiderOnline(!isRiderOnline)}
               style={{
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
-                gap: '6px',
-                padding: '6px 12px',
+                gap: '5px',
+                padding: '6px 11px',
                 borderRadius: 'var(--radius-full)',
-                backgroundColor: isRiderOnline ? 'var(--color-veg)' : 'rgba(255,255,255,0.15)',
+                backgroundColor: isRiderOnline ? 'var(--color-veg)' : 'rgba(255, 255, 255, 0.12)',
                 color: '#FFFFFF',
+                border: isRiderOnline ? 'none' : '1px solid rgba(255, 255, 255, 0.2)',
                 fontSize: '11px',
-                fontWeight: 700
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
               }}
             >
-              <Power size={13} />
-              <span>{isRiderOnline ? 'ON DUTY' : 'GO ONLINE'}</span>
+              <Power size={12} />
+              <span>{isRiderOnline ? 'ON DUTY' : 'OFFLINE'}</span>
             </button>
           </div>
         </div>
 
-        {/* Daily Stats Bar (clickable to open passbook) */}
+        {/* Dedicated Partner Application Banner */}
+        <div style={{ marginTop: '12px' }}>
+          <button
+            onClick={() => {
+              if (!activeRiderApplicant && !supabaseSession) {
+                setIsAuthModalOpen(true);
+              } else {
+                setIsOnboardingOpen(true);
+              }
+            }}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '9px 12px',
+              borderRadius: 'var(--radius-md)',
+              backgroundColor:
+                riderOnboardingStatus === 'approved'
+                  ? 'rgba(46, 204, 113, 0.12)'
+                  : riderOnboardingStatus === 'under_review'
+                  ? 'rgba(243, 156, 18, 0.12)'
+                  : riderOnboardingStatus === 'rejected'
+                  ? 'rgba(231, 76, 60, 0.12)'
+                  : 'rgba(255, 75, 58, 0.12)',
+              color:
+                riderOnboardingStatus === 'approved'
+                  ? 'var(--color-veg, #2ECC71)'
+                  : riderOnboardingStatus === 'under_review'
+                  ? '#F39C12'
+                  : riderOnboardingStatus === 'rejected'
+                  ? '#FF6B6B'
+                  : 'var(--color-primary)',
+              border: `1px solid ${
+                riderOnboardingStatus === 'approved'
+                  ? 'rgba(46, 204, 113, 0.35)'
+                  : riderOnboardingStatus === 'under_review'
+                  ? 'rgba(243, 156, 18, 0.3)'
+                  : riderOnboardingStatus === 'rejected'
+                  ? 'rgba(231, 76, 60, 0.3)'
+                  : 'rgba(255, 75, 58, 0.25)'
+              }`,
+              cursor: 'pointer',
+              transition: 'background-color 0.15s ease'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {riderOnboardingStatus === 'approved' ? (
+                <CheckCircle2 size={16} />
+              ) : riderOnboardingStatus === 'under_review' ? (
+                <Clock size={15} />
+              ) : riderOnboardingStatus === 'rejected' ? (
+                <ShieldAlert size={15} />
+              ) : (
+                <UserPlus size={15} />
+              )}
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ fontSize: '12px', fontWeight: 700, lineHeight: 1.2 }}>
+                  {riderOnboardingStatus === 'approved'
+                    ? 'Delivery Partner Account Active ✓'
+                    : riderOnboardingStatus === 'under_review'
+                    ? 'Application In Review'
+                    : riderOnboardingStatus === 'rejected'
+                    ? 'KYC Verification Action Required'
+                    : activeRiderApplicant
+                    ? 'Continue Delivery Partner Onboarding'
+                    : 'Apply as Delivery Partner'}
+                </div>
+                <div style={{ fontSize: '10px', color: '#9CA3AF', marginTop: '1px' }}>
+                  {riderOnboardingStatus === 'approved'
+                    ? 'Fleet approved • Tap to view credentials or update profile'
+                    : riderOnboardingStatus === 'under_review'
+                    ? 'Fleet Ops is validating your documents'
+                    : riderOnboardingStatus === 'rejected'
+                    ? 'Tap to re-upload documents & resubmit'
+                    : activeRiderApplicant
+                    ? `Authenticated (${activeRiderApplicant.fullName || activeRiderApplicant.phone}) • Tap to continue`
+                    : 'Earn up to ₹35,000/month + incentives'}
+                </div>
+              </div>
+            </div>
+            <ArrowRight size={14} color="#9CA3AF" />
+          </button>
+
+          {/* Active Session Indicator (Supports both real Supabase & isolated Demo Auth) */}
+          {(supabaseSession || activeRiderApplicant) && (
+            <div
+              style={{
+                marginTop: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '6px 12px',
+                backgroundColor: 'rgba(46, 204, 113, 0.08)',
+                border: '1px solid rgba(46, 204, 113, 0.2)',
+                borderRadius: 'var(--radius-sm, 6px)',
+                fontSize: '11px'
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  color: 'var(--color-veg, #2ECC71)'
+                }}
+              >
+                <CheckCircle2 size={13} />
+                <span style={{ fontWeight: 600 }}>
+                  {activeRiderApplicant?.isDemo ? 'Demo Auth:' : 'Auth Session:'}{' '}
+                  {activeRiderApplicant?.phone || supabaseUser?.phone || 'Logged In'}
+                </span>
+                {activeRiderApplicant?.isDemo && (
+                  <span
+                    style={{
+                      fontSize: '9px',
+                      backgroundColor: 'rgba(243, 156, 18, 0.15)',
+                      color: '#F39C12',
+                      padding: '1px 5px',
+                      borderRadius: '3px',
+                      fontWeight: 700
+                    }}
+                  >
+                    DEV SIMULATED
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={signOutSupabase}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#9CA3AF',
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  padding: 0
+                }}
+                title="Sign out / Clear active rider applicant session"
+              >
+                Sign Out
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Stats Section: Two Visually Balanced Metric Cards */}
         <div
-          onClick={() => setIsEarningsModalOpen(true)}
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(2, 1fr)',
             gap: '10px',
-            marginTop: '14px',
-            backgroundColor: 'rgba(255,255,255,0.06)',
-            padding: '10px 14px',
-            borderRadius: 'var(--radius-md)',
-            cursor: 'pointer'
+            marginTop: '12px'
           }}
         >
-          <div>
-            <span style={{ fontSize: '10px', color: '#A5A5B2' }}>Today's Earnings (Tap for passbook)</span>
-            <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--color-veg)' }}>
-              ₹{riderEarningsToday} ➔
+          {/* Earnings Card */}
+          <div
+            onClick={() => setIsEarningsModalOpen(true)}
+            style={{
+              backgroundColor: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: 'var(--radius-md)',
+              padding: '10px 12px',
+              cursor: 'pointer',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              transition: 'background-color 0.15s ease'
+            }}
+            title="Click to view detailed earnings passbook"
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <span style={{ fontSize: '11px', color: '#9CA3AF', fontWeight: 500 }}>Today's Earnings</span>
+              <DollarSign size={13} color="var(--color-veg)" />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '18px', fontWeight: 800, color: 'var(--color-veg)' }}>
+                ₹{riderEarningsToday}
+              </span>
+              <span style={{ fontSize: '10px', color: '#9CA3AF' }}>Passbook ➔</span>
             </div>
           </div>
 
-          <div>
-            <span style={{ fontSize: '10px', color: '#A5A5B2' }}>Trips Completed</span>
-            <div style={{ fontSize: '16px', fontWeight: 800, color: '#FFFFFF' }}>
-              {riderTripsToday} deliveries
+          {/* Trips Completed Card */}
+          <div
+            onClick={() => setIsTripsModalOpen(true)}
+            style={{
+              backgroundColor: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: 'var(--radius-md)',
+              padding: '10px 12px',
+              cursor: 'pointer',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              transition: 'background-color 0.15s ease'
+            }}
+            title="Click to view completed delivery trips"
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <span style={{ fontSize: '11px', color: '#9CA3AF', fontWeight: 500 }}>Trips Completed</span>
+              <Bike size={13} color="var(--color-primary)" />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '18px', fontWeight: 800, color: '#FFFFFF' }}>
+                {riderTripsToday} <span style={{ fontSize: '11px', fontWeight: 500, color: '#9CA3AF' }}>orders</span>
+              </span>
+              <span style={{ fontSize: '10px', color: '#9CA3AF' }}>History ➔</span>
             </div>
           </div>
         </div>
 
-        {/* Quick Action Pills */}
-        <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+        {/* Navigation Action Pills: Equal Width Grid */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '8px',
+            marginTop: '10px'
+          }}
+        >
           <button
             onClick={() => setIsProfileModalOpen(true)}
             style={{
-              flex: 1,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: '6px',
-              padding: '7px 10px',
+              padding: '8px 4px',
               borderRadius: 'var(--radius-sm)',
-              backgroundColor: 'rgba(255, 75, 58, 0.15)',
+              backgroundColor: 'rgba(255, 255, 255, 0.06)',
               color: '#FFFFFF',
               fontSize: '11px',
-              fontWeight: 700,
-              border: '1px solid rgba(255, 75, 58, 0.4)',
-              cursor: 'pointer'
+              fontWeight: 600,
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              transition: 'background-color 0.15s ease'
             }}
           >
-            <User size={13} color="var(--color-primary)" />
-            <span>Full Profile</span>
+            <User size={13} color="#9CA3AF" />
+            <span>Profile</span>
           </button>
 
           <button
             onClick={() => setIsTripsModalOpen(true)}
             style={{
-              flex: 1,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: '6px',
-              padding: '7px 10px',
+              padding: '8px 4px',
               borderRadius: 'var(--radius-sm)',
-              backgroundColor: 'rgba(255,255,255,0.08)',
+              backgroundColor: 'rgba(255, 255, 255, 0.06)',
               color: '#FFFFFF',
               fontSize: '11px',
-              fontWeight: 700,
-              border: '1px solid rgba(255,255,255,0.1)',
-              cursor: 'pointer'
+              fontWeight: 600,
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              transition: 'background-color 0.15s ease'
             }}
           >
-            <ClipboardList size={13} color="var(--color-primary)" />
+            <ClipboardList size={13} color="#9CA3AF" />
             <span>Trips</span>
           </button>
 
           <button
             onClick={() => setIsKycModalOpen(true)}
             style={{
-              flex: 1,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: '6px',
-              padding: '7px 10px',
+              padding: '8px 4px',
               borderRadius: 'var(--radius-sm)',
-              backgroundColor: 'rgba(255,255,255,0.08)',
+              backgroundColor: 'rgba(255, 255, 255, 0.06)',
               color: '#FFFFFF',
               fontSize: '11px',
-              fontWeight: 700,
-              border: '1px solid rgba(255,255,255,0.1)',
-              cursor: 'pointer'
+              fontWeight: 600,
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              transition: 'background-color 0.15s ease'
             }}
           >
-            <FileCheck size={13} color="var(--color-veg)" />
+            <FileCheck size={13} color="#9CA3AF" />
             <span>KYC & Docs</span>
           </button>
         </div>
@@ -595,6 +818,8 @@ export const RiderApp: React.FC = () => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '12px',
                 boxShadow: 'var(--shadow-sm)'
               }}
             >
@@ -802,6 +1027,22 @@ export const RiderApp: React.FC = () => {
       <RiderProfileModal
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
+      />
+
+      {/* Supabase Phone OTP Authentication Modal for Delivery Partners */}
+      <RiderAuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onSuccess={() => {
+          setIsAuthModalOpen(false);
+          setIsOnboardingPreview(false);
+          setIsOnboardingOpen(true);
+        }}
+        onDevPreview={() => {
+          setIsAuthModalOpen(false);
+          setIsOnboardingPreview(true);
+          setIsOnboardingOpen(true);
+        }}
       />
     </div>
   );

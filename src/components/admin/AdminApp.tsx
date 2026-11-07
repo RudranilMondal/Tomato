@@ -968,9 +968,16 @@ export const AdminApp: React.FC = () => {
                             >
                               <span>📞 {app.phone}</span>
                               {app.email && <span>✉️ {app.email}</span>}
+                              <span>🏙️ <strong>{app.city || 'Bengaluru'}</strong></span>
+                              <span>
+                                {app.vehicleType === 'Bicycle' ? '🚲 Bicycle' : `🛵 Bike (${app.vehicleNumber || 'KA 03 EN 4592'})`}
+                              </span>
                               <span>🩸 Blood: <strong>{app.bloodGroup}</strong></span>
                               <span>⚧ Gender: {app.gender}</span>
                               <span>🎂 DOB: {app.dob}</span>
+                              {app.emergencyContactPhone && (
+                                <span>🚨 Emergency: {app.emergencyContactName} ({app.emergencyContactPhone})</span>
+                              )}
                             </div>
 
                             <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '3px' }}>
@@ -1011,27 +1018,36 @@ export const AdminApp: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Middle: 6 Documents Preview Grid */}
+                      {/* Middle: 8 Documents Preview Grid */}
                       <div style={{ marginBottom: '16px' }}>
-                        <div style={{ fontSize: '12px', fontWeight: 800, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <FileText size={14} color="var(--color-primary)" />
-                          <span>Submitted Verification Documents (6/6 Scanned Photos)</span>
+                        <div style={{ fontSize: '12px', fontWeight: 800, marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <FileText size={14} color="var(--color-primary)" />
+                            <span>Submitted Verification Documents (8 Document Slots)</span>
+                          </div>
+                          {app.vehicleType === 'Bicycle' && (
+                            <span style={{ fontSize: '11px', color: 'var(--color-veg)', fontWeight: 700, backgroundColor: 'rgba(46, 204, 113, 0.1)', padding: '2px 8px', borderRadius: '4px' }}>
+                              🚲 Bicycle Partner (DL & RC Exempt)
+                            </span>
+                          )}
                         </div>
 
                         <div
                           style={{
                             display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                            gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
                             gap: '10px'
                           }}
                         >
                           {[
-                            { title: 'Aadhaar Front', url: app.documents.aadhaarFront },
-                            { title: 'Aadhaar Back', url: app.documents.aadhaarBack },
-                            { title: 'PAN Front', url: app.documents.panFront },
-                            { title: 'PAN Back', url: app.documents.panBack },
-                            { title: 'DL Front', url: app.documents.drivingLicenseFront },
-                            { title: 'DL Back', url: app.documents.drivingLicenseBack }
+                            { title: 'Aadhaar Front', url: app.documents?.aadhaarFront },
+                            { title: 'Aadhaar Back', url: app.documents?.aadhaarBack },
+                            { title: 'PAN Front', url: app.documents?.panFront },
+                            { title: 'PAN Back', url: app.documents?.panBack },
+                            { title: 'DL Front', url: app.documents?.drivingLicenseFront, isExempt: app.vehicleType === 'Bicycle' },
+                            { title: 'DL Back', url: app.documents?.drivingLicenseBack, isExempt: app.vehicleType === 'Bicycle' },
+                            { title: 'Vehicle RC', url: app.documents?.vehicleRc, isExempt: app.vehicleType === 'Bicycle' },
+                            { title: 'Bank Proof / Cheque', url: app.documents?.bankProof }
                           ].map((doc, idx) => (
                             <div
                               key={idx}
@@ -1061,7 +1077,12 @@ export const AdminApp: React.FC = () => {
                                   if (doc.url) setSelectedDocPreview({ title: `${app.fullName} - ${doc.title}`, url: doc.url });
                                 }}
                               >
-                                {doc.url ? (
+                                {doc.isExempt ? (
+                                  <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(46, 204, 113, 0.08)', padding: '4px', textAlign: 'center' }}>
+                                    <span style={{ fontSize: '18px' }}>🚲</span>
+                                    <span style={{ fontSize: '9px', color: 'var(--color-veg)', fontWeight: 700, marginTop: '2px' }}>Exempted</span>
+                                  </div>
+                                ) : doc.url ? (
                                   <>
                                     <img src={doc.url} alt={doc.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                     <div
@@ -1088,8 +1109,8 @@ export const AdminApp: React.FC = () => {
                                   </div>
                                 )}
                               </div>
-                              <span style={{ fontSize: '9px', color: 'var(--color-veg)', fontWeight: 700, textAlign: 'center' }}>
-                                ✓ UIDAI/RTO Verified
+                              <span style={{ fontSize: '9px', color: doc.isExempt ? '#9CA3AF' : 'var(--color-veg)', fontWeight: 700, textAlign: 'center' }}>
+                                {doc.isExempt ? 'Not Required' : '✓ Uploaded'}
                               </span>
                             </div>
                           ))}

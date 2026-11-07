@@ -184,7 +184,15 @@ export interface ChatMessage {
   time: string;
 }
 
-export type RiderOnboardingStatus = 'not_started' | 'under_review' | 'approved' | 'rejected';
+export type RiderOnboardingStatus =
+  | 'not_started'
+  | 'draft'
+  | 'submitted'
+  | 'under_review'
+  | 'in_review'
+  | 'approved'
+  | 'rejected'
+  | 'action_required';
 
 export interface RiderKycDocuments {
   aadhaarFront: string | null;
@@ -193,6 +201,8 @@ export interface RiderKycDocuments {
   panBack: string | null;
   drivingLicenseFront: string | null;
   drivingLicenseBack: string | null;
+  vehicleRc?: string | null;
+  bankProof?: string | null;
 }
 
 export interface RiderBankDetails {
@@ -205,10 +215,17 @@ export interface RiderBankDetails {
 
 export interface RiderOnboardingApplication {
   id: string;
+  applicationRef?: string;
   fullName: string;
   profilePhoto: string;
   phone: string;
   email?: string;
+  city?: string;
+  vehicleType?: 'Bike' | 'Bicycle';
+  vehicleNumber?: string;
+  drivingLicenseNumber?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
   residentialAddress: string;
   bloodGroup: 'A+' | 'A-' | 'B+' | 'B-' | 'O+' | 'O-' | 'AB+' | 'AB-';
   gender: 'Male' | 'Female' | 'Other';
