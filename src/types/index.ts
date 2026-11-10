@@ -94,7 +94,35 @@ export type OrderStatus =
   | 'rider_assigned'
   | 'picked_up'
   | 'out_for_delivery'
+  | 'delivered'
+  | 'rejected'
+  | 'cancelled'
+  | 'refunded';
+
+export type RiderDeliveryStep =
+  | 'heading_to_restaurant'
+  | 'at_restaurant'
+  | 'pickup_otp'
+  | 'out_for_delivery'
+  | 'at_customer'
   | 'delivered';
+
+export interface CompletedTrip {
+  id: string;
+  orderNumber: string;
+  restaurantName: string;
+  restaurantArea: string;
+  customerName: string;
+  customerArea: string;
+  distanceKm: number;
+  durationMins: number;
+  deliveryFee: number;
+  customerTip: number;
+  surgeBonus: number;
+  totalPayout: number;
+  completedAt: string;
+  status: 'Completed';
+}
 
 export interface RiderInfo {
   id: string;
@@ -124,6 +152,7 @@ export interface Order {
   totalAmount: number;
   appliedCoupon?: Coupon;
   paymentMethod: 'upi' | 'card' | 'cod';
+  paymentStatus?: 'pending' | 'captured' | 'failed' | 'refunded';
   deliveryAddress: {
     label: string;
     addressLine: string;
@@ -135,6 +164,9 @@ export interface Order {
   pickupOtp: string;
   deliveryOtp: string;
   estimatedDeliveryTime: string;
+  estimatedPrepMinutes?: number;
+  rejectionReason?: string;
+  cancellationReason?: string;
 }
 
 export interface UserProfile {

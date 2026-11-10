@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Order } from '../../types';
+import { Order, RiderDeliveryStep } from '../../types';
 import { X, Navigation, MapPin, Bike, Compass, AlertCircle } from 'lucide-react';
 
 interface RiderRouteModalProps {
   isOpen: boolean;
   order: Order | null;
-  step: 'heading_to_restaurant' | 'pickup_otp' | 'out_for_delivery' | 'delivered';
+  step: RiderDeliveryStep;
   onClose: () => void;
 }
 
@@ -29,8 +29,12 @@ export const RiderRouteModal: React.FC<RiderRouteModalProps> = ({
 
   if (!isOpen || !order) return null;
 
-  const isGoingToRest = step === 'heading_to_restaurant' || step === 'pickup_otp';
-  const targetLocation = isGoingToRest ? order.restaurant.name : order.deliveryAddress.addressLine;
+  const isGoingToRest = step === 'heading_to_restaurant' || step === 'pickup_otp' || step === 'at_restaurant';
+  const targetLocation = isGoingToRest
+    ? order.restaurant.name
+    : typeof order.deliveryAddress === 'string'
+      ? order.deliveryAddress
+      : order.deliveryAddress?.addressLine || 'Customer Location';
 
   const turns = isGoingToRest
     ? [

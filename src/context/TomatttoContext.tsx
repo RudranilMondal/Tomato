@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import confetti from 'canvas-confetti';
 import {
   AppMode,
@@ -18,12 +18,14 @@ import {
   RiderOnboardingStatus,
   RiderOnboardingApplication,
   RiderKycDocuments,
-  RiderBankDetails
+  RiderBankDetails,
+  RiderDeliveryStep,
+  CompletedTrip
 } from '../types';
-import { RESTAURANTS, COUPONS, INITIAL_USER, SAMPLE_RIDER } from '../data/mockData';
+import { RESTAURANTS, COUPONS, INITIAL_USER, SAMPLE_RIDER, INITIAL_PARTNER_ORDERS, INITIAL_RIDER_TRIPS } from '../data/mockData';
 import { supabase } from '../lib/supabase';
 import { Session, User } from '@supabase/supabase-js';
-import { DemoRiderUser } from '../lib/demoAuth';
+import { DemoRiderUser, DEMO_OTP_CODE } from '../lib/demoAuth';
 
 export type CustomerScreen =
   | 'splash'
@@ -146,9 +148,11 @@ interface TomatttoContextType {
   // Partner State
   incomingOrder: Order | null;
   partnerOrders: Order[];
-  partnerAcceptOrder: (orderId: string, prepMins?: number) => void;
-  partnerRejectOrder: (orderId: string) => void;
-  partnerMarkReady: (orderId: string) => void;
+  partnerAcceptOrder: (orderId: string, prepMins?: number) => { success: boolean; error?: string };
+  partnerStartPreparing: (orderId: string) => { success: boolean; error?: string };
+  partnerMarkReady: (orderId: string) => { success: boolean; error?: string };
+  partnerRejectOrder: (orderId: string, reason?: string) => { success: boolean; error?: string };
+  partnerCancelOrder: (orderId: string, reason?: string) => { success: boolean; error?: string };
   menuStockMap: Record<string, boolean>;
   toggleItemStock: (itemId: string) => void;
   addMenuItem: (
@@ -176,13 +180,18 @@ interface TomatttoContextType {
   setIsRiderOnline: (val: boolean) => void;
   riderDeliveryRequest: Order | null;
   activeRiderOrder: Order | null;
-  riderStep: 'heading_to_restaurant' | 'pickup_otp' | 'out_for_delivery' | 'delivered';
-  riderAcceptDelivery: () => void;
-  riderRejectDelivery: () => void;
-  riderVerifyPickup: (otp: string) => boolean;
-  riderCompleteDelivery: (otp: string) => boolean;
+  availableRiderOrders: Order[];
+  riderStep: RiderDeliveryStep;
+  setRiderStep: (step: RiderDeliveryStep) => void;
+  riderAcceptDelivery: (orderId?: string) => { success: boolean; error?: string };
+  riderRejectDelivery: (orderId?: string) => { success: boolean; error?: string };
+  riderArriveAtRestaurant: () => { success: boolean; error?: string };
+  riderVerifyPickup: (otp?: string) => { success: boolean; error?: string };
+  riderArriveAtCustomer: () => { success: boolean; error?: string };
+  riderCompleteDelivery: (otp: string) => { success: boolean; error?: string };
   riderEarningsToday: number;
   riderTripsToday: number;
+  completedRiderTrips: CompletedTrip[];
 
   // Rider Onboarding & KYC
   riderOnboardingStatus: RiderOnboardingStatus;
@@ -659,16 +668,18 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Partner
   const [incomingOrder, setIncomingOrder] = useState<Order | null>(null);
-  const [partnerOrders, setPartnerOrders] = useState<Order[]>([]);
+  const [partnerOrders, setPartnerOrders] = useState<Order[]>(INITIAL_PARTNER_ORDERS);
   const [menuStockMap, setMenuStockMap] = useState<Record<string, boolean>>({});
 
   // Rider
   const [isRiderOnline, setIsRiderOnline] = useState<boolean>(true);
   const [riderDeliveryRequest, setRiderDeliveryRequest] = useState<Order | null>(null);
   const [activeRiderOrder, setActiveRiderOrder] = useState<Order | null>(null);
-  const [riderStep, setRiderStep] = useState<'heading_to_restaurant' | 'pickup_otp' | 'out_for_delivery' | 'delivered'>('heading_to_restaurant');
+  const [riderStep, setRiderStep] = useState<RiderDeliveryStep>('heading_to_restaurant');
   const [riderEarningsToday, setRiderEarningsToday] = useState<number>(390);
   const [riderTripsToday, setRiderTripsToday] = useState<number>(6);
+  const [dismissedDeliveryIds, setDismissedDeliveryIds] = useState<string[]>([]);
+  const [completedRiderTrips, setCompletedRiderTrips] = useState<CompletedTrip[]>(INITIAL_RIDER_TRIPS);
 
   // Rider Onboarding & KYC Applications
   const [riderOnboardingStatus, setRiderOnboardingStatus] = useState<RiderOnboardingStatus>('approved');
@@ -994,33 +1005,229 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   // Partner Actions
-  const partnerAcceptOrder = (orderId: string, prepMins: number = 20) => {
+  const partnerAcceptOrder = (orderId: string, prepMins: number = 20): { success: boolean; error?: string } => {
+    const targetOrder = partnerOrders.find((o) => o.id === orderId) || (incomingOrder?.id === orderId ? incomingOrder : null);
+    if (!targetOrder) {
+      return { success: false, error: `Order #${orderId} was not found.` };
+    }
+
+    if (targetOrder.status === 'rejected' || targetOrder.status === 'cancelled') {
+      return {
+        success: false,
+        error: `Cannot accept Order #${orderId} because it is already ${targetOrder.status}.`
+      };
+    }
+
+    if (targetOrder.status !== 'placed') {
+      return {
+        success: false,
+        error: `Order #${orderId} has already progressed past incoming state (current status: ${targetOrder.status}).`
+      };
+    }
+
+    const updatedOrder: Order = {
+      ...targetOrder,
+      status: 'accepted',
+      estimatedPrepMinutes: prepMins
+    };
+
     setPartnerOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: 'preparing' as OrderStatus } : o))
+      prev.map((o) => (o.id === orderId ? updatedOrder : o))
     );
+
     if (incomingOrder?.id === orderId) {
-      const updated = { ...incomingOrder, status: 'preparing' as OrderStatus };
       setIncomingOrder(null);
-      if (currentOrder?.id === orderId) {
-        setCurrentOrder(updated);
-      }
-      // Notify rider app of delivery request!
-      setRiderDeliveryRequest(updated);
     }
-  };
 
-  const partnerRejectOrder = (orderId: string) => {
-    setIncomingOrder(null);
-    setPartnerOrders((prev) => prev.filter((o) => o.id !== orderId));
-  };
-
-  const partnerMarkReady = (orderId: string) => {
-    setPartnerOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: 'ready' as OrderStatus } : o))
-    );
     if (currentOrder?.id === orderId) {
-      setCurrentOrder((prev) => (prev ? { ...prev, status: 'ready' } : null));
+      setCurrentOrder(updatedOrder);
     }
+
+    setAllOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? updatedOrder : o))
+    );
+
+    return { success: true };
+  };
+
+  const partnerStartPreparing = (orderId: string): { success: boolean; error?: string } => {
+    const targetOrder = partnerOrders.find((o) => o.id === orderId) || (incomingOrder?.id === orderId ? incomingOrder : null);
+    if (!targetOrder) {
+      return { success: false, error: `Order #${orderId} was not found.` };
+    }
+
+    if (targetOrder.status === 'rejected' || targetOrder.status === 'cancelled') {
+      return {
+        success: false,
+        error: `Cannot cook Order #${orderId} because it is ${targetOrder.status}.`
+      };
+    }
+
+    if (targetOrder.status === 'preparing') {
+      return { success: false, error: `Order #${orderId} is already actively being prepared in kitchen.` };
+    }
+
+    if (targetOrder.status === 'ready' || targetOrder.status === 'delivered') {
+      return {
+        success: false,
+        error: `Order #${orderId} is already cooked and marked as ${targetOrder.status}.`
+      };
+    }
+
+    const updatedOrder: Order = {
+      ...targetOrder,
+      status: 'preparing'
+    };
+
+    setPartnerOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? updatedOrder : o))
+    );
+
+    if (incomingOrder?.id === orderId) {
+      setIncomingOrder(null);
+    }
+
+    if (currentOrder?.id === orderId) {
+      setCurrentOrder(updatedOrder);
+    }
+
+    setAllOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? updatedOrder : o))
+    );
+
+    // Notify rider app of active delivery request
+    setRiderDeliveryRequest(updatedOrder);
+
+    return { success: true };
+  };
+
+  const partnerMarkReady = (orderId: string): { success: boolean; error?: string } => {
+    const targetOrder = partnerOrders.find((o) => o.id === orderId);
+    if (!targetOrder) {
+      return { success: false, error: `Order #${orderId} was not found.` };
+    }
+
+    if (targetOrder.status === 'rejected' || targetOrder.status === 'cancelled') {
+      return {
+        success: false,
+        error: `Cannot mark Order #${orderId} as ready because it is ${targetOrder.status}.`
+      };
+    }
+
+    if (targetOrder.status === 'placed' || targetOrder.status === 'accepted') {
+      return {
+        success: false,
+        error: `Cannot mark Order #${orderId} ready before preparation has started. Please click "Start Preparing" first.`
+      };
+    }
+
+    if (targetOrder.status === 'ready') {
+      return { success: false, error: `Order #${orderId} is already packed and marked ready for pickup.` };
+    }
+
+    if (targetOrder.status === 'delivered' || targetOrder.status === 'picked_up' || targetOrder.status === 'out_for_delivery') {
+      return { success: false, error: `Order #${orderId} has already departed the restaurant.` };
+    }
+
+    const updatedOrder: Order = {
+      ...targetOrder,
+      status: 'ready'
+    };
+
+    setPartnerOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? updatedOrder : o))
+    );
+
+    if (currentOrder?.id === orderId) {
+      setCurrentOrder(updatedOrder);
+    }
+
+    setAllOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? updatedOrder : o))
+    );
+
+    return { success: true };
+  };
+
+  const partnerRejectOrder = (orderId: string, reason?: string): { success: boolean; error?: string } => {
+    const targetOrder = partnerOrders.find((o) => o.id === orderId) || (incomingOrder?.id === orderId ? incomingOrder : null);
+    if (!targetOrder) {
+      return { success: false, error: `Order #${orderId} was not found.` };
+    }
+
+    if (targetOrder.status === 'ready' || targetOrder.status === 'delivered' || targetOrder.status === 'picked_up' || targetOrder.status === 'out_for_delivery') {
+      return {
+        success: false,
+        error: `Cannot reject Order #${orderId} because food has already been prepared or dispatched.`
+      };
+    }
+
+    if (targetOrder.status === 'rejected') {
+      return { success: false, error: `Order #${orderId} is already rejected.` };
+    }
+
+    const selectedReason = reason || 'Kitchen at peak capacity';
+    const updatedOrder: Order = {
+      ...targetOrder,
+      status: 'rejected',
+      rejectionReason: selectedReason,
+      paymentStatus: 'refunded'
+    };
+
+    setPartnerOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? updatedOrder : o))
+    );
+
+    if (incomingOrder?.id === orderId) {
+      setIncomingOrder(null);
+    }
+
+    if (currentOrder?.id === orderId) {
+      setCurrentOrder(updatedOrder);
+    }
+
+    setAllOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? updatedOrder : o))
+    );
+
+    return { success: true };
+  };
+
+  const partnerCancelOrder = (orderId: string, reason?: string): { success: boolean; error?: string } => {
+    const targetOrder = partnerOrders.find((o) => o.id === orderId);
+    if (!targetOrder) {
+      return { success: false, error: `Order #${orderId} was not found.` };
+    }
+
+    if (targetOrder.status === 'delivered') {
+      return { success: false, error: `Cannot cancel Order #${orderId} because it is already delivered.` };
+    }
+
+    const selectedReason = reason || 'Cancelled by restaurant';
+    const updatedOrder: Order = {
+      ...targetOrder,
+      status: 'cancelled',
+      cancellationReason: selectedReason,
+      paymentStatus: 'refunded'
+    };
+
+    setPartnerOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? updatedOrder : o))
+    );
+
+    if (incomingOrder?.id === orderId) {
+      setIncomingOrder(null);
+    }
+
+    if (currentOrder?.id === orderId) {
+      setCurrentOrder(updatedOrder);
+    }
+
+    setAllOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? updatedOrder : o))
+    );
+
+    return { success: true };
   };
 
   const toggleItemStock = (itemId: string) => {
@@ -1178,44 +1385,246 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  // Rider Actions
-  const riderAcceptDelivery = () => {
-    if (!riderDeliveryRequest) return;
-    const order = { ...riderDeliveryRequest, status: 'rider_assigned' as OrderStatus };
-    setActiveRiderOrder(order);
-    setRiderDeliveryRequest(null);
-    setRiderStep('heading_to_restaurant');
-    if (currentOrder?.id === order.id) {
-      setCurrentOrder(order);
+  // Available Deliveries for Rider
+  const availableRiderOrders = useMemo(() => {
+    if (activeRiderOrder) {
+      // Rider already has an active delivery
+      return [];
     }
+
+    const list: Order[] = [];
+    const seenIds = new Set<string>();
+
+    if (riderDeliveryRequest && !dismissedDeliveryIds.includes(riderDeliveryRequest.id)) {
+      list.push(riderDeliveryRequest);
+      seenIds.add(riderDeliveryRequest.id);
+    }
+
+    // Orders marked as 'ready' (ready for pickup) or newly assigned in partnerOrders
+    partnerOrders.forEach((o) => {
+      if (
+        (o.status === 'ready' || o.status === 'rider_assigned') &&
+        !seenIds.has(o.id) &&
+        !dismissedDeliveryIds.includes(o.id)
+      ) {
+        list.push(o);
+        seenIds.add(o.id);
+      }
+    });
+
+    allOrders.forEach((o) => {
+      if (
+        (o.status === 'ready' || o.status === 'rider_assigned') &&
+        !seenIds.has(o.id) &&
+        !dismissedDeliveryIds.includes(o.id)
+      ) {
+        list.push(o);
+        seenIds.add(o.id);
+      }
+    });
+
+    return list;
+  }, [activeRiderOrder, riderDeliveryRequest, partnerOrders, allOrders, dismissedDeliveryIds]);
+
+  // Rider Actions & Workflow
+  const riderAcceptDelivery = (orderId?: string): { success: boolean; error?: string } => {
+    if (activeRiderOrder) {
+      return {
+        success: false,
+        error: `You already have active delivery #${activeRiderOrder.id} in progress. Complete it before accepting another order.`
+      };
+    }
+
+    let targetOrder: Order | null = null;
+    if (orderId) {
+      targetOrder =
+        availableRiderOrders.find((o) => o.id === orderId) ||
+        partnerOrders.find((o) => o.id === orderId) ||
+        allOrders.find((o) => o.id === orderId) ||
+        null;
+    } else {
+      targetOrder = riderDeliveryRequest || availableRiderOrders[0] || null;
+    }
+
+    if (!targetOrder) {
+      return { success: false, error: 'Order not found or no longer available for delivery.' };
+    }
+
+    if (
+      targetOrder.status === 'picked_up' ||
+      targetOrder.status === 'out_for_delivery' ||
+      targetOrder.status === 'delivered'
+    ) {
+      return { success: false, error: `Order #${targetOrder.id} is already in transit or completed.` };
+    }
+
+    if (targetOrder.status === 'rejected' || targetOrder.status === 'cancelled') {
+      return { success: false, error: `Order #${targetOrder.id} was cancelled by restaurant.` };
+    }
+
+    const assignedOrder: Order = {
+      ...targetOrder,
+      status: 'rider_assigned',
+      rider: SAMPLE_RIDER
+    };
+
+    setActiveRiderOrder(assignedOrder);
+    setRiderStep('heading_to_restaurant');
+
+    if (riderDeliveryRequest?.id === assignedOrder.id) {
+      setRiderDeliveryRequest(null);
+    }
+
+    // Sync partner orders, all orders, & customer current order
+    setPartnerOrders((prev) =>
+      prev.map((o) => (o.id === assignedOrder.id ? assignedOrder : o))
+    );
+    setAllOrders((prev) =>
+      prev.map((o) => (o.id === assignedOrder.id ? assignedOrder : o))
+    );
+    if (currentOrder?.id === assignedOrder.id) {
+      setCurrentOrder(assignedOrder);
+    }
+
+    return { success: true };
   };
 
-  const riderRejectDelivery = () => {
-    setRiderDeliveryRequest(null);
+  const riderRejectDelivery = (orderId?: string): { success: boolean; error?: string } => {
+    if (orderId) {
+      setDismissedDeliveryIds((prev) => (prev.includes(orderId) ? prev : [...prev, orderId]));
+      if (riderDeliveryRequest?.id === orderId) {
+        setRiderDeliveryRequest(null);
+      }
+    } else {
+      if (riderDeliveryRequest) {
+        setDismissedDeliveryIds((prev) =>
+          prev.includes(riderDeliveryRequest.id) ? prev : [...prev, riderDeliveryRequest.id]
+        );
+        setRiderDeliveryRequest(null);
+      }
+    }
+    return { success: true };
   };
 
-  const riderVerifyPickup = (_otp: string) => {
-    if (!activeRiderOrder) return false;
-    const updated = { ...activeRiderOrder, status: 'picked_up' as OrderStatus };
+  const riderArriveAtRestaurant = (): { success: boolean; error?: string } => {
+    if (!activeRiderOrder) {
+      return { success: false, error: 'No active delivery order found.' };
+    }
+    if (riderStep !== 'heading_to_restaurant') {
+      return { success: false, error: 'Rider is not en route to the restaurant.' };
+    }
+    setRiderStep('at_restaurant');
+    return { success: true };
+  };
+
+  const riderVerifyPickup = (_otp?: string): { success: boolean; error?: string } => {
+    if (!activeRiderOrder) {
+      return { success: false, error: 'No active delivery order found.' };
+    }
+
+    if (
+      activeRiderOrder.status !== 'ready' &&
+      activeRiderOrder.status !== 'rider_assigned'
+    ) {
+      return {
+        success: false,
+        error: `Order is currently in status "${activeRiderOrder.status}" and cannot be picked up.`
+      };
+    }
+
+    const updated: Order = {
+      ...activeRiderOrder,
+      status: 'picked_up'
+    };
+
     setActiveRiderOrder(updated);
     setRiderStep('out_for_delivery');
+
+    setPartnerOrders((prev) =>
+      prev.map((o) => (o.id === updated.id ? updated : o))
+    );
+    setAllOrders((prev) =>
+      prev.map((o) => (o.id === updated.id ? updated : o))
+    );
     if (currentOrder?.id === updated.id) {
       setCurrentOrder(updated);
     }
-    return true;
+
+    return { success: true };
   };
 
-  const riderCompleteDelivery = (_otp: string) => {
-    if (!activeRiderOrder) return false;
-    const updated = { ...activeRiderOrder, status: 'delivered' as OrderStatus };
-    setActiveRiderOrder(null);
-    setRiderStep('delivered');
-    setRiderEarningsToday((prev) => prev + 65);
+  const riderArriveAtCustomer = (): { success: boolean; error?: string } => {
+    if (!activeRiderOrder) {
+      return { success: false, error: 'No active delivery order found.' };
+    }
+    if (riderStep !== 'out_for_delivery') {
+      return { success: false, error: 'Food must be picked up before arriving at customer doorstep.' };
+    }
+    setRiderStep('at_customer');
+    return { success: true };
+  };
+
+  const riderCompleteDelivery = (otp: string): { success: boolean; error?: string } => {
+    if (!activeRiderOrder) {
+      return { success: false, error: 'No active delivery order to complete.' };
+    }
+
+    const cleanOtp = otp.trim();
+    // Validate against fixed demo OTP 123456 or customer order OTP
+    const isValid = cleanOtp === DEMO_OTP_CODE || cleanOtp === activeRiderOrder.deliveryOtp;
+
+    if (!isValid) {
+      return {
+        success: false,
+        error: `Invalid delivery verification OTP. In development demo mode, enter OTP: ${DEMO_OTP_CODE}`
+      };
+    }
+
+    const updated: Order = {
+      ...activeRiderOrder,
+      status: 'delivered'
+    };
+
+    const payout = 45 + (activeRiderOrder.tipAmount || 30) + 15; // base fare + tip + surge
+    setRiderEarningsToday((prev) => prev + payout);
     setRiderTripsToday((prev) => prev + 1);
+
+    const completedTrip: CompletedTrip = {
+      id: `TRIP-${Date.now().toString().slice(-4)}`,
+      orderNumber: activeRiderOrder.id,
+      restaurantName: activeRiderOrder.restaurant.name,
+      restaurantArea: activeRiderOrder.restaurant.address || 'Indiranagar 100ft Rd',
+      customerName: activeRiderOrder.customerName,
+      customerArea: activeRiderOrder.deliveryAddress.addressLine,
+      distanceKm: 3.2,
+      durationMins: 18,
+      deliveryFee: 45,
+      customerTip: activeRiderOrder.tipAmount || 30,
+      surgeBonus: 15,
+      totalPayout: payout,
+      completedAt: 'Just now',
+      status: 'Completed'
+    };
+
+    setCompletedRiderTrips((prev) => [completedTrip, ...prev]);
+    setActiveRiderOrder(null);
+    setRiderStep('heading_to_restaurant');
+
+    setPartnerOrders((prev) =>
+      prev.map((o) => (o.id === updated.id ? updated : o))
+    );
+    setAllOrders((prev) =>
+      prev.map((o) => (o.id === updated.id ? updated : o))
+    );
     if (currentOrder?.id === updated.id) {
       setCurrentOrder(updated);
     }
-    return true;
+
+    try {
+      confetti({ particleCount: 75, spread: 60, origin: { y: 0.6 } });
+    } catch {}
+
+    return { success: true };
   };
 
   const submitRiderOnboarding = (appData: Omit<RiderOnboardingApplication, 'id' | 'status' | 'submittedAt'>) => {
@@ -1516,8 +1925,10 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         incomingOrder,
         partnerOrders,
         partnerAcceptOrder,
-        partnerRejectOrder,
+        partnerStartPreparing,
         partnerMarkReady,
+        partnerRejectOrder,
+        partnerCancelOrder,
         menuStockMap,
         toggleItemStock,
         addMenuItem,
@@ -1532,13 +1943,18 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setIsRiderOnline,
         riderDeliveryRequest,
         activeRiderOrder,
+        availableRiderOrders,
         riderStep,
+        setRiderStep,
         riderAcceptDelivery,
         riderRejectDelivery,
+        riderArriveAtRestaurant,
         riderVerifyPickup,
+        riderArriveAtCustomer,
         riderCompleteDelivery,
         riderEarningsToday,
         riderTripsToday,
+        completedRiderTrips,
         riderOnboardingStatus,
         setRiderOnboardingStatus,
         persistedRiderApp,

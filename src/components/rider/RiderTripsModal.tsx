@@ -1,4 +1,5 @@
 import React from 'react';
+import { CompletedTrip } from '../../types';
 import { X, Bike, MapPin, DollarSign, Clock, CheckCircle2, ChevronRight, Navigation } from 'lucide-react';
 
 interface RiderTripsModalProps {
@@ -6,23 +7,7 @@ interface RiderTripsModalProps {
   onClose: () => void;
   tripsToday: number;
   earningsToday: number;
-}
-
-interface CompletedTrip {
-  id: string;
-  orderNumber: string;
-  restaurantName: string;
-  restaurantArea: string;
-  customerName: string;
-  customerArea: string;
-  distanceKm: number;
-  durationMins: number;
-  deliveryFee: number;
-  customerTip: number;
-  surgeBonus: number;
-  totalPayout: number;
-  completedAt: string;
-  status: 'Completed';
+  completedTrips?: CompletedTrip[];
 }
 
 const PAST_TRIPS: CompletedTrip[] = [
@@ -96,9 +81,12 @@ export const RiderTripsModal: React.FC<RiderTripsModalProps> = ({
   isOpen,
   onClose,
   tripsToday,
-  earningsToday
+  earningsToday,
+  completedTrips
 }) => {
   if (!isOpen) return null;
+
+  const tripsList = completedTrips && completedTrips.length > 0 ? completedTrips : PAST_TRIPS;
 
   return (
     <div
@@ -214,7 +202,7 @@ export const RiderTripsModal: React.FC<RiderTripsModalProps> = ({
           }}
           className="no-scrollbar"
         >
-          {PAST_TRIPS.map((trip) => (
+          {tripsList.map((trip) => (
             <div
               key={trip.id}
               style={{

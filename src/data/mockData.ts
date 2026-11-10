@@ -1,4 +1,4 @@
-import { Restaurant, Cuisine, Coupon, UserProfile, RiderInfo } from '../types';
+import { Restaurant, Cuisine, Coupon, UserProfile, RiderInfo, Order, CompletedTrip } from '../types';
 
 export const CUISINES: Cuisine[] = [
   { id: '1', name: 'Biryani', iconUrl: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=200&auto=format&fit=crop&q=80', isPopular: true },
@@ -80,6 +80,73 @@ export const SAMPLE_RIDER: RiderInfo = {
   lat: 12.972,
   lng: 77.642
 };
+
+export const INITIAL_RIDER_TRIPS: CompletedTrip[] = [
+  {
+    id: 'TRIP-108',
+    orderNumber: 'TOM-8921',
+    restaurantName: 'Meghana Foods',
+    restaurantArea: 'Indiranagar 100ft Rd',
+    customerName: 'Rahul Verma',
+    customerArea: 'Defence Colony, 4th Cross',
+    distanceKm: 3.2,
+    durationMins: 19,
+    deliveryFee: 45,
+    customerTip: 30,
+    surgeBonus: 15,
+    totalPayout: 90,
+    completedAt: 'Today, 1:42 PM',
+    status: 'Completed'
+  },
+  {
+    id: 'TRIP-107',
+    orderNumber: 'TOM-8845',
+    restaurantName: 'Truffles',
+    restaurantArea: 'Koramangala 5th Block',
+    customerName: 'Priya Sundaram',
+    customerArea: 'Sony World Signal, 7th Block',
+    distanceKm: 2.1,
+    durationMins: 14,
+    deliveryFee: 40,
+    customerTip: 20,
+    surgeBonus: 0,
+    totalPayout: 60,
+    completedAt: 'Today, 12:15 PM',
+    status: 'Completed'
+  },
+  {
+    id: 'TRIP-106',
+    orderNumber: 'TOM-8712',
+    restaurantName: 'Leon Grill',
+    restaurantArea: 'Indiranagar Metro',
+    customerName: 'Arjun Das',
+    customerArea: 'HAL 2nd Stage, Doopanahalli',
+    distanceKm: 4.5,
+    durationMins: 24,
+    deliveryFee: 55,
+    customerTip: 50,
+    surgeBonus: 20,
+    totalPayout: 125,
+    completedAt: 'Today, 11:20 AM',
+    status: 'Completed'
+  },
+  {
+    id: 'TRIP-105',
+    orderNumber: 'TOM-8650',
+    restaurantName: 'Chai Point',
+    restaurantArea: 'Domlur Flyover',
+    customerName: 'Sneha Patel',
+    customerArea: 'Embassy Golf Links, Tower D',
+    distanceKm: 1.8,
+    durationMins: 11,
+    deliveryFee: 35,
+    customerTip: 10,
+    surgeBonus: 0,
+    totalPayout: 45,
+    completedAt: 'Today, 10:05 AM',
+    status: 'Completed'
+  }
+];
 
 export const RESTAURANTS: Restaurant[] = [
   {
@@ -671,5 +738,258 @@ export const RESTAURANTS: Restaurant[] = [
         ]
       }
     ]
+  }
+];
+
+export const INITIAL_PARTNER_ORDERS: Order[] = [
+  {
+    id: 'TOM-801249',
+    createdAt: 'Just now',
+    customerName: 'Ananya Iyer',
+    customerPhone: '+91 98765 43210',
+    restaurant: RESTAURANTS[0],
+    items: [
+      {
+        id: 'cart-init-1',
+        menuItem: RESTAURANTS[0].categories[0].items[0],
+        quantity: 1,
+        selectedVariant: { id: 'v1', name: 'Regular (Serves 1)', price: 445 },
+        selectedAddons: [{ id: 'a1', name: 'Extra Gosht Korma Gravy', price: 65 }],
+        specialInstruction: 'Make it mild spicy, extra salan please.',
+        itemTotal: 510
+      },
+      {
+        id: 'cart-init-2',
+        menuItem: RESTAURANTS[0].categories[2].items[0],
+        quantity: 2,
+        itemTotal: 170
+      }
+    ],
+    status: 'placed',
+    itemTotal: 680,
+    deliveryFee: 35,
+    platformFee: 5,
+    taxAmount: 34,
+    discountAmount: 100,
+    tipAmount: 30,
+    totalAmount: 684,
+    paymentMethod: 'upi',
+    paymentStatus: 'captured',
+    deliveryAddress: {
+      label: 'Home',
+      addressLine: 'Flat 402, Shanti Apts, 12th Main, Indiranagar, Bengaluru',
+      landmark: 'Near Corner House Ice Cream'
+    },
+    specialCookingInstructions: 'Low oil and mild spice for family with kids. Extra tissues.',
+    pickupOtp: '4892',
+    deliveryOtp: '7153',
+    estimatedDeliveryTime: '25 mins',
+    estimatedPrepMinutes: 20
+  },
+  {
+    id: 'TOM-798102',
+    createdAt: '5 mins ago',
+    customerName: 'Rohan Deshmukh',
+    customerPhone: '+91 99123 77481',
+    restaurant: RESTAURANTS[0],
+    items: [
+      {
+        id: 'cart-init-3',
+        menuItem: RESTAURANTS[0].categories[0].items[1],
+        quantity: 1,
+        selectedVariant: { id: 'v4', name: 'King Size (Serves 2-3)', price: 620 },
+        selectedAddons: [{ id: 'a2', name: 'Burani Garlic Raita', price: 45 }],
+        specialInstruction: 'Fresh raita separately packed.',
+        itemTotal: 665
+      },
+      {
+        id: 'cart-init-4',
+        menuItem: RESTAURANTS[0].categories[1].items[1],
+        quantity: 1,
+        itemTotal: 220
+      }
+    ],
+    status: 'accepted',
+    itemTotal: 885,
+    deliveryFee: 35,
+    platformFee: 5,
+    taxAmount: 44,
+    discountAmount: 100,
+    tipAmount: 20,
+    totalAmount: 889,
+    paymentMethod: 'card',
+    paymentStatus: 'captured',
+    deliveryAddress: {
+      label: 'Work',
+      addressLine: 'WeWork Galaxy, 43 Residency Road, Bengaluru',
+      landmark: 'Gate 2 Security Desk'
+    },
+    specialCookingInstructions: 'Severe peanut and sesame seed allergy on the paneer dish.',
+    pickupOtp: '2341',
+    deliveryOtp: '9082',
+    estimatedDeliveryTime: '30 mins',
+    estimatedPrepMinutes: 25
+  },
+  {
+    id: 'TOM-792451',
+    createdAt: '12 mins ago',
+    customerName: 'Meera Nambiar',
+    customerPhone: '+91 98451 22390',
+    restaurant: RESTAURANTS[0],
+    items: [
+      {
+        id: 'cart-init-5',
+        menuItem: RESTAURANTS[0].categories[0].items[2],
+        quantity: 2,
+        selectedVariant: { id: 'v5', name: 'Regular (Serves 1)', price: 385 },
+        itemTotal: 770
+      },
+      {
+        id: 'cart-init-6',
+        menuItem: RESTAURANTS[0].categories[1].items[0],
+        quantity: 1,
+        selectedAddons: [{ id: 'a4', name: 'Mint Chutney Dip', price: 25 }],
+        specialInstruction: 'Well-done charred kebabs.',
+        itemTotal: 300
+      }
+    ],
+    status: 'preparing',
+    itemTotal: 1070,
+    deliveryFee: 0,
+    platformFee: 5,
+    taxAmount: 54,
+    discountAmount: 150,
+    tipAmount: 40,
+    totalAmount: 1019,
+    paymentMethod: 'upi',
+    paymentStatus: 'captured',
+    deliveryAddress: {
+      label: 'Home',
+      addressLine: 'Villa 14, Palm Meadows, Whitefield, Bengaluru'
+    },
+    specialCookingInstructions: 'Pack gravy separately in heat-sealed spill-proof containers.',
+    pickupOtp: '8820',
+    deliveryOtp: '3149',
+    estimatedDeliveryTime: '18 mins',
+    estimatedPrepMinutes: 20
+  },
+  {
+    id: 'TOM-786310',
+    createdAt: '22 mins ago',
+    customerName: 'Arjun Kapoor',
+    customerPhone: '+91 97412 88390',
+    restaurant: RESTAURANTS[0],
+    items: [
+      {
+        id: 'cart-init-7',
+        menuItem: RESTAURANTS[0].categories[0].items[0],
+        quantity: 1,
+        selectedVariant: { id: 'v2', name: 'King Size (Serves 2-3)', price: 799 },
+        itemTotal: 799
+      },
+      {
+        id: 'cart-init-8',
+        menuItem: RESTAURANTS[0].categories[1].items[0],
+        quantity: 2,
+        selectedAddons: [{ id: 'a5', name: 'Rumali Roti', price: 30 }],
+        itemTotal: 610
+      }
+    ],
+    status: 'ready',
+    itemTotal: 1409,
+    deliveryFee: 0,
+    platformFee: 5,
+    taxAmount: 70,
+    discountAmount: 150,
+    tipAmount: 50,
+    totalAmount: 1384,
+    paymentMethod: 'upi',
+    paymentStatus: 'captured',
+    deliveryAddress: {
+      label: 'Home',
+      addressLine: 'House 88, 5th Cross, Koramangala 4th Block, Bengaluru',
+      landmark: 'Opposite BDA Complex'
+    },
+    specialCookingInstructions: 'Extra cutleries, bone disposal pouch, and mint mouth fresheners.',
+    rider: SAMPLE_RIDER,
+    pickupOtp: '5519',
+    deliveryOtp: '6642',
+    estimatedDeliveryTime: '10 mins',
+    estimatedPrepMinutes: 20
+  },
+  {
+    id: 'TOM-774921',
+    createdAt: '45 mins ago',
+    customerName: 'Pooja Hegde',
+    customerPhone: '+91 96112 33455',
+    restaurant: RESTAURANTS[0],
+    items: [
+      {
+        id: 'cart-init-9',
+        menuItem: RESTAURANTS[0].categories[0].items[1],
+        quantity: 1,
+        selectedVariant: { id: 'v3', name: 'Regular (Serves 1)', price: 345 },
+        itemTotal: 345
+      },
+      {
+        id: 'cart-init-10',
+        menuItem: RESTAURANTS[0].categories[2].items[0],
+        quantity: 2,
+        itemTotal: 170
+      }
+    ],
+    status: 'delivered',
+    itemTotal: 515,
+    deliveryFee: 35,
+    platformFee: 5,
+    taxAmount: 26,
+    discountAmount: 75,
+    tipAmount: 30,
+    totalAmount: 536,
+    paymentMethod: 'upi',
+    paymentStatus: 'captured',
+    deliveryAddress: {
+      label: 'Home',
+      addressLine: 'Tower 2, Apt 1104, Brigade Gateway, Malleshwaram, Bengaluru'
+    },
+    rider: SAMPLE_RIDER,
+    pickupOtp: '3391',
+    deliveryOtp: '1120',
+    estimatedDeliveryTime: 'Delivered',
+    estimatedPrepMinutes: 15
+  },
+  {
+    id: 'TOM-768192',
+    createdAt: '1 hour ago',
+    customerName: 'Karan Verma',
+    customerPhone: '+91 91234 56780',
+    restaurant: RESTAURANTS[0],
+    items: [
+      {
+        id: 'cart-init-11',
+        menuItem: RESTAURANTS[0].categories[1].items[0],
+        quantity: 4,
+        itemTotal: 1100
+      }
+    ],
+    status: 'rejected',
+    rejectionReason: 'Key ingredients / dishes out of stock (Charcoal grill offline)',
+    itemTotal: 1100,
+    deliveryFee: 0,
+    platformFee: 5,
+    taxAmount: 55,
+    discountAmount: 100,
+    tipAmount: 0,
+    totalAmount: 1060,
+    paymentMethod: 'card',
+    paymentStatus: 'refunded',
+    deliveryAddress: {
+      label: 'Work',
+      addressLine: 'Embassy Golf Links, Challaghatta, Domlur, Bengaluru'
+    },
+    pickupOtp: '0000',
+    deliveryOtp: '0000',
+    estimatedDeliveryTime: 'Cancelled',
+    estimatedPrepMinutes: 0
   }
 ];

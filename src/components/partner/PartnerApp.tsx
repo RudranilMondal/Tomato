@@ -35,7 +35,16 @@ import {
   Percent,
   ArrowUpRight,
   Flame,
-  Award
+  Award,
+  Search,
+  LayoutGrid,
+  ListFilter,
+  Bike,
+  ShieldAlert,
+  CreditCard,
+  MapPin,
+  User,
+  Check
 } from 'lucide-react';
 
 export const PartnerApp: React.FC = () => {
@@ -45,8 +54,10 @@ export const PartnerApp: React.FC = () => {
     incomingOrder,
     partnerOrders,
     partnerAcceptOrder,
-    partnerRejectOrder,
+    partnerStartPreparing,
     partnerMarkReady,
+    partnerRejectOrder,
+    partnerCancelOrder,
     menuStockMap,
     toggleItemStock,
     triggerSimulatedCustomerOrder
@@ -63,6 +74,57 @@ export const PartnerApp: React.FC = () => {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [isMobileScreen, setIsMobileScreen] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
+
+  // Phase 1: Order Dashboard Controls State
+  const [orderFilter, setOrderFilter] = useState<'all' | 'placed' | 'accepted' | 'preparing' | 'ready' | 'delivered' | 'rejected'>('all');
+  const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [incomingPrepMins, setIncomingPrepMins] = useState(20);
+  const [cardPrepMins, setCardPrepMins] = useState<Record<string, number>>({});
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  const handleAcceptOrder = (orderId: string, prepMins: number = 20) => {
+    const res = partnerAcceptOrder(orderId, prepMins);
+    if (res.success) {
+      setToast({ type: 'success', message: `Order #${orderId} accepted! Estimated prep set to ${prepMins} mins.` });
+    } else {
+      setToast({ type: 'error', message: res.error || 'Failed to accept order.' });
+    }
+  };
+
+  const handleStartPreparing = (orderId: string) => {
+    const res = partnerStartPreparing(orderId);
+    if (res.success) {
+      setToast({ type: 'success', message: `Order #${orderId} sent to kitchen line! Preparation started.` });
+    } else {
+      setToast({ type: 'error', message: res.error || 'Failed to start cooking.' });
+    }
+  };
+
+  const handleMarkReady = (orderId: string) => {
+    const res = partnerMarkReady(orderId);
+    if (res.success) {
+      setToast({ type: 'success', message: `Order #${orderId} marked ready! Packaging sealed & pickup OTP active.` });
+    } else {
+      setToast({ type: 'error', message: res.error || 'Failed to mark order ready.' });
+    }
+  };
+
+  const handleRejectConfirm = (orderId: string, reason: string) => {
+    const res = partnerRejectOrder(orderId, reason);
+    if (res.success) {
+      setToast({ type: 'success', message: `Order #${orderId} rejected (${reason}). Customer notified and refund issued.` });
+    } else {
+      setToast({ type: 'error', message: res.error || 'Failed to reject order.' });
+    }
+  };
 
   useEffect(() => {
     const handleResize = () => {
@@ -359,8 +421,48 @@ export const PartnerApp: React.FC = () => {
       </div>
 
       {/* Main Body */}
-      <div style={{ flex: 1, padding: '20px', maxWidth: '960px', margin: '0 auto', width: '100%' }}>
-        {/* Incoming Order Alert Banner / Modal if active */}
+      <div style={{ flex: 1, padding: '20px', maxWidth: '1060px', margin: '0 auto', width: '100%' }}>
+        {/* Operation Toast Notification */}
+        {toast && (
+          <div
+            style={{
+              padding: '12px 18px',
+              borderRadius: 'var(--radius-md)',
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: toast.type === 'success' ? 'rgba(46, 204, 113, 0.15)' : 'rgba(231, 76, 60, 0.15)',
+              border: `1.5px solid ${toast.type === 'success' ? 'var(--color-veg)' : '#E74C3C'}`,
+              color: toast.type === 'success' ? 'var(--color-veg)' : '#E74C3C',
+              fontSize: '13px',
+              fontWeight: 700,
+              boxShadow: 'var(--shadow-md)',
+              animation: 'fadeIn 0.2s ease'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {toast.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+              <span>{toast.message}</span>
+            </div>
+            <button
+              onClick={() => setToast(null)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'currentColor',
+                cursor: 'pointer',
+                padding: '4px',
+                display: 'flex',
+                alignItems: 'center'
+              }}
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
+
+        {/* Incoming Order Alert Banner */}
         {incomingOrder && (
           <div
             style={{
@@ -373,12 +475,12 @@ export const PartnerApp: React.FC = () => {
               animation: 'pulseGlow 2s infinite'
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div
                   style={{
-                    width: '36px',
-                    height: '36px',
+                    width: '38px',
+                    height: '38px',
                     borderRadius: '50%',
                     backgroundColor: 'var(--color-primary)',
                     color: '#FFFFFF',
@@ -388,22 +490,43 @@ export const PartnerApp: React.FC = () => {
                     animation: 'floatRide 1s infinite'
                   }}
                 >
-                  <Bell size={18} />
+                  <Bell size={20} />
                 </div>
                 <div>
-                  <h4 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--color-primary)' }}>
+                  <h4 style={{ fontSize: '16px', fontWeight: 900, color: 'var(--color-primary)' }}>
                     🔥 NEW ORDER RECEIVED! (#{incomingOrder.id})
                   </h4>
                   <p style={{ fontSize: '12px', color: 'var(--color-text-main)', marginTop: '2px' }}>
-                    Customer: <b>{incomingOrder.customerName}</b> • {incomingOrder.items.length} items • ₹{incomingOrder.totalAmount}
+                    Customer: <b>{incomingOrder.customerName}</b> ({incomingOrder.customerPhone}) • {incomingOrder.items.length} items • <b>₹{incomingOrder.totalAmount}</b> ({incomingOrder.paymentMethod.toUpperCase()})
                   </p>
                 </div>
               </div>
 
-              <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--color-primary)', backgroundColor: '#FFFFFF', padding: '4px 8px', borderRadius: '4px' }}>
-                Auto-reject in 45s
+              <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--color-primary)', backgroundColor: '#FFFFFF', padding: '4px 10px', borderRadius: '4px', border: '1px solid var(--color-primary)' }}>
+                Action Required
               </span>
             </div>
+
+            {/* Special cooking notes / dietary warning if present */}
+            {incomingOrder.specialCookingInstructions && (
+              <div
+                style={{
+                  backgroundColor: '#FFF9E6',
+                  border: '1px solid #FFB400',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '8px 12px',
+                  margin: '10px 0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontSize: '12px'
+                }}
+              >
+                <AlertCircle size={15} color="#D35400" />
+                <span style={{ fontWeight: 700, color: '#D35400' }}>Note:</span>
+                <span style={{ color: '#1E1E24' }}>"{incomingOrder.specialCookingInstructions}"</span>
+              </div>
+            )}
 
             {/* Items inside incoming order */}
             <div
@@ -416,418 +539,940 @@ export const PartnerApp: React.FC = () => {
               }}
             >
               {incomingOrder.items.map((i) => (
-                <div key={i.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>
-                  <span>{i.quantity}x {i.menuItem.name}</span>
+                <div key={i.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                  <span>{i.quantity}x {i.menuItem.name} {i.selectedVariant ? `(${i.selectedVariant.name})` : ''}</span>
                   <span>₹{i.itemTotal}</span>
                 </div>
               ))}
             </div>
 
-            {/* Action buttons */}
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setRejectOrderId(incomingOrder.id)}
-                style={{
-                  padding: '10px 18px',
-                  borderRadius: 'var(--radius-md)',
-                  backgroundColor: 'var(--color-surface)',
-                  color: '#E74C3C',
-                  border: '1.5px solid #E74C3C',
-                  fontSize: '13px',
-                  fontWeight: 700
-                }}
-              >
-                Reject Order
-              </button>
+            {/* Action buttons & Prep Time Selector */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-main)' }}>Estimated Prep:</span>
+                {[15, 20, 30, 45].map((mins) => (
+                  <button
+                    key={mins}
+                    onClick={() => setIncomingPrepMins(mins)}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: 'var(--radius-sm)',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      backgroundColor: incomingPrepMins === mins ? 'var(--color-primary)' : 'var(--color-surface)',
+                      color: incomingPrepMins === mins ? '#FFFFFF' : 'var(--color-text-main)',
+                      border: `1px solid ${incomingPrepMins === mins ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {mins}m
+                  </button>
+                ))}
+              </div>
 
-              <button
-                onClick={() => partnerAcceptOrder(incomingOrder.id, 20)}
-                style={{
-                  padding: '10px 22px',
-                  borderRadius: 'var(--radius-md)',
-                  backgroundColor: 'var(--color-veg)',
-                  color: '#FFFFFF',
-                  fontSize: '13px',
-                  fontWeight: 800,
-                  boxShadow: '0 4px 12px rgba(46, 204, 113, 0.3)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                <CheckCircle2 size={16} />
-                <span>Accept (Set 20 mins prep)</span>
-              </button>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  onClick={() => setInspectedOrder(incomingOrder)}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: 'var(--radius-md)',
+                    backgroundColor: 'var(--color-surface)',
+                    color: 'var(--color-text-main)',
+                    border: '1px solid var(--color-border)',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  View KOT
+                </button>
+
+                <button
+                  onClick={() => setRejectOrderId(incomingOrder.id)}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: 'var(--radius-md)',
+                    backgroundColor: 'var(--color-surface)',
+                    color: '#E74C3C',
+                    border: '1.5px solid #E74C3C',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Reject Order
+                </button>
+
+                <button
+                  onClick={() => handleAcceptOrder(incomingOrder.id, incomingPrepMins)}
+                  style={{
+                    padding: '8px 20px',
+                    borderRadius: 'var(--radius-md)',
+                    backgroundColor: 'var(--color-veg)',
+                    color: '#FFFFFF',
+                    fontSize: '13px',
+                    fontWeight: 800,
+                    boxShadow: '0 4px 12px rgba(46, 204, 113, 0.3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <CheckCircle2 size={16} />
+                  <span>Accept ({incomingPrepMins} mins)</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Tab 1: Live Kitchen Kanban Orders Board */}
-        {activeTab === 'orders' && (
-          <div>
-            {/* Top Operational Controls Bar */}
-            <div
-              style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                gap: '10px',
-                marginBottom: '16px',
-                backgroundColor: 'var(--color-surface)',
-                padding: '12px 16px',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--color-border)'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 800 }}>Kitchen Display (KDS)</h3>
-                {isRushMode && (
-                  <span style={{ fontSize: '10px', fontWeight: 800, backgroundColor: '#E74C3C', color: '#FFFFFF', padding: '2px 6px', borderRadius: '4px' }}>
-                    🔥 RUSH MODE ACTIVE (+10m)
-                  </span>
-                )}
-              </div>
+        {/* Tab 1: Live Restaurant Partner Orders Dashboard */}
+        {activeTab === 'orders' && (() => {
+          const counts = {
+            all: partnerOrders.length,
+            placed: partnerOrders.filter((o) => o.status === 'placed').length,
+            accepted: partnerOrders.filter((o) => o.status === 'accepted').length,
+            preparing: partnerOrders.filter((o) => o.status === 'preparing').length,
+            ready: partnerOrders.filter((o) => o.status === 'ready' || o.status === 'rider_assigned').length,
+            delivered: partnerOrders.filter((o) => o.status === 'delivered' || o.status === 'picked_up' || o.status === 'out_for_delivery').length,
+            rejected: partnerOrders.filter((o) => o.status === 'rejected' || o.status === 'cancelled').length
+          };
 
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
-                {/* Instant Order Simulation */}
-                <button
-                  onClick={triggerSimulatedCustomerOrder}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    padding: '6px 12px',
-                    borderRadius: 'var(--radius-sm)',
-                    backgroundColor: 'var(--color-primary)',
-                    color: '#FFFFFF',
-                    fontSize: '11px',
-                    fontWeight: 800,
-                    boxShadow: '0 4px 10px var(--color-primary-glow)'
-                  }}
-                >
-                  <Zap size={13} fill="#FFFFFF" />
-                  <span>Simulate Order</span>
-                </button>
+          const filterOptions: { id: typeof orderFilter; label: string; count: number; badgeColor?: string }[] = [
+            { id: 'all', label: 'All Orders', count: counts.all },
+            { id: 'placed', label: 'New', count: counts.placed, badgeColor: '#E74C3C' },
+            { id: 'accepted', label: 'Accepted', count: counts.accepted, badgeColor: '#2980B9' },
+            { id: 'preparing', label: 'Preparing', count: counts.preparing, badgeColor: '#E67E22' },
+            { id: 'ready', label: 'Ready for Pickup', count: counts.ready, badgeColor: 'var(--color-veg)' },
+            { id: 'delivered', label: 'Completed', count: counts.delivered, badgeColor: '#27AE60' },
+            { id: 'rejected', label: 'Rejected / Cancelled', count: counts.rejected, badgeColor: '#7F8C8D' }
+          ];
 
-                {/* Rush Hour Toggle */}
-                <button
-                  onClick={() => setIsRushMode(!isRushMode)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    padding: '6px 12px',
-                    borderRadius: 'var(--radius-sm)',
-                    backgroundColor: isRushMode ? 'rgba(231, 76, 60, 0.15)' : 'var(--color-surface-muted)',
-                    color: isRushMode ? '#E74C3C' : 'var(--color-text-main)',
-                    border: `1px solid ${isRushMode ? '#E74C3C' : 'var(--color-border)'}`,
-                    fontSize: '11px',
-                    fontWeight: 700
-                  }}
-                >
-                  <Flame size={13} color={isRushMode ? '#E74C3C' : 'var(--color-text-muted)'} />
-                  <span>{isRushMode ? 'Rush Hour ON' : 'Rush Hour Mode'}</span>
-                </button>
+          const getFilteredOrders = (statusCategory: typeof orderFilter) => {
+            let list = partnerOrders;
+            if (statusCategory === 'placed') list = list.filter((o) => o.status === 'placed');
+            else if (statusCategory === 'accepted') list = list.filter((o) => o.status === 'accepted');
+            else if (statusCategory === 'preparing') list = list.filter((o) => o.status === 'preparing');
+            else if (statusCategory === 'ready') list = list.filter((o) => o.status === 'ready' || o.status === 'rider_assigned');
+            else if (statusCategory === 'delivered') list = list.filter((o) => o.status === 'delivered' || o.status === 'picked_up' || o.status === 'out_for_delivery');
+            else if (statusCategory === 'rejected') list = list.filter((o) => o.status === 'rejected' || o.status === 'cancelled');
 
-                {/* Auto Accept Toggle */}
-                <button
-                  onClick={() => setIsAutoAccept(!isAutoAccept)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    padding: '6px 12px',
-                    borderRadius: 'var(--radius-sm)',
-                    backgroundColor: isAutoAccept ? 'rgba(46, 204, 113, 0.15)' : 'var(--color-surface-muted)',
-                    color: isAutoAccept ? 'var(--color-veg)' : 'var(--color-text-main)',
-                    border: `1px solid ${isAutoAccept ? 'var(--color-veg)' : 'var(--color-border)'}`,
-                    fontSize: '11px',
-                    fontWeight: 700
-                  }}
-                >
-                  <CheckCircle2 size={13} color={isAutoAccept ? 'var(--color-veg)' : 'var(--color-text-muted)'} />
-                  <span>{isAutoAccept ? 'Auto-Accept ON' : 'Auto-Accept (< ₹400)'}</span>
-                </button>
-              </div>
-            </div>
+            if (searchQuery.trim()) {
+              const q = searchQuery.toLowerCase().trim();
+              list = list.filter(
+                (o) =>
+                  o.id.toLowerCase().includes(q) ||
+                  o.customerName.toLowerCase().includes(q) ||
+                  o.customerPhone.toLowerCase().includes(q) ||
+                  o.items.some((item) => item.menuItem.name.toLowerCase().includes(q))
+              );
+            }
+            return list;
+          };
 
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                gap: '16px'
-              }}
-            >
-              {/* Preparing Column */}
+          const renderCard = (order: Order) => {
+            const prepMins = cardPrepMins[order.id] || order.estimatedPrepMinutes || 20;
+
+            const getPill = (status: Order['status']) => {
+              switch (status) {
+                case 'placed':
+                  return { label: 'NEW', bg: 'rgba(231, 76, 60, 0.15)', text: '#E74C3C', border: '#E74C3C' };
+                case 'accepted':
+                  return { label: 'ACCEPTED', bg: 'rgba(52, 152, 219, 0.15)', text: '#2980B9', border: '#3498DB' };
+                case 'preparing':
+                  return { label: 'COOKING', bg: 'rgba(230, 126, 34, 0.15)', text: '#D35400', border: '#E67E22' };
+                case 'ready':
+                case 'rider_assigned':
+                  return { label: 'READY FOR PICKUP', bg: 'rgba(46, 204, 113, 0.15)', text: 'var(--color-veg)', border: 'var(--color-veg)' };
+                case 'delivered':
+                case 'picked_up':
+                case 'out_for_delivery':
+                  return { label: 'COMPLETED', bg: 'rgba(39, 174, 96, 0.12)', text: '#27AE60', border: '#27AE60' };
+                case 'rejected':
+                case 'cancelled':
+                  return { label: status.toUpperCase(), bg: 'rgba(127, 140, 141, 0.15)', text: '#7F8C8D', border: '#95A5A6' };
+                default:
+                  return { label: status, bg: 'var(--color-surface-muted)', text: 'var(--color-text-main)', border: 'var(--color-border)' };
+              }
+            };
+
+            const pill = getPill(order.status);
+
+            return (
               <div
+                key={order.id}
                 style={{
-                  backgroundColor: 'var(--color-surface)',
+                  padding: '14px',
                   borderRadius: 'var(--radius-lg)',
-                  padding: '16px',
-                  border: '1px solid var(--color-border)',
-                  boxShadow: 'var(--shadow-sm)'
+                  backgroundColor: 'var(--color-surface)',
+                  border: `1.5px solid ${order.status === 'placed' ? '#E74C3C' : 'var(--color-border)'}`,
+                  boxShadow: 'var(--shadow-sm)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                  transition: 'all 0.2s ease'
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 800, color: '#E67E22', textTransform: 'uppercase' }}>
-                    🍳 Preparing in Kitchen
-                  </span>
-                  <span
-                    style={{
-                      backgroundColor: 'rgba(230, 126, 34, 0.15)',
-                      color: '#E67E22',
-                      fontSize: '11px',
-                      fontWeight: 800,
-                      padding: '2px 8px',
-                      borderRadius: '10px'
-                    }}
-                  >
-                    {partnerOrders.filter((o) => o.status === 'preparing' || o.status === 'placed').length}
-                  </span>
-                </div>
-
-                {partnerOrders.filter((o) => o.status === 'preparing' || o.status === 'placed').length === 0 ? (
-                  <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', textAlign: 'center', padding: '24px 0' }}>
-                    No orders being cooked right now
-                  </p>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {partnerOrders
-                      .filter((o) => o.status === 'preparing' || o.status === 'placed')
-                      .map((order) => (
-                        <div
-                          key={order.id}
-                          onClick={() => setInspectedOrder(order)}
-                          style={{
-                            padding: '12px',
-                            borderRadius: 'var(--radius-md)',
-                            backgroundColor: 'var(--color-surface-muted)',
-                            border: '1px solid var(--color-border)',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s ease'
-                          }}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <FileText size={14} color="var(--color-primary)" />
-                              <span style={{ fontSize: '13px', fontWeight: 800 }}>#{order.id}</span>
-                            </div>
-                            <span style={{ fontSize: '11px', color: '#E67E22', fontWeight: 700 }}>
-                              ⏳ 15 mins left
-                            </span>
-                          </div>
-
-                          <div style={{ fontSize: '12px', color: 'var(--color-text-main)', marginBottom: '10px' }}>
-                            {order.items.map((i) => (
-                              <div key={i.id}>• {i.quantity}x {i.menuItem.name}</div>
-                            ))}
-                          </div>
-
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              partnerMarkReady(order.id);
-                            }}
-                            style={{
-                              width: '100%',
-                              backgroundColor: 'var(--color-veg)',
-                              color: '#FFFFFF',
-                              padding: '8px',
-                              borderRadius: 'var(--radius-sm)',
-                              fontSize: '12px',
-                              fontWeight: 700
-                            }}
-                          >
-                            Mark Ready for Pickup
-                          </button>
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Ready for Pickup Column */}
-              <div
-                style={{
-                  backgroundColor: 'var(--color-surface)',
-                  borderRadius: 'var(--radius-lg)',
-                  padding: '16px',
-                  border: '1px solid var(--color-border)',
-                  boxShadow: 'var(--shadow-sm)'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--color-veg)', textTransform: 'uppercase' }}>
-                    🛵 Ready for Pickup
-                  </span>
-                  <span
-                    style={{
-                      backgroundColor: 'var(--color-veg-bg)',
-                      color: 'var(--color-veg)',
-                      fontSize: '11px',
-                      fontWeight: 800,
-                      padding: '2px 8px',
-                      borderRadius: '10px'
-                    }}
-                  >
-                    {partnerOrders.filter((o) => o.status === 'ready' || o.status === 'rider_assigned').length}
-                  </span>
-                </div>
-
-                {partnerOrders.filter((o) => o.status === 'ready' || o.status === 'rider_assigned').length === 0 ? (
-                  <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', textAlign: 'center', padding: '24px 0' }}>
-                    No packed bags waiting
-                  </p>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {partnerOrders
-                      .filter((o) => o.status === 'ready' || o.status === 'rider_assigned')
-                      .map((order) => (
-                        <div
-                          key={order.id}
-                          onClick={() => setInspectedOrder(order)}
-                          style={{
-                            padding: '12px',
-                            borderRadius: 'var(--radius-md)',
-                            backgroundColor: 'var(--color-surface-muted)',
-                            border: '1px solid var(--color-border)',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <FileText size={14} color="var(--color-veg)" />
-                              <span style={{ fontSize: '13px', fontWeight: 800 }}>#{order.id}</span>
-                            </div>
-                            <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-veg)' }}>
-                              Bag Packed
-                            </span>
-                          </div>
-
-                          <p style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
-                            Rider assigned: <b>Vikram Singh</b> (Arriving in 3 mins)
-                          </p>
-
-                          <div
-                            style={{
-                              marginTop: '8px',
-                              backgroundColor: 'var(--color-surface)',
-                              padding: '6px',
-                              borderRadius: '4px',
-                              fontSize: '11px',
-                              fontWeight: 700,
-                              textAlign: 'center',
-                              border: '1px dashed var(--color-border)'
-                            }}
-                          >
-                            Pickup Code: {order.pickupOtp}
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Bottom Section: Active Kitchen Staff & Operations SLA */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                gap: '16px',
-                marginTop: '16px'
-              }}
-            >
-              {/* Active Station Staff */}
-              <div
-                style={{
-                  backgroundColor: 'var(--color-surface)',
-                  borderRadius: 'var(--radius-lg)',
-                  padding: '16px',
-                  border: '1px solid var(--color-border)',
-                  boxShadow: 'var(--shadow-sm)'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                  <ChefHat size={16} color="var(--color-primary)" />
-                  <h4 style={{ fontSize: '13px', fontWeight: 800 }}>Active Kitchen Shift Staff</h4>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {[
-                    { name: 'Chef Rakesh Pillai', role: 'Head Chef • Biryani & Dum Handi Station', status: 'Active Line', badge: '#27AE60' },
-                    { name: 'Anita Sharma', role: 'Prep Cook • Tandoor & Starters', status: 'Active Line', badge: '#27AE60' },
-                    { name: 'Suresh Rao', role: 'Packaging • Quality Check & Tamper Seal', status: 'Active Line', badge: '#27AE60' }
-                  ].map((chef, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '8px 10px',
-                        borderRadius: 'var(--radius-sm)',
-                        backgroundColor: 'var(--color-surface-muted)',
-                        fontSize: '11px'
-                      }}
-                    >
-                      <div>
-                        <div style={{ fontWeight: 700, color: 'var(--color-text-main)' }}>{chef.name}</div>
-                        <div style={{ color: 'var(--color-text-muted)', fontSize: '10px' }}>{chef.role}</div>
-                      </div>
-                      <span style={{ fontSize: '10px', fontWeight: 800, color: chef.badge, backgroundColor: 'rgba(39, 174, 96, 0.12)', padding: '2px 6px', borderRadius: '4px' }}>
-                        {chef.status}
+                {/* Header Row */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <FileText size={16} color="var(--color-primary)" />
+                      <span style={{ fontSize: '14px', fontWeight: 900 }}>#{order.id}</span>
+                      <span
+                        style={{
+                          fontSize: '10px',
+                          fontWeight: 800,
+                          backgroundColor: pill.bg,
+                          color: pill.text,
+                          border: `1px solid ${pill.border}`,
+                          padding: '2px 8px',
+                          borderRadius: '4px'
+                        }}
+                      >
+                        {pill.label}
                       </span>
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+                      Placed: <b>{order.createdAt}</b> {order.estimatedPrepMinutes ? `• Prep Est: ${order.estimatedPrepMinutes}m` : ''}
+                    </div>
+                  </div>
+
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ fontSize: '14px', fontWeight: 900, color: 'var(--color-text-main)' }}>
+                      ₹{order.totalAmount}
+                    </span>
+                    <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', display: 'block' }}>
+                      {order.paymentMethod.toUpperCase()} • {order.paymentStatus ? order.paymentStatus.toUpperCase() : 'CAPTURED'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Customer Info */}
+                <div
+                  style={{
+                    backgroundColor: 'var(--color-surface-muted)',
+                    padding: '8px 10px',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '11px',
+                    color: 'var(--color-text-main)'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ fontWeight: 700 }}>{order.customerName}</span>
+                    <span style={{ color: 'var(--color-text-muted)' }}>{order.customerPhone}</span>
+                  </div>
+                  <div style={{ color: 'var(--color-text-muted)', marginTop: '2px', lineHeight: 1.3 }}>
+                    {order.deliveryAddress.addressLine}
+                  </div>
+                </div>
+
+                {/* Dietary / Chef Instructions Alert */}
+                {order.specialCookingInstructions && (
+                  <div
+                    style={{
+                      backgroundColor: '#FFF9E6',
+                      border: '1px solid #FFB400',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '6px 10px',
+                      fontSize: '11px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <AlertCircle size={14} color="#D35400" style={{ flexShrink: 0 }} />
+                    <span style={{ color: '#D35400', fontWeight: 700 }}>Chef:</span>
+                    <span style={{ color: '#1E1E24', fontWeight: 600 }}>"{order.specialCookingInstructions}"</span>
+                  </div>
+                )}
+
+                {/* Rejection / Cancellation Reason if terminal */}
+                {(order.status === 'rejected' || order.status === 'cancelled') && (
+                  <div
+                    style={{
+                      backgroundColor: 'rgba(231, 76, 60, 0.08)',
+                      border: '1px solid #E74C3C',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '6px 10px',
+                      fontSize: '11px',
+                      color: '#E74C3C',
+                      fontWeight: 600
+                    }}
+                  >
+                    Reason: {order.rejectionReason || order.cancellationReason || 'Order cancelled'} (Refund: {order.paymentStatus || 'refunded'})
+                  </div>
+                )}
+
+                {/* Item List */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px' }}>
+                  {order.items.map((i) => (
+                    <div key={i.id} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontWeight: 600 }}>
+                        {i.quantity}x {i.menuItem.name} {i.selectedVariant ? `(${i.selectedVariant.name})` : ''}
+                      </span>
+                      <span style={{ color: 'var(--color-text-muted)', fontWeight: 700 }}>₹{i.itemTotal}</span>
                     </div>
                   ))}
                 </div>
-              </div>
 
-              {/* Kitchen Performance SLA */}
+                {/* Assigned Rider Info (if present) */}
+                {order.rider && (
+                  <div
+                    style={{
+                      backgroundColor: 'rgba(52, 152, 219, 0.08)',
+                      border: '1px solid rgba(52, 152, 219, 0.25)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '6px 10px',
+                      fontSize: '11px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Bike size={14} color="var(--color-primary)" />
+                      <span>Rider: <b>{order.rider.name}</b> ({order.rider.vehicleNumber})</span>
+                    </div>
+                    <span style={{ fontWeight: 700, color: 'var(--color-primary)' }}>{order.rider.phone}</span>
+                  </div>
+                )}
+
+                {/* Pickup OTP code box if Ready */}
+                {(order.status === 'ready' || order.status === 'rider_assigned') && (
+                  <div
+                    style={{
+                      backgroundColor: 'rgba(46, 204, 113, 0.1)',
+                      border: '1px dashed var(--color-veg)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '8px',
+                      textAlign: 'center',
+                      fontSize: '12px',
+                      fontWeight: 800,
+                      color: 'var(--color-veg)'
+                    }}
+                  >
+                    📦 Bag Packed • Rider Pickup OTP: <span style={{ letterSpacing: '1px' }}>{order.pickupOtp}</span>
+                  </div>
+                )}
+
+                {/* Strict Order Lifecycle Action Buttons */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+                  {/* Status = PLACED */}
+                  {order.status === 'placed' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-text-muted)' }}>Set Prep:</span>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          {[15, 20, 30, 45].map((mins) => (
+                            <button
+                              key={mins}
+                              onClick={() => setCardPrepMins((prev) => ({ ...prev, [order.id]: mins }))}
+                              style={{
+                                padding: '2px 8px',
+                                borderRadius: 'var(--radius-sm)',
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                backgroundColor: prepMins === mins ? 'var(--color-primary)' : 'var(--color-surface-muted)',
+                                color: prepMins === mins ? '#FFFFFF' : 'var(--color-text-main)',
+                                border: `1px solid ${prepMins === mins ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              {mins}m
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                          onClick={() => setRejectOrderId(order.id)}
+                          style={{
+                            flex: 1,
+                            padding: '8px',
+                            borderRadius: 'var(--radius-sm)',
+                            backgroundColor: 'transparent',
+                            color: '#E74C3C',
+                            border: '1px solid #E74C3C',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Reject
+                        </button>
+                        <button
+                          onClick={() => handleAcceptOrder(order.id, prepMins)}
+                          style={{
+                            flex: 2,
+                            padding: '8px',
+                            borderRadius: 'var(--radius-sm)',
+                            backgroundColor: 'var(--color-veg)',
+                            color: '#FFFFFF',
+                            fontSize: '12px',
+                            fontWeight: 800,
+                            border: 'none',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '4px',
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 8px rgba(46, 204, 113, 0.25)'
+                          }}
+                        >
+                          <CheckCircle2 size={14} />
+                          <span>Accept ({prepMins}m)</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Status = ACCEPTED */}
+                  {order.status === 'accepted' && (
+                    <button
+                      onClick={() => handleStartPreparing(order.id)}
+                      style={{
+                        width: '100%',
+                        padding: '9px',
+                        borderRadius: 'var(--radius-sm)',
+                        backgroundColor: '#E67E22',
+                        color: '#FFFFFF',
+                        fontSize: '12px',
+                        fontWeight: 800,
+                        border: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 8px rgba(230, 126, 34, 0.25)'
+                      }}
+                    >
+                      <ChefHat size={14} />
+                      <span>Start Preparing in Kitchen</span>
+                    </button>
+                  )}
+
+                  {/* Status = PREPARING */}
+                  {order.status === 'preparing' && (
+                    <button
+                      onClick={() => handleMarkReady(order.id)}
+                      style={{
+                        width: '100%',
+                        padding: '9px',
+                        borderRadius: 'var(--radius-sm)',
+                        backgroundColor: 'var(--color-veg)',
+                        color: '#FFFFFF',
+                        fontSize: '12px',
+                        fontWeight: 800,
+                        border: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 8px rgba(46, 204, 113, 0.25)'
+                      }}
+                    >
+                      <CheckCircle2 size={14} />
+                      <span>Mark Ready for Pickup</span>
+                    </button>
+                  )}
+
+                  {/* Secondary Details & KOT button */}
+                  <button
+                    onClick={() => setInspectedOrder(order)}
+                    style={{
+                      width: '100%',
+                      padding: '7px',
+                      borderRadius: 'var(--radius-sm)',
+                      backgroundColor: 'var(--color-surface-muted)',
+                      color: 'var(--color-text-main)',
+                      border: '1px solid var(--color-border)',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '4px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <FileText size={13} />
+                    <span>View Full KOT Ticket</span>
+                  </button>
+                </div>
+              </div>
+            );
+          };
+
+          const kanbanColumns: { id: typeof orderFilter; title: string; icon: string; orders: Order[]; color: string }[] = [
+            { id: 'placed', title: 'New Orders', icon: '🔴', orders: getFilteredOrders('placed'), color: '#E74C3C' },
+            { id: 'accepted', title: 'Accepted', icon: '🔵', orders: getFilteredOrders('accepted'), color: '#2980B9' },
+            { id: 'preparing', title: 'Preparing in Kitchen', icon: '🍳', orders: getFilteredOrders('preparing'), color: '#E67E22' },
+            { id: 'ready', title: 'Ready for Pickup', icon: '🛵', orders: getFilteredOrders('ready'), color: 'var(--color-veg)' },
+            { id: 'delivered', title: 'Completed', icon: '✅', orders: getFilteredOrders('delivered'), color: '#27AE60' },
+            { id: 'rejected', title: 'Rejected / Cancelled', icon: '⛔', orders: getFilteredOrders('rejected'), color: '#7F8C8D' }
+          ];
+
+          return (
+            <div>
+              {/* Top Operational Controls Bar */}
               <div
                 style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: '12px',
+                  marginBottom: '16px',
                   backgroundColor: 'var(--color-surface)',
+                  padding: '14px 18px',
                   borderRadius: 'var(--radius-lg)',
-                  padding: '16px',
                   border: '1px solid var(--color-border)',
                   boxShadow: 'var(--shadow-sm)'
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                  <Award size={16} color="#F39C12" />
-                  <h4 style={{ fontSize: '13px', fontWeight: 800 }}>Kitchen Service Level Agreement (SLA)</h4>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <h3 style={{ fontSize: '17px', fontWeight: 900 }}>Kitchen Display System (KDS)</h3>
+                    {counts.placed > 0 && (
+                      <span style={{ fontSize: '10px', fontWeight: 800, backgroundColor: '#E74C3C', color: '#FFFFFF', padding: '2px 7px', borderRadius: '10px', animation: 'pulse 1.5s infinite' }}>
+                        {counts.placed} NEW
+                      </span>
+                    )}
+                    {isRushMode && (
+                      <span style={{ fontSize: '10px', fontWeight: 800, backgroundColor: '#E74C3C', color: '#FFFFFF', padding: '2px 6px', borderRadius: '4px' }}>
+                        🔥 RUSH MODE (+10m)
+                      </span>
+                    )}
+                  </div>
+                  <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+                    Live lifecycle tracker • Unidirectional progression with strict verification
+                  </p>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
-                  <div style={{ padding: '10px', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--color-surface-muted)' }}>
-                    <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>On-Time Dispatch</span>
-                    <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--color-veg)', marginTop: '2px' }}>98.4%</div>
-                    <span style={{ fontSize: '9px', color: 'var(--color-text-muted)' }}>Under 20m threshold</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+                  {/* View Switcher */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      backgroundColor: 'var(--color-surface-muted)',
+                      padding: '3px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--color-border)'
+                    }}
+                  >
+                    <button
+                      onClick={() => setViewMode('kanban')}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '5px 10px',
+                        borderRadius: 'var(--radius-sm)',
+                        backgroundColor: viewMode === 'kanban' ? 'var(--color-surface)' : 'transparent',
+                        color: viewMode === 'kanban' ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                        border: 'none',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        boxShadow: viewMode === 'kanban' ? 'var(--shadow-sm)' : 'none'
+                      }}
+                    >
+                      <LayoutGrid size={13} />
+                      <span>Kanban</span>
+                    </button>
+                    <button
+                      onClick={() => setViewMode('list')}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '5px 10px',
+                        borderRadius: 'var(--radius-sm)',
+                        backgroundColor: viewMode === 'list' ? 'var(--color-surface)' : 'transparent',
+                        color: viewMode === 'list' ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                        border: 'none',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        boxShadow: viewMode === 'list' ? 'var(--shadow-sm)' : 'none'
+                      }}
+                    >
+                      <ListFilter size={13} />
+                      <span>List View</span>
+                    </button>
                   </div>
 
-                  <div style={{ padding: '10px', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--color-surface-muted)' }}>
-                    <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Average Accept TAT</span>
-                    <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--color-text-main)', marginTop: '2px' }}>18 secs</div>
-                    <span style={{ fontSize: '9px', color: 'var(--color-veg)' }}>Top 5% in Indiranagar</span>
+                  {/* Simulate Order Button */}
+                  <button
+                    onClick={triggerSimulatedCustomerOrder}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      padding: '7px 12px',
+                      borderRadius: 'var(--radius-sm)',
+                      backgroundColor: 'var(--color-primary)',
+                      color: '#FFFFFF',
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      border: 'none',
+                      cursor: 'pointer',
+                      boxShadow: '0 4px 10px var(--color-primary-glow)'
+                    }}
+                  >
+                    <Zap size={13} fill="#FFFFFF" />
+                    <span>Simulate Order</span>
+                  </button>
+
+                  {/* Rush Toggle */}
+                  <button
+                    onClick={() => setIsRushMode(!isRushMode)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      padding: '7px 12px',
+                      borderRadius: 'var(--radius-sm)',
+                      backgroundColor: isRushMode ? 'rgba(231, 76, 60, 0.15)' : 'var(--color-surface-muted)',
+                      color: isRushMode ? '#E74C3C' : 'var(--color-text-main)',
+                      border: `1px solid ${isRushMode ? '#E74C3C' : 'var(--color-border)'}`,
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Flame size={13} color={isRushMode ? '#E74C3C' : 'var(--color-text-muted)'} />
+                    <span>{isRushMode ? 'Rush ON' : 'Rush Mode'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Status Tabs Filter Bar & Search */}
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                  marginBottom: '18px'
+                }}
+              >
+                {/* Horizontal Filter Tabs */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    overflowX: 'auto',
+                    paddingBottom: '4px'
+                  }}
+                  className="no-scrollbar"
+                >
+                  {filterOptions.map((opt) => {
+                    const isSelected = orderFilter === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        onClick={() => setOrderFilter(opt.id)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '7px 14px',
+                          borderRadius: 'var(--radius-md)',
+                          backgroundColor: isSelected ? 'var(--color-primary)' : 'var(--color-surface)',
+                          color: isSelected ? '#FFFFFF' : 'var(--color-text-main)',
+                          border: isSelected ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                          boxShadow: isSelected ? 'var(--shadow-sm)' : 'none'
+                        }}
+                      >
+                        <span>{opt.label}</span>
+                        <span
+                          style={{
+                            fontSize: '10px',
+                            fontWeight: 800,
+                            padding: '1px 6px',
+                            borderRadius: '10px',
+                            backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : (opt.badgeColor ? `${opt.badgeColor}22` : 'var(--color-surface-muted)'),
+                            color: isSelected ? '#FFFFFF' : (opt.badgeColor || 'var(--color-text-muted)')
+                          }}
+                        >
+                          {opt.count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Search Bar */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    backgroundColor: 'var(--color-surface)',
+                    padding: '8px 14px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)'
+                  }}
+                >
+                  <Search size={16} color="var(--color-text-muted)" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search orders by ID (#TOM-...), customer name, phone, or dish..."
+                    style={{
+                      flex: 1,
+                      border: 'none',
+                      outline: 'none',
+                      backgroundColor: 'transparent',
+                      color: 'var(--color-text-main)',
+                      fontSize: '13px'
+                    }}
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--color-text-muted)',
+                        cursor: 'pointer',
+                        padding: '2px'
+                      }}
+                    >
+                      <X size={15} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* View 1: Kanban Board View */}
+              {viewMode === 'kanban' ? (
+                <div>
+                  {orderFilter === 'all' ? (
+                    /* Full Multi-Column Kanban Board */
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))',
+                        gap: '16px',
+                        alignItems: 'start'
+                      }}
+                    >
+                      {kanbanColumns.map((col) => (
+                        <div
+                          key={col.id}
+                          style={{
+                            backgroundColor: 'var(--color-surface-muted)',
+                            borderRadius: 'var(--radius-lg)',
+                            padding: '14px',
+                            border: '1px solid var(--color-border)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '12px',
+                            minHeight: '260px'
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span>{col.icon}</span>
+                              <span style={{ fontSize: '13px', fontWeight: 800, color: col.color, textTransform: 'uppercase' }}>
+                                {col.title}
+                              </span>
+                            </div>
+                            <span
+                              style={{
+                                backgroundColor: 'var(--color-surface)',
+                                color: col.color,
+                                border: `1px solid ${col.color}`,
+                                fontSize: '11px',
+                                fontWeight: 800,
+                                padding: '2px 8px',
+                                borderRadius: '10px'
+                              }}
+                            >
+                              {col.orders.length}
+                            </span>
+                          </div>
+
+                          {col.orders.length === 0 ? (
+                            <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', textAlign: 'center', padding: '30px 10px' }}>
+                              No orders in this stage
+                            </p>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                              {col.orders.map((o) => renderCard(o))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    /* Single Filter Column Expanded */
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+                        gap: '16px'
+                      }}
+                    >
+                      {getFilteredOrders(orderFilter).length === 0 ? (
+                        <div
+                          style={{
+                            gridColumn: '1 / -1',
+                            backgroundColor: 'var(--color-surface)',
+                            borderRadius: 'var(--radius-lg)',
+                            padding: '40px 20px',
+                            textAlign: 'center',
+                            border: '1px solid var(--color-border)'
+                          }}
+                        >
+                          <FileText size={32} color="var(--color-text-muted)" style={{ margin: '0 auto 10px' }} />
+                          <h4 style={{ fontSize: '15px', fontWeight: 800 }}>No orders found</h4>
+                          <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                            There are no orders matching the selected filter or search query.
+                          </p>
+                        </div>
+                      ) : (
+                        getFilteredOrders(orderFilter).map((o) => renderCard(o))
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* View 2: Detailed List View */
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  {getFilteredOrders(orderFilter).length === 0 ? (
+                    <div
+                      style={{
+                        backgroundColor: 'var(--color-surface)',
+                        borderRadius: 'var(--radius-lg)',
+                        padding: '40px 20px',
+                        textAlign: 'center',
+                        border: '1px solid var(--color-border)'
+                      }}
+                    >
+                      <FileText size={32} color="var(--color-text-muted)" style={{ margin: '0 auto 10px' }} />
+                      <h4 style={{ fontSize: '15px', fontWeight: 800 }}>No orders in this view</h4>
+                      <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                        Try switching tabs or clearing your search keywords.
+                      </p>
+                    </div>
+                  ) : (
+                    getFilteredOrders(orderFilter).map((o) => renderCard(o))
+                  )}
+                </div>
+              )}
+
+              {/* Bottom Operational SLA & Staff Metrics */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                  gap: '16px',
+                  marginTop: '24px'
+                }}
+              >
+                {/* Active Station Staff */}
+                <div
+                  style={{
+                    backgroundColor: 'var(--color-surface)',
+                    borderRadius: 'var(--radius-lg)',
+                    padding: '16px',
+                    border: '1px solid var(--color-border)',
+                    boxShadow: 'var(--shadow-sm)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                    <ChefHat size={16} color="var(--color-primary)" />
+                    <h4 style={{ fontSize: '13px', fontWeight: 800 }}>Active Kitchen Shift Staff</h4>
                   </div>
 
-                  <div style={{ padding: '10px', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--color-surface-muted)' }}>
-                    <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Kitchen Audit Score</span>
-                    <div style={{ fontSize: '16px', fontWeight: 800, color: '#F39C12', marginTop: '2px' }}>5.0 ★</div>
-                    <span style={{ fontSize: '9px', color: 'var(--color-text-muted)' }}>FSSAI Grade A Hygiene</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {[
+                      { name: 'Chef Rakesh Pillai', role: 'Head Chef • Biryani & Dum Handi Station', status: 'Active Line', badge: '#27AE60' },
+                      { name: 'Anita Sharma', role: 'Prep Cook • Tandoor & Starters', status: 'Active Line', badge: '#27AE60' },
+                      { name: 'Suresh Rao', role: 'Packaging • Quality Check & Tamper Seal', status: 'Active Line', badge: '#27AE60' }
+                    ].map((chef, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '8px 10px',
+                          borderRadius: 'var(--radius-sm)',
+                          backgroundColor: 'var(--color-surface-muted)',
+                          fontSize: '11px'
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 700, color: 'var(--color-text-main)' }}>{chef.name}</div>
+                          <div style={{ color: 'var(--color-text-muted)', fontSize: '10px' }}>{chef.role}</div>
+                        </div>
+                        <span style={{ fontSize: '10px', fontWeight: 800, color: chef.badge, backgroundColor: 'rgba(39, 174, 96, 0.12)', padding: '2px 6px', borderRadius: '4px' }}>
+                          {chef.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Kitchen Performance SLA */}
+                <div
+                  style={{
+                    backgroundColor: 'var(--color-surface)',
+                    borderRadius: 'var(--radius-lg)',
+                    padding: '16px',
+                    border: '1px solid var(--color-border)',
+                    boxShadow: 'var(--shadow-sm)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                    <Award size={16} color="#F39C12" />
+                    <h4 style={{ fontSize: '13px', fontWeight: 800 }}>Kitchen Service Level Agreement (SLA)</h4>
                   </div>
 
-                  <div style={{ padding: '10px', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--color-surface-muted)' }}>
-                    <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Wrong Item Rate</span>
-                    <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--color-veg)', marginTop: '2px' }}>0.05%</div>
-                    <span style={{ fontSize: '9px', color: 'var(--color-text-muted)' }}>Zero packaging leaks</span>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                    <div style={{ padding: '10px', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--color-surface-muted)' }}>
+                      <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>On-Time Dispatch</span>
+                      <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--color-veg)', marginTop: '2px' }}>98.4%</div>
+                      <span style={{ fontSize: '9px', color: 'var(--color-text-muted)' }}>Under 20m threshold</span>
+                    </div>
+
+                    <div style={{ padding: '10px', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--color-surface-muted)' }}>
+                      <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Average Accept TAT</span>
+                      <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--color-text-main)', marginTop: '2px' }}>18 secs</div>
+                      <span style={{ fontSize: '9px', color: 'var(--color-veg)' }}>Top 5% in Indiranagar</span>
+                    </div>
+
+                    <div style={{ padding: '10px', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--color-surface-muted)' }}>
+                      <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Kitchen Audit Score</span>
+                      <div style={{ fontSize: '16px', fontWeight: 800, color: '#F39C12', marginTop: '2px' }}>5.0 ★</div>
+                      <span style={{ fontSize: '9px', color: 'var(--color-text-muted)' }}>FSSAI Grade A Hygiene</span>
+                    </div>
+
+                    <div style={{ padding: '10px', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--color-surface-muted)' }}>
+                      <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Wrong Item Rate</span>
+                      <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--color-veg)', marginTop: '2px' }}>0.05%</div>
+                      <span style={{ fontSize: '9px', color: 'var(--color-text-muted)' }}>Zero packaging leaks</span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Tab 2: Menu Stock Manager */}
         {activeTab === 'menu' && (
@@ -1424,7 +2069,10 @@ export const PartnerApp: React.FC = () => {
       <KitchenTicketModal
         order={inspectedOrder}
         onClose={() => setInspectedOrder(null)}
-        onMarkReady={partnerMarkReady}
+        onAcceptOrder={handleAcceptOrder}
+        onStartPreparing={handleStartPreparing}
+        onMarkReady={handleMarkReady}
+        onRejectOrder={(id) => setRejectOrderId(id)}
       />
 
       {/* Reject Order Reason Modal */}
@@ -1432,7 +2080,7 @@ export const PartnerApp: React.FC = () => {
         isOpen={rejectOrderId !== null}
         orderId={rejectOrderId}
         onClose={() => setRejectOrderId(null)}
-        onConfirmReject={(orderId) => partnerRejectOrder(orderId)}
+        onConfirmReject={handleRejectConfirm}
       />
 
       {/* Outlet Profile & KYC Modal */}
