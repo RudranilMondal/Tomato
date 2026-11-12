@@ -626,7 +626,75 @@ BEGIN
 END $$;
 
 -- ------------------------------------------------------------------------------
--- 8. SUMMARY AND CLEAN ROLLBACK
+-- 8. IS_ADMIN ARBITRARY UUID ENUMERATION HARDENING ASSERTIONS
+-- ------------------------------------------------------------------------------
+
+DO $$
+DECLARE
+  v_admin_id UUID := '00000000-0000-0000-0000-0000000000a1';
+  v_customer_id UUID := '00000000-0000-0000-0000-0000000000c1';
+  v_other_user_id UUID := '00000000-0000-0000-0000-0000000000d1';
+  v_arbitrary_uuid UUID := '99999999-9999-9999-9999-999999999999';
+  v_res BOOLEAN;
+BEGIN
+  RAISE NOTICE '============================================================';
+  RAISE NOTICE '🔒 TESTING IS_ADMIN ARBITRARY UUID ENUMERATION HARDENING';
+  RAISE NOTICE '============================================================';
+
+  -- Case 1: anon caller checking admin UUID -> MUST BE FALSE
+  PERFORM public.set_test_auth_context(NULL, 'anon');
+  v_res := public.is_admin(v_admin_id);
+  PERFORM public.assert_test('Anon Probing Admin UUID', v_res = FALSE, 'Anon checking admin UUID returned FALSE');
+
+  -- Case 2: anon caller checking arbitrary UUID -> MUST BE FALSE
+  v_res := public.is_admin(v_arbitrary_uuid);
+  PERFORM public.assert_test('Anon Probing Arbitrary UUID', v_res = FALSE, 'Anon checking arbitrary UUID returned FALSE');
+
+  -- Case 3: anon caller checking NULL -> MUST BE FALSE
+  v_res := public.is_admin(NULL);
+  PERFORM public.assert_test('Anon Checking NULL UUID', v_res = FALSE, 'Anon checking NULL returned FALSE');
+
+  -- Case 4: authenticated non-admin checking own UUID -> MUST BE FALSE
+  PERFORM public.set_test_auth_context(v_customer_id, 'authenticated');
+  v_res := public.is_admin(v_customer_id);
+  PERFORM public.assert_test('Non-Admin Checking Own UUID', v_res = FALSE, 'Customer checking own UUID returned FALSE');
+
+  -- Case 5: authenticated non-admin checking admin UUID (enumeration attempt) -> MUST BE FALSE
+  v_res := public.is_admin(v_admin_id);
+  PERFORM public.assert_test('Non-Admin Probing Admin UUID', v_res = FALSE, 'Customer probing admin UUID returned FALSE');
+
+  -- Case 6: authenticated non-admin checking another customer UUID -> MUST BE FALSE
+  v_res := public.is_admin(v_other_user_id);
+  PERFORM public.assert_test('Non-Admin Probing Other UUID', v_res = FALSE, 'Customer probing other UUID returned FALSE');
+
+  -- Case 7: authenticated admin checking own UUID -> MUST BE TRUE
+  PERFORM public.set_test_auth_context(v_admin_id, 'authenticated');
+  v_res := public.is_admin(v_admin_id);
+  PERFORM public.assert_test('Admin Checking Own UUID', v_res = TRUE, 'Admin checking own UUID returned TRUE');
+
+  -- Case 8: authenticated admin checking another user UUID -> MUST BE FALSE (caller identity enforcement)
+  v_res := public.is_admin(v_customer_id);
+  PERFORM public.assert_test('Admin Probing Other UUID', v_res = FALSE, 'Admin checking other UUID returned FALSE');
+
+  -- Case 9: service_role checking admin UUID -> MUST BE TRUE (trusted context preserved)
+  PERFORM public.set_test_auth_context(NULL, 'service_role');
+  v_res := public.is_admin(v_admin_id);
+  PERFORM public.assert_test('Service Role Checking Admin UUID', v_res = TRUE, 'Service role checking admin UUID returned TRUE');
+
+  -- Case 10: service_role checking non-admin UUID -> MUST BE FALSE (trusted context preserved)
+  v_res := public.is_admin(v_customer_id);
+  PERFORM public.assert_test('Service Role Checking Non-Admin UUID', v_res = FALSE, 'Service role checking customer UUID returned FALSE');
+
+  -- Case 11: service_role checking NULL -> MUST BE FALSE
+  v_res := public.is_admin(NULL);
+  PERFORM public.assert_test('Service Role Checking NULL UUID', v_res = FALSE, 'Service role checking NULL returned FALSE');
+
+  -- Reset role to postgres
+  PERFORM public.set_test_auth_context(NULL, 'postgres');
+END $$;
+
+-- ------------------------------------------------------------------------------
+-- 9. SUMMARY AND CLEAN ROLLBACK
 -- ------------------------------------------------------------------------------
 
 DO $$

@@ -36,7 +36,9 @@ import {
   Eye,
   X,
   FileText,
-  CreditCard
+  CreditCard,
+  RotateCcw,
+  ShieldAlert
 } from 'lucide-react';
 
 interface SupportTicket {
@@ -64,10 +66,17 @@ export const AdminApp: React.FC = () => {
     toggleRestaurantStatus,
     allRiderApplications,
     approveRiderKyc,
-    rejectRiderKyc
+    rejectRiderKyc,
+    requestResubmissionRiderKyc
   } = useTomattto();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'restaurants' | 'riders' | 'customers' | 'tickets' | 'coupons'>('overview');
+  const [riderFilter, setRiderFilter] = useState<'all' | 'under_review' | 'action_required' | 'approved' | 'rejected'>('all');
+  const [inspectedRiderApp, setInspectedRiderApp] = useState<any | null>(null);
+  const [resubmitModalAppId, setResubmitModalAppId] = useState<string | null>(null);
+  const [resubmitReasonText, setResubmitReasonText] = useState('');
+  const [rejectModalAppId, setRejectModalAppId] = useState<string | null>(null);
+  const [rejectReasonText, setRejectReasonText] = useState('');
   const [isCreateCouponOpen, setIsCreateCouponOpen] = useState(false);
   const [selectedManageRestaurant, setSelectedManageRestaurant] = useState<Restaurant | null>(null);
   const [isLiveMapOpen, setIsLiveMapOpen] = useState(false);
@@ -889,10 +898,55 @@ export const AdminApp: React.FC = () => {
                 </div>
               </div>
 
+              {/* Status Filter Tabs */}
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                {[
+                  { id: 'all', label: `All (${allRiderApplications.length})` },
+                  {
+                    id: 'under_review',
+                    label: `Pending (${allRiderApplications.filter((a) => a.status === 'under_review' || a.status === 'submitted' || a.status === 'in_review').length})`
+                  },
+                  {
+                    id: 'action_required',
+                    label: `Action Required (${allRiderApplications.filter((a) => a.status === 'action_required').length})`
+                  },
+                  {
+                    id: 'approved',
+                    label: `Approved (${allRiderApplications.filter((a) => a.status === 'approved').length})`
+                  },
+                  {
+                    id: 'rejected',
+                    label: `Rejected (${allRiderApplications.filter((a) => a.status === 'rejected').length})`
+                  }
+                ].map((flt) => (
+                  <button
+                    key={flt.id}
+                    onClick={() => setRiderFilter(flt.id as any)}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: 'var(--radius-full, 9999px)',
+                      border: riderFilter === flt.id ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
+                      backgroundColor: riderFilter === flt.id ? 'rgba(255, 75, 58, 0.15)' : 'var(--color-surface)',
+                      color: riderFilter === flt.id ? 'var(--color-primary)' : 'var(--color-text-main)',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {flt.label}
+                  </button>
+                ))}
+              </div>
+
               {/* Applications List */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {allRiderApplications.map((app) => {
-                  const isPending = app.status === 'under_review';
+                {allRiderApplications.filter((app) => {
+                  if (riderFilter === 'all') return true;
+                  if (riderFilter === 'under_review') return app.status === 'under_review' || app.status === 'submitted' || app.status === 'in_review';
+                  return app.status === riderFilter;
+                }).map((app) => {
+                  const isPending = app.status === 'under_review' || app.status === 'submitted' || app.status === 'in_review';
+                  const isActionRequired = app.status === 'action_required';
                   const isApproved = app.status === 'approved';
                   const isRejected = app.status === 'rejected';
 
@@ -968,7 +1022,7 @@ export const AdminApp: React.FC = () => {
                             >
                               <span>📞 {app.phone}</span>
                               {app.email && <span>✉️ {app.email}</span>}
-                              <span>🏙️ <strong>{app.city || 'Bengaluru'}</strong></span>
+                              <span>🏙️ <strong>{app.city || 'Bengaluru'}</strong>{app.district ? `, ${app.district}` : ''}{app.state ? ` (${app.state})` : ''}{app.pincode ? ` - ${app.pincode}` : ''}</span>
                               <span>
                                 {app.vehicleType === 'Bicycle' ? '🚲 Bicycle' : `🛵 Bike (${app.vehicleNumber || 'KA 03 EN 4592'})`}
                               </span>
@@ -1154,16 +1208,60 @@ export const AdminApp: React.FC = () => {
                       </div>
 
                       {/* Action Decision Controls */}
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                        {isPending && (
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                        {/* Inspect full details & KYC documents */}
+                        <button
+                          onClick={() => setInspectedRiderApp(app)}
+                          style={{
+                            padding: '8px 14px',
+                            borderRadius: 'var(--radius-sm)',
+                            backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                            color: '#FFFFFF',
+                            border: '1px solid var(--color-border)',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px'
+                          }}
+                        >
+                          <Eye size={13} />
+                          <span>Inspect Application</span>
+                        </button>
+
+                        {(isPending || isActionRequired) && (
                           <>
                             <button
                               onClick={() => {
-                                const reason = prompt('Enter reason for rejecting this rider application:', 'Documents blurry or license expired');
-                                if (reason) rejectRiderKyc(app.id, reason);
+                                setResubmitModalAppId(app.id);
+                                setResubmitReasonText('Document photos are unclear or license expired. Please re-upload clear photos.');
                               }}
                               style={{
-                                padding: '8px 16px',
+                                padding: '8px 14px',
+                                borderRadius: 'var(--radius-sm)',
+                                backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                                color: '#F59E0B',
+                                border: '1px solid rgba(245, 158, 11, 0.4)',
+                                fontSize: '12px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '5px'
+                              }}
+                            >
+                              <RotateCcw size={13} />
+                              <span>Request Resubmission</span>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                setRejectModalAppId(app.id);
+                                setRejectReasonText('Ineligible vehicle or duplicate registration profile.');
+                              }}
+                              style={{
+                                padding: '8px 14px',
                                 borderRadius: 'var(--radius-sm)',
                                 backgroundColor: 'rgba(231, 76, 60, 0.15)',
                                 color: '#E74C3C',
@@ -1179,11 +1277,11 @@ export const AdminApp: React.FC = () => {
                             <button
                               onClick={() => {
                                 approveRiderKyc(app.id);
-                                setKycSuccessMsg(`Approved ${app.fullName}! Rider terminal is now activated for deliveries.`);
+                                setKycSuccessMsg(`Approved ${app.fullName}! Rider terminal is activated and ready.`);
                                 setTimeout(() => setKycSuccessMsg(null), 5000);
                               }}
                               style={{
-                                padding: '9px 20px',
+                                padding: '9px 18px',
                                 borderRadius: 'var(--radius-sm)',
                                 backgroundColor: 'var(--color-veg)',
                                 color: '#FFFFFF',
@@ -1197,7 +1295,7 @@ export const AdminApp: React.FC = () => {
                               }}
                             >
                               <CheckCircle2 size={15} />
-                              <span>Approve Rider & Activate Terminal</span>
+                              <span>Approve & Activate Profile</span>
                             </button>
                           </>
                         )}
@@ -1205,13 +1303,19 @@ export const AdminApp: React.FC = () => {
                         {isApproved && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-veg)', fontSize: '12px', fontWeight: 800 }}>
                             <CheckCircle2 size={16} />
-                            <span>Rider is active and receiving delivery requests</span>
+                            <span>Fleet Approved • Profile Activated</span>
+                          </div>
+                        )}
+
+                        {isActionRequired && (
+                          <div style={{ color: '#F59E0B', fontSize: '12px', fontWeight: 700 }}>
+                            Resubmission Requested: {app.rejectionReason || app.resubmissionNote}
                           </div>
                         )}
 
                         {isRejected && (
                           <div style={{ color: '#E74C3C', fontSize: '12px', fontWeight: 700 }}>
-                            Reason: {app.rejectionReason}
+                            Rejection Reason: {app.rejectionReason}
                           </div>
                         )}
                       </div>
@@ -1890,6 +1994,382 @@ export const AdminApp: React.FC = () => {
                 }}
               >
                 Done Inspecting
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Resubmission Request Modal */}
+      {resubmitModalAppId && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+          onClick={() => setResubmitModalAppId(null)}
+        >
+          <div
+            style={{
+              backgroundColor: '#1E1E24',
+              borderRadius: '16px',
+              maxWidth: '500px',
+              width: '100%',
+              padding: '24px',
+              border: '1px solid rgba(245, 158, 11, 0.3)',
+              boxShadow: 'var(--shadow-xl)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#F59E0B', marginBottom: '12px' }}>
+              <RotateCcw size={20} />
+              <h3 style={{ fontSize: '17px', fontWeight: 800, color: '#FFFFFF', margin: 0 }}>
+                Request Document Resubmission
+              </h3>
+            </div>
+            <p style={{ fontSize: '13px', color: '#9CA3AF', marginBottom: '14px', lineHeight: 1.5 }}>
+              Specify the exact documents that require re-upload or correction by the applicant.
+            </p>
+            <textarea
+              rows={3}
+              value={resubmitReasonText}
+              onChange={(e) => setResubmitReasonText(e.target.value)}
+              placeholder="e.g. Driving Licence front photo is blurry. Please upload a clear photo."
+              style={{
+                width: '100%',
+                padding: '12px 14px',
+                borderRadius: '10px',
+                backgroundColor: '#121216',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                color: '#FFFFFF',
+                fontSize: '13px',
+                outline: 'none',
+                resize: 'none',
+                marginBottom: '18px'
+              }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => setResubmitModalAppId(null)}
+                style={{
+                  padding: '9px 16px',
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                  color: '#FFFFFF',
+                  fontWeight: 600,
+                  fontSize: '12px',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!resubmitReasonText.trim()}
+                onClick={() => {
+                  if (resubmitModalAppId && resubmitReasonText.trim()) {
+                    requestResubmissionRiderKyc(resubmitModalAppId, resubmitReasonText.trim());
+                    setResubmitModalAppId(null);
+                    setResubmitReasonText('');
+                  }
+                }}
+                style={{
+                  padding: '9px 18px',
+                  borderRadius: '8px',
+                  backgroundColor: '#F59E0B',
+                  color: '#000000',
+                  fontWeight: 800,
+                  fontSize: '12px',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                Send Resubmission Request
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rejection Modal */}
+      {rejectModalAppId && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+          onClick={() => setRejectModalAppId(null)}
+        >
+          <div
+            style={{
+              backgroundColor: '#1E1E24',
+              borderRadius: '16px',
+              maxWidth: '500px',
+              width: '100%',
+              padding: '24px',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              boxShadow: 'var(--shadow-xl)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#EF4444', marginBottom: '12px' }}>
+              <ShieldAlert size={20} />
+              <h3 style={{ fontSize: '17px', fontWeight: 800, color: '#FFFFFF', margin: 0 }}>
+                Reject Rider Application
+              </h3>
+            </div>
+            <p style={{ fontSize: '13px', color: '#9CA3AF', marginBottom: '14px', lineHeight: 1.5 }}>
+              Enter the mandatory rejection explanation. This will be visible to the applicant.
+            </p>
+            <textarea
+              rows={3}
+              value={rejectReasonText}
+              onChange={(e) => setRejectReasonText(e.target.value)}
+              placeholder="e.g. Duplicate application or failed background criteria."
+              style={{
+                width: '100%',
+                padding: '12px 14px',
+                borderRadius: '10px',
+                backgroundColor: '#121216',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                color: '#FFFFFF',
+                fontSize: '13px',
+                outline: 'none',
+                resize: 'none',
+                marginBottom: '18px'
+              }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => setRejectModalAppId(null)}
+                style={{
+                  padding: '9px 16px',
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                  color: '#FFFFFF',
+                  fontWeight: 600,
+                  fontSize: '12px',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!rejectReasonText.trim()}
+                onClick={() => {
+                  if (rejectModalAppId && rejectReasonText.trim()) {
+                    rejectRiderKyc(rejectModalAppId, rejectReasonText.trim());
+                    setRejectModalAppId(null);
+                    setRejectReasonText('');
+                  }
+                }}
+                style={{
+                  padding: '9px 18px',
+                  borderRadius: '8px',
+                  backgroundColor: '#EF4444',
+                  color: '#FFFFFF',
+                  fontWeight: 800,
+                  fontSize: '12px',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                Confirm Rejection
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Inspected Rider Application Modal */}
+      {inspectedRiderApp && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.85)',
+            backdropFilter: 'blur(5px)',
+            zIndex: 99998,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+          onClick={() => setInspectedRiderApp(null)}
+        >
+          <div
+            style={{
+              backgroundColor: '#1E1E24',
+              borderRadius: '16px',
+              maxWidth: '680px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              border: '1px solid rgba(255,255,255,0.1)',
+              boxShadow: 'var(--shadow-xl)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                padding: '16px 20px',
+                borderBottom: '1px solid rgba(255,255,255,0.08)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                backgroundColor: '#17171C'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <img
+                  src={inspectedRiderApp.profilePhoto}
+                  alt={inspectedRiderApp.fullName}
+                  style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }}
+                />
+                <div>
+                  <h4 style={{ fontSize: '16px', fontWeight: 800, color: '#FFFFFF', margin: 0 }}>
+                    {inspectedRiderApp.fullName}
+                  </h4>
+                  <div style={{ fontSize: '11px', color: '#9CA3AF' }}>
+                    Ref: {inspectedRiderApp.applicationRef || inspectedRiderApp.id} • Status: {inspectedRiderApp.status}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setInspectedRiderApp(null)}
+                style={{
+                  background: 'rgba(255,255,255,0.08)',
+                  border: 'none',
+                  color: '#FFFFFF',
+                  padding: '6px',
+                  borderRadius: '50%',
+                  cursor: 'pointer'
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Personal & Operating Details */}
+              <div style={{ backgroundColor: '#17171C', borderRadius: '12px', padding: '14px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <h5 style={{ fontSize: '13px', fontWeight: 800, color: 'var(--color-primary)', marginBottom: '10px' }}>
+                  Personal Information
+                </h5>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px' }}>
+                  <div><span style={{ color: '#9CA3AF' }}>Phone:</span> <strong>{inspectedRiderApp.phone}</strong></div>
+                  <div><span style={{ color: '#9CA3AF' }}>Email:</span> <strong>{inspectedRiderApp.email || 'N/A'}</strong></div>
+                  <div><span style={{ color: '#9CA3AF' }}>DOB:</span> <strong>{inspectedRiderApp.dob}</strong></div>
+                  <div><span style={{ color: '#9CA3AF' }}>Gender:</span> <strong>{inspectedRiderApp.gender}</strong></div>
+                  <div><span style={{ color: '#9CA3AF' }}>Blood Group:</span> <strong>{inspectedRiderApp.bloodGroup}</strong></div>
+                  <div><span style={{ color: '#9CA3AF' }}>City:</span> <strong>{inspectedRiderApp.city || 'Bengaluru'}</strong></div>
+                  <div>
+                    <span style={{ color: '#9CA3AF' }}>District / State:</span>{' '}
+                    <strong>
+                      {inspectedRiderApp.district || inspectedRiderApp.metadata?.district ? `${inspectedRiderApp.district || inspectedRiderApp.metadata?.district}, ` : ''}
+                      {inspectedRiderApp.state || inspectedRiderApp.metadata?.state || 'N/A'}
+                      {inspectedRiderApp.pincode || inspectedRiderApp.metadata?.pincode ? ` - ${inspectedRiderApp.pincode || inspectedRiderApp.metadata?.pincode}` : ''}
+                    </strong>
+                  </div>
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <span style={{ color: '#9CA3AF' }}>Address:</span> <strong>{inspectedRiderApp.residentialAddress}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Vehicle & Emergency Details */}
+              <div style={{ backgroundColor: '#17171C', borderRadius: '12px', padding: '14px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <h5 style={{ fontSize: '13px', fontWeight: 800, color: 'var(--color-primary)', marginBottom: '10px' }}>
+                  Vehicle & Emergency Information
+                </h5>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px' }}>
+                  <div><span style={{ color: '#9CA3AF' }}>Vehicle Type:</span> <strong>{inspectedRiderApp.vehicleType || 'Motorcycle'}</strong></div>
+                  <div><span style={{ color: '#9CA3AF' }}>Model:</span> <strong>{inspectedRiderApp.vehicleModel || 'Standard'}</strong></div>
+                  <div><span style={{ color: '#9CA3AF' }}>Plate Number:</span> <strong>{inspectedRiderApp.vehicleNumber || 'N/A'}</strong></div>
+                  <div><span style={{ color: '#9CA3AF' }}>Driving Licence:</span> <strong>{inspectedRiderApp.drivingLicenseNumber || 'N/A'}</strong></div>
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <span style={{ color: '#9CA3AF' }}>Emergency Contact:</span> <strong>{inspectedRiderApp.emergencyContactPhone || 'N/A'}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* KYC Documents Previews */}
+              <div style={{ backgroundColor: '#17171C', borderRadius: '12px', padding: '14px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <h5 style={{ fontSize: '13px', fontWeight: 800, color: 'var(--color-primary)', marginBottom: '10px' }}>
+                  Uploaded Verification Documents
+                </h5>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                  {[
+                    { label: 'Aadhaar Front', url: inspectedRiderApp.documents?.aadhaarFront },
+                    { label: 'Aadhaar Back', url: inspectedRiderApp.documents?.aadhaarBack },
+                    { label: 'PAN Card', url: inspectedRiderApp.documents?.panFront },
+                    { label: 'Driving Licence', url: inspectedRiderApp.documents?.drivingLicenseFront },
+                    { label: 'Vehicle RC', url: inspectedRiderApp.documents?.vehicleRc },
+                    { label: 'Bank Proof', url: inspectedRiderApp.documents?.bankProof }
+                  ].map((doc, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => {
+                        if (doc.url) setSelectedDocPreview({ title: doc.label, url: doc.url });
+                      }}
+                      style={{
+                        borderRadius: '8px',
+                        overflow: 'hidden',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        cursor: doc.url ? 'pointer' : 'default',
+                        backgroundColor: '#101014'
+                      }}
+                    >
+                      {doc.url ? (
+                        <img src={doc.url} alt={doc.label} style={{ width: '100%', height: '80px', objectFit: 'cover' }} />
+                      ) : (
+                        <div style={{ height: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280', fontSize: '10px' }}>
+                          Not attached
+                        </div>
+                      )}
+                      <div style={{ padding: '6px', fontSize: '10px', textAlign: 'center', fontWeight: 700, color: '#D1D5DB', backgroundColor: '#1A1A20' }}>
+                        {doc.label}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding: '14px 20px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                onClick={() => setInspectedRiderApp(null)}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                  color: '#FFFFFF',
+                  fontWeight: 600,
+                  fontSize: '12px',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                Close
               </button>
             </div>
           </div>

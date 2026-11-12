@@ -14,7 +14,8 @@ import {
   Heart,
   Gift,
   Tag,
-  Edit3
+  Edit3,
+  Bike
 } from 'lucide-react';
 import { SavedAddressesModal } from './SavedAddressesModal';
 import { WalletModal } from './WalletModal';
@@ -34,7 +35,8 @@ export const ProfileScreen: React.FC = () => {
     isDarkMode,
     toggleDarkMode,
     isLoggedIn,
-    logoutUser
+    logoutUser,
+    setAppMode
   } = useTomattto();
 
   const [isSavedAddressesOpen, setIsSavedAddressesOpen] = useState(false);
@@ -94,6 +96,12 @@ export const ProfileScreen: React.FC = () => {
       title: 'Help & 24x7 Concierge Support',
       subtitle: 'FAQs, refund policy & live AI chat',
       action: () => setIsSupportOpen(true)
+    },
+    {
+      icon: <Bike size={18} color="var(--color-primary)" />,
+      title: 'Become a Delivery Partner',
+      subtitle: 'Earn up to ₹35,000/month with flexible shifts & insurance',
+      action: () => setAppMode('rider')
     },
     {
       icon: <LogOut size={18} color="var(--color-primary)" />,

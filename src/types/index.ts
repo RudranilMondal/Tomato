@@ -245,6 +245,13 @@ export interface RiderBankDetails {
   upiId: string;
 }
 
+export type RiderVehicleType =
+  | 'Bicycle'
+  | 'Motorcycle'
+  | 'Scooter'
+  | 'Electric Vehicle'
+  | 'Bike';
+
 export interface RiderOnboardingApplication {
   id: string;
   applicationRef?: string;
@@ -253,8 +260,12 @@ export interface RiderOnboardingApplication {
   phone: string;
   email?: string;
   city?: string;
-  vehicleType?: 'Bike' | 'Bicycle';
+  district?: string;
+  state?: string;
+  pincode?: string;
+  vehicleType?: RiderVehicleType;
   vehicleNumber?: string;
+  vehicleModel?: string;
   drivingLicenseNumber?: string;
   emergencyContactName?: string;
   emergencyContactPhone?: string;
@@ -267,5 +278,7 @@ export interface RiderOnboardingApplication {
   status: RiderOnboardingStatus;
   submittedAt: string;
   rejectionReason?: string;
+  resubmissionNote?: string;
+  timeline?: { action: string; timestamp: string; note?: string; by?: string }[];
 }
 

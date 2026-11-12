@@ -10,6 +10,8 @@ import { RiderKycModal } from './RiderKycModal';
 import { RiderProfileModal } from './RiderProfileModal';
 import { RiderOnboardingWizard } from './RiderOnboardingWizard';
 import { RiderAuthModal } from './RiderAuthModal';
+import { RiderWelcomeScreen } from './RiderWelcomeScreen';
+import { RiderApplicationStatusScreen } from './RiderApplicationStatusScreen';
 import {
   Bike,
   Power,
@@ -43,7 +45,8 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
-  X
+  X,
+  LogOut
 } from 'lucide-react';
 
 export const RiderApp: React.FC = () => {
@@ -71,9 +74,13 @@ export const RiderApp: React.FC = () => {
     supabaseUser,
     activeRiderApplicant,
     demoRiderUser,
-    signOutSupabase
+    signOutSupabase,
+    allRiderApplications,
+    loginDemoRider,
+    setAppMode
   } = useTomattto();
 
+  const [isRegistering, setIsRegistering] = useState(false);
   const [enteredOtp, setEnteredOtp] = useState('');
   const [otpError, setOtpError] = useState('');
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
@@ -170,6 +177,73 @@ export const RiderApp: React.FC = () => {
       setOtpError(res.error || `Invalid delivery OTP. In demo mode, use: ${DEMO_OTP_CODE}`);
     }
   };
+
+  // 1. If currently in registration wizard flow:
+  if (isRegistering) {
+    return (
+      <div style={{ flex: 1, height: '100%', overflowY: 'auto' }}>
+        <RiderOnboardingWizard
+          onBack={() => setIsRegistering(false)}
+          onSuccess={() => {
+            setIsRegistering(false);
+          }}
+        />
+      </div>
+    );
+  }
+
+  // 2. If rider is NOT approved:
+  if (riderOnboardingStatus !== 'approved') {
+    // A. Not started: Show dedicated Rider Welcome / Registration Entry Screen
+    if (riderOnboardingStatus === 'not_started') {
+      return (
+        <div style={{ flex: 1, height: '100%', overflowY: 'auto' }}>
+          <RiderWelcomeScreen
+            onRegister={() => setIsRegistering(true)}
+            onLogin={() => setIsAuthModalOpen(true)}
+            onQuickDemoLogin={() => {
+              loginDemoRider();
+              setToast({ type: 'success', message: 'Logged in as Vikram Singh (Approved Demo Rider)' });
+            }}
+          />
+          <RiderAuthModal
+            isOpen={isAuthModalOpen}
+            onClose={() => setIsAuthModalOpen(false)}
+            onSuccess={() => {
+              setIsAuthModalOpen(false);
+              loginDemoRider();
+            }}
+          />
+        </div>
+      );
+    }
+
+    // B. Application in progress (under_review, submitted, in_review, action_required, rejected, draft):
+    const currentApp =
+      allRiderApplications.find(
+        (a) =>
+          (activeRiderApplicant?.phone && a.phone === activeRiderApplicant.phone) ||
+          a.status === riderOnboardingStatus
+      ) || allRiderApplications[0];
+
+    return (
+      <div style={{ flex: 1, height: '100%', overflowY: 'auto' }}>
+        <RiderApplicationStatusScreen
+          status={riderOnboardingStatus}
+          application={currentApp}
+          onResume={() => setIsRegistering(true)}
+          onResubmit={() => setIsRegistering(true)}
+          onSwitchAccount={() => {
+            signOutSupabase();
+            resetRiderOnboarding();
+          }}
+          onRefresh={() => {
+            setToast({ type: 'info', message: 'Checked latest application status.' });
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -328,6 +402,32 @@ export const RiderApp: React.FC = () => {
             >
               <Power size={12} />
               <span>{isRiderOnline ? 'ON DUTY' : 'OFFLINE'}</span>
+            </button>
+
+            {/* Exit / Switch Account */}
+            <button
+              onClick={() => {
+                signOutSupabase();
+                resetRiderOnboarding();
+                setToast({ type: 'info', message: 'Logged out from rider terminal' });
+              }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '3px',
+                padding: '6px 9px',
+                borderRadius: 'var(--radius-full)',
+                backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                color: '#D1D5DB',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                fontSize: '11px',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+              title="Sign out and return to rider welcome screen"
+            >
+              <LogOut size={12} />
+              <span>Exit</span>
             </button>
           </div>
         </div>

@@ -199,9 +199,11 @@ interface TomatttoContextType {
   persistedRiderApp: any | null;
   fetchUserRiderApplication: (userId?: string) => Promise<any>;
   allRiderApplications: RiderOnboardingApplication[];
-  submitRiderOnboarding: (app: Omit<RiderOnboardingApplication, 'id' | 'status' | 'submittedAt'>) => void;
+  submitRiderOnboarding: (app: Omit<RiderOnboardingApplication, 'id' | 'status' | 'submittedAt'> & { id?: string }) => void;
   approveRiderKyc: (appId: string) => void;
   rejectRiderKyc: (appId: string, reason: string) => void;
+  requestResubmissionRiderKyc: (appId: string, reason: string) => void;
+  loginDemoRider: () => void;
   resetRiderOnboarding: () => void;
 
   // Simulation Helpers
@@ -682,7 +684,7 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [completedRiderTrips, setCompletedRiderTrips] = useState<CompletedTrip[]>(INITIAL_RIDER_TRIPS);
 
   // Rider Onboarding & KYC Applications
-  const [riderOnboardingStatus, setRiderOnboardingStatus] = useState<RiderOnboardingStatus>('approved');
+  const [riderOnboardingStatus, setRiderOnboardingStatus] = useState<RiderOnboardingStatus>('not_started');
   const [persistedRiderApp, setPersistedRiderApp] = useState<any | null>(null);
 
   const fetchUserRiderApplication = async (userId?: string) => {
@@ -722,6 +724,54 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         } else if (data.status === 'approved' || data.status === 'verified') {
           setRiderOnboardingStatus('approved');
         }
+
+        // Keep allRiderApplications list in sync with persisted data
+        if (data.full_name && data.phone) {
+          const mappedApp: RiderOnboardingApplication = {
+            id: data.id || data.application_ref,
+            applicationRef: data.application_ref,
+            fullName: data.full_name,
+            phone: data.phone,
+            email: data.email || undefined,
+            city: data.city,
+            state: data.metadata?.state || '',
+            district: data.metadata?.district || '',
+            pincode: data.metadata?.pincode || '',
+            residentialAddress: data.metadata?.residential_address || '',
+            profilePhoto: data.metadata?.profile_photo || '',
+            bloodGroup: data.metadata?.blood_group || 'O+',
+            gender: data.metadata?.gender || 'Male',
+            dob: data.metadata?.dob || '1998-01-01',
+            vehicleType: data.vehicle_type || 'Motorcycle',
+            vehicleNumber: data.vehicle_number || '',
+            vehicleModel: data.metadata?.vehicle_model || '',
+            drivingLicenseNumber: data.driving_license_number || '',
+            emergencyContactName: data.emergency_contact_name || '',
+            emergencyContactPhone: data.emergency_contact_phone || '',
+            status:
+              data.status === 'approved' || data.status === 'verified'
+                ? 'approved'
+                : data.status === 'rejected'
+                ? 'rejected'
+                : data.status === 'action_required'
+                ? 'action_required'
+                : 'under_review',
+            submittedAt: data.submitted_at ? new Date(data.submitted_at).toLocaleDateString() : 'Recent',
+            documents: (data.metadata?.documents || {}) as any,
+            bankDetails: {
+              accountHolderName: data.full_name,
+              bankName: '',
+              accountNumber: '',
+              ifscCode: '',
+              upiId: ''
+            }
+          };
+          setAllRiderApplications((prev) => {
+            const filtered = prev.filter((a) => a.applicationRef !== mappedApp.applicationRef && a.phone !== mappedApp.phone);
+            return [mappedApp, ...filtered];
+          });
+        }
+
         return data;
       }
     } catch (err) {
@@ -733,12 +783,13 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     if (supabaseUser) {
       fetchUserRiderApplication(supabaseUser.id);
+    } else if (demoRiderUser) {
+      setRiderOnboardingStatus('approved');
     } else {
       setPersistedRiderApp(null);
-      // Demo rider Vikram Singh defaults to approved dashboard
-      setRiderOnboardingStatus('approved');
+      setRiderOnboardingStatus('not_started');
     }
-  }, [supabaseUser]);
+  }, [supabaseUser, demoRiderUser]);
 
   const [allRiderApplications, setAllRiderApplications] = useState<RiderOnboardingApplication[]>([
     {
@@ -747,6 +798,10 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       profilePhoto: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80',
       phone: '+91 98451 92831',
       email: 'vikram.singh@example.com',
+      city: 'Bengaluru',
+      district: 'Bengaluru Urban',
+      state: 'Karnataka',
+      pincode: '560008',
       residentialAddress: '14/B, 2nd Cross, Old Airport Road, Kodihalli, Bengaluru',
       bloodGroup: 'O+',
       gender: 'Male',
@@ -1428,6 +1483,13 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Rider Actions & Workflow
   const riderAcceptDelivery = (orderId?: string): { success: boolean; error?: string } => {
+    if (riderOnboardingStatus !== 'approved') {
+      return {
+        success: false,
+        error: 'Account verification required: Only approved delivery partners can accept orders.'
+      };
+    }
+
     if (activeRiderOrder) {
       return {
         success: false,
@@ -1627,14 +1689,90 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return { success: true };
   };
 
-  const submitRiderOnboarding = (appData: Omit<RiderOnboardingApplication, 'id' | 'status' | 'submittedAt'>) => {
+  const submitRiderOnboarding = (appData: Omit<RiderOnboardingApplication, 'id' | 'status' | 'submittedAt'> & { id?: string }) => {
+    const existing = allRiderApplications.find(
+      (a) => a.phone === appData.phone || (appData.applicationRef && a.applicationRef === appData.applicationRef)
+    );
     const newApp: RiderOnboardingApplication = {
       ...appData,
-      id: `APP-RDR-${Math.floor(1000 + Math.random() * 9000)}`,
+      id: existing ? existing.id : (appData.id || `APP-RDR-${Math.floor(1000 + Math.random() * 9000)}`),
+      applicationRef: appData.applicationRef || (existing?.applicationRef || `APP-RDR-${Math.floor(1000 + Math.random() * 9000)}`),
       status: 'under_review',
-      submittedAt: 'Just now'
+      submittedAt: 'Just now',
+      timeline: [
+        ...(existing?.timeline || []),
+        { action: 'Application Submitted', timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), note: 'Awaiting administrator verification.' }
+      ]
     };
-    setAllRiderApplications((prev) => [newApp, ...prev]);
+    setAllRiderApplications((prev) => {
+      const filtered = prev.filter((a) => a.id !== newApp.id);
+      return [newApp, ...filtered];
+    });
+    setPersistedRiderApp({
+      ...newApp,
+      full_name: newApp.fullName,
+      phone: newApp.phone,
+      email: newApp.email,
+      city: newApp.city,
+      vehicle_type: newApp.vehicleType,
+      vehicle_number: newApp.vehicleNumber,
+      metadata: {
+        state: newApp.state,
+        district: newApp.district,
+        pincode: newApp.pincode,
+        profile_photo: newApp.profilePhoto,
+        residential_address: newApp.residentialAddress,
+        gender: newApp.gender,
+        dob: newApp.dob,
+        blood_group: newApp.bloodGroup,
+        vehicle_model: newApp.vehicleModel
+      }
+    });
+
+    // Asynchronously persist to Supabase if connected
+    if (supabase && (supabaseUser?.id || activeRiderApplicant?.id)) {
+      const targetUserId = supabaseUser?.id || activeRiderApplicant?.id;
+        Promise.resolve(
+          supabase
+            .from('rider_applications')
+            .upsert(
+              {
+                user_id: targetUserId,
+                application_ref: newApp.applicationRef,
+                full_name: newApp.fullName,
+                phone: newApp.phone,
+                email: newApp.email || null,
+                city: newApp.city,
+                vehicle_type: newApp.vehicleType,
+                vehicle_number: newApp.vehicleNumber || 'Pending',
+                driving_license_number: newApp.drivingLicenseNumber || null,
+                emergency_contact_name: newApp.emergencyContactName || null,
+                emergency_contact_phone: newApp.emergencyContactPhone || null,
+                status: 'submitted',
+                submitted_at: new Date().toISOString(),
+                metadata: {
+                  state: newApp.state,
+                  district: newApp.district,
+                  pincode: newApp.pincode,
+                  profile_photo: newApp.profilePhoto,
+                  residential_address: newApp.residentialAddress,
+                  gender: newApp.gender,
+                  dob: newApp.dob,
+                  blood_group: newApp.bloodGroup,
+                  vehicle_model: newApp.vehicleModel
+                }
+              },
+              { onConflict: 'application_ref' }
+            )
+        )
+          .then(({ error }: any) => {
+            if (error) {
+              console.warn('Supabase rider application persistence notice:', error.message);
+            }
+          })
+          .catch(() => {});
+    }
+
     setRiderOnboardingStatus('under_review');
     try {
       confetti({ particleCount: 60, spread: 60, origin: { y: 0.6 } });
@@ -1645,10 +1783,21 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const approveRiderKyc = (appId: string) => {
     setAllRiderApplications((prev) =>
-      prev.map((a) => (a.id === appId ? { ...a, status: 'approved' } : a))
+      prev.map((a) =>
+        a.id === appId
+          ? {
+              ...a,
+              status: 'approved',
+              timeline: [
+                ...(a.timeline || []),
+                { action: 'Approved', timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), note: 'Application verified and rider account activated.', by: 'Fleet Administrator' }
+              ]
+            }
+          : a
+      )
     );
     setRiderOnboardingStatus('approved');
-    setIsRiderOnline(true);
+    setIsRiderOnline(false);
     try {
       confetti({ particleCount: 100, spread: 80, origin: { y: 0.5 } });
     } catch {
@@ -1658,9 +1807,54 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const rejectRiderKyc = (appId: string, reason: string) => {
     setAllRiderApplications((prev) =>
-      prev.map((a) => (a.id === appId ? { ...a, status: 'rejected', rejectionReason: reason } : a))
+      prev.map((a) =>
+        a.id === appId
+          ? {
+              ...a,
+              status: 'rejected',
+              rejectionReason: reason,
+              timeline: [
+                ...(a.timeline || []),
+                { action: 'Rejected', timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), note: reason, by: 'Fleet Administrator' }
+              ]
+            }
+          : a
+      )
     );
     setRiderOnboardingStatus('rejected');
+  };
+
+  const requestResubmissionRiderKyc = (appId: string, reason: string) => {
+    setAllRiderApplications((prev) =>
+      prev.map((a) =>
+        a.id === appId
+          ? {
+              ...a,
+              status: 'action_required',
+              rejectionReason: reason,
+              resubmissionNote: reason,
+              timeline: [
+                ...(a.timeline || []),
+                { action: 'Resubmission Requested', timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), note: reason, by: 'Fleet Administrator' }
+              ]
+            }
+          : a
+      )
+    );
+    setRiderOnboardingStatus('action_required');
+  };
+
+  const loginDemoRider = () => {
+    setDemoRiderUser({
+      id: 'rdr-701',
+      phone: '+91 98234 56789',
+      fullName: 'Vikram Singh',
+      role: 'rider',
+      isDemo: true,
+      createdAt: new Date().toISOString()
+    });
+    setRiderOnboardingStatus('approved');
+    setIsRiderOnline(false);
   };
 
   const resetRiderOnboarding = () => {
@@ -1963,6 +2157,8 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         submitRiderOnboarding,
         approveRiderKyc,
         rejectRiderKyc,
+        requestResubmissionRiderKyc,
+        loginDemoRider,
         resetRiderOnboarding,
         triggerSimulatedCustomerOrder,
         triggerSimulatedDeliveryRequest,
