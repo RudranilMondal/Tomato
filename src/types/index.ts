@@ -59,6 +59,7 @@ export interface Restaurant {
   isPureVeg: boolean;
   isOpen: boolean;
   address: string;
+  phone?: string;
   distanceKm: number;
   cuisines: string[];
   offerText?: string;
@@ -235,6 +236,25 @@ export interface RiderKycDocuments {
   drivingLicenseBack: string | null;
   vehicleRc?: string | null;
   bankProof?: string | null;
+  qualificationProof?: string | null;
+}
+
+export interface RiderEducationDetails {
+  highestQualification: string;
+  qualificationName?: string;
+  institutionName?: string;
+  completionYear?: string;
+  additionalQualification?: string;
+  proofDocumentUrl?: string | null;
+  proofFileName?: string | null;
+  proofFileType?: string | null;
+  proofFileSize?: number | null;
+  verificationStatus?: 'pending' | 'verified' | 'rejected';
+  rejectionReason?: string;
+  qualificationStatus?: 'pending' | 'verified' | 'rejected';
+  qualificationRejectionReason?: string;
+  verifiedAt?: string;
+  verifiedBy?: string;
 }
 
 export interface RiderBankDetails {
@@ -255,6 +275,8 @@ export type RiderVehicleType =
 export interface RiderOnboardingApplication {
   id: string;
   applicationRef?: string;
+  userId?: string;
+  isDemo?: boolean;
   fullName: string;
   profilePhoto: string;
   phone: string;
@@ -274,11 +296,173 @@ export interface RiderOnboardingApplication {
   gender: 'Male' | 'Female' | 'Other';
   dob: string;
   documents: RiderKycDocuments;
+  documentStatuses?: Partial<Record<keyof RiderKycDocuments, 'pending' | 'verified' | 'rejected'>>;
+  education?: RiderEducationDetails;
   bankDetails: RiderBankDetails;
   status: RiderOnboardingStatus;
+  tier?: RiderTier;
+  totalWorkingHours?: number;
+  completedOrdersCount?: number;
   submittedAt: string;
   rejectionReason?: string;
   resubmissionNote?: string;
   timeline?: { action: string; timestamp: string; note?: string; by?: string }[];
 }
+
+export interface RestaurantPartnerApplication {
+  id: string;
+  applicationRef?: string;
+  userId?: string;
+  isDemo?: boolean;
+  status: 'draft' | 'submitted' | 'under_review' | 'in_review' | 'verified' | 'approved' | 'rejected' | 'action_required';
+  restaurantName: string;
+  restaurantType: string;
+  cuisines?: string[];
+  cuisineTypes?: string[];
+  description?: string;
+  phone: string;
+  email?: string;
+  ownerName?: string;
+  managerName?: string;
+  managerPhone?: string;
+  address?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  landmark?: string;
+  city: string;
+  state?: string;
+  pincode?: string;
+  postalCode?: string;
+  openingTime?: string;
+  closingTime?: string;
+  operatingDays?: string[];
+  estimatedCostForTwo?: number;
+  pureVeg?: boolean;
+  legalEntityName?: string;
+  legalBusinessName?: string;
+  businessType?: string;
+  panNumber?: string;
+  panNumberMasked?: string;
+  hasGst?: boolean;
+  gstRegistered?: boolean;
+  gstin?: string;
+  fssaiNumber?: string;
+  fssaiLicenseNumber?: string;
+  fssaiExpiryDate?: string;
+  bankName?: string;
+  bankAccountHolder?: string;
+  bankAccountNumberMasked?: string;
+  bankIfscCode?: string;
+  bankAccountType?: string;
+  bankDetails?: {
+    accountHolderName?: string;
+    bankName?: string;
+    accountNumber?: string;
+    ifscCode?: string;
+    accountType?: string;
+  };
+  payoutFrequency?: string;
+  payoutEmail?: string;
+  documents?: {
+    fssaiDoc?: string;
+    fssaiDocName?: string;
+    panDoc?: string;
+    panDocName?: string;
+    gstDoc?: string;
+    gstDocName?: string;
+    chequeDoc?: string;
+    chequeDocName?: string;
+    aadhaarFront?: string;
+    aadhaarFrontName?: string;
+    aadhaarBack?: string;
+    aadhaarBackName?: string;
+    personalPanFront?: string;
+    personalPanFrontName?: string;
+    personalPanBack?: string;
+    personalPanBackName?: string;
+  };
+  documentStatuses?: {
+    fssaiDoc?: 'pending' | 'verified' | 'rejected';
+    panDoc?: 'pending' | 'verified' | 'rejected';
+    gstDoc?: 'pending' | 'verified' | 'rejected';
+    chequeDoc?: 'pending' | 'verified' | 'rejected';
+    aadhaarFront?: 'pending' | 'verified' | 'rejected';
+    aadhaarBack?: 'pending' | 'verified' | 'rejected';
+    personalPanFront?: 'pending' | 'verified' | 'rejected';
+    personalPanBack?: 'pending' | 'verified' | 'rejected';
+  };
+  logoUrl?: string;
+  coverImageUrl?: string;
+  rejectionReason?: string;
+  reviewerNotes?: string;
+  submittedAt?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// ==========================================
+// RIDER TIER & VERIFICATION SYSTEM TYPES
+// ==========================================
+
+export type RiderTier = 'bronze' | 'silver' | 'gold';
+
+export interface TierConfiguration {
+  tier: RiderTier;
+  minRating: number;
+  minWorkingHours: number;
+  minCompletedOrders: number;
+  basePayout: number;
+  basePay?: number;
+  perKmRate: number;
+  surgeBonus: number;
+  tierIncentive: number;
+  tierIncentiveBonus?: number;
+  orderMultiplier: number;
+  payoutMultiplier?: number;
+  selfieIntervalMinutes: number;
+  selfieFrequencyHours?: number;
+  selfieWindowMinutes?: number;
+  priorityOrderDispatch?: boolean;
+  description?: string;
+}
+
+export interface RiderSelfieVerification {
+  id: string;
+  riderId: string;
+  riderName?: string;
+  orderId?: string;
+  tier: RiderTier;
+  verificationType: 'random_duty' | 'duty_start' | 'duty_end' | 'order_linked';
+  triggerReason?: string;
+  storageBucket?: string;
+  storagePath?: string;
+  selfieUrl?: string;
+  status: 'verified' | 'flagged' | 'missed' | 'rejected';
+  promptedAt?: string;
+  triggeredAt?: string;
+  capturedAt?: string;
+  verifiedAt?: string;
+  verifiedBy?: string;
+  reviewerNotes?: string;
+  submittedAt?: string;
+  missedAt?: string;
+  notes?: string;
+}
+
+export interface RestaurantPartnerSession {
+  user: {
+    id: string;
+    email?: string;
+    phone?: string;
+    fullName?: string;
+  };
+  status: 'approved' | 'pending' | 'action_required' | 'rejected' | 'suspended' | 'not_registered';
+  restaurant?: Restaurant;
+  restaurants?: Restaurant[];
+  application?: RestaurantPartnerApplication;
+}
+
+
 

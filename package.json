@@ -6,7 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test tests/*.test.js",
+    "test:concurrency": "node tests/concurrency_delivery_claim.js",
+    "test:storage": "node --env-file=.env tests/storage_kyc_validation.js",
+    "test:restaurant-kyc": "node tests/restaurant_admin_kyc_verification.js",
+    "test:phase2-selfie": "node --env-file=.env tests/phase2_selfie_storage_access.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
@@ -21,6 +26,7 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
+    "pg": "^8.23.1",
     "typescript": "^5.6.3",
     "vite": "^5.4.10"
   }

@@ -4,6 +4,8 @@ dist-ssr
 *.local
 .env
 !.env.example
+supabase/.env
+supabase/.env.*
 .DS_Store
 *.log
 

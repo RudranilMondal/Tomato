@@ -34,7 +34,10 @@ import {
   Search,
   ChevronDown,
   X,
-  Loader2
+  Loader2,
+  GraduationCap,
+  Paperclip,
+  Trash2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
@@ -554,8 +557,99 @@ export const RiderOnboardingWizard: React.FC<RiderOnboardingWizardProps> = ({
     drivingLicenseFront: null,
     drivingLicenseBack: null,
     vehicleRc: null,
-    bankProof: null
+    bankProof: null,
+    qualificationProof: null
   });
+  const [kycDocFiles, setKycDocFiles] = useState<Partial<Record<keyof RiderKycDocuments, File>>>({});
+
+  // ==========================================
+  // STEP 3B: EDUCATIONAL QUALIFICATION & PROOF STATE
+  // ==========================================
+  const [highestQualification, setHighestQualification] = useState<string>(
+    persistedRiderApp?.education?.highestQualification ||
+    persistedRiderApp?.highest_qualification ||
+    'Class 12'
+  );
+  const [otherQualification, setOtherQualification] = useState<string>('');
+  const [qualificationName, setQualificationName] = useState<string>(
+    persistedRiderApp?.education?.qualificationName ||
+    persistedRiderApp?.qualification_name ||
+    'Higher Secondary Certificate'
+  );
+  const [institutionName, setInstitutionName] = useState<string>(
+    persistedRiderApp?.education?.institutionName ||
+    persistedRiderApp?.institution_name ||
+    'Kendriya Vidyalaya'
+  );
+  const [completionYear, setCompletionYear] = useState<string>(
+    persistedRiderApp?.education?.completionYear ||
+    persistedRiderApp?.completion_year ||
+    '2020'
+  );
+  const [additionalQualification, setAdditionalQualification] = useState<string>(
+    persistedRiderApp?.education?.additionalQualification ||
+    persistedRiderApp?.additional_qualification ||
+    ''
+  );
+  const [qualificationProof, setQualificationProof] = useState<string | null>(
+    persistedRiderApp?.education?.proofDocumentUrl ||
+    persistedRiderApp?.documents?.qualificationProof ||
+    null
+  );
+  const [qualificationProofName, setQualificationProofName] = useState<string>(
+    persistedRiderApp?.education?.proofFileName || ''
+  );
+  const [qualificationProofSize, setQualificationProofSize] = useState<number | null>(
+    persistedRiderApp?.education?.proofFileSize || null
+  );
+  const [qualificationProofProgress, setQualificationProofProgress] = useState<number>(
+    persistedRiderApp?.education?.proofDocumentUrl ? 100 : 0
+  );
+  const [qualificationProofFile, setQualificationProofFile] = useState<File | null>(null);
+  const [isUploadingProof, setIsUploadingProof] = useState<boolean>(false);
+  const [proofError, setProofError] = useState<string | null>(null);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
+
+  const handleQualificationProofUpload = (file: File) => {
+    setProofError(null);
+    const validMimes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+    const validExts = /\.(pdf|jpg|jpeg|png)$/i;
+
+    if (!validMimes.includes(file.type) && !validExts.test(file.name)) {
+      setProofError('Please upload a valid document in PDF, JPG, JPEG, or PNG format.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setProofError('Document file size exceeds the 10 MB limit. Please choose a smaller file.');
+      return;
+    }
+
+    setQualificationProofFile(file);
+    setIsUploadingProof(true);
+    setQualificationProofProgress(25);
+    setQualificationProofName(file.name);
+    setQualificationProofSize(file.size);
+
+    setTimeout(() => {
+      setQualificationProofProgress(75);
+    }, 150);
+
+    setTimeout(() => {
+      const url = URL.createObjectURL(file);
+      setQualificationProof(url);
+      setQualificationProofProgress(100);
+      setIsUploadingProof(false);
+    }, 350);
+  };
+
+  const handleRemoveQualificationProof = () => {
+    setQualificationProof(null);
+    setQualificationProofFile(null);
+    setQualificationProofName('');
+    setQualificationProofSize(null);
+    setQualificationProofProgress(0);
+    setProofError(null);
+  };
 
   // ==========================================
   // STEP 4: BANK & CONSENT STATE
@@ -597,7 +691,21 @@ export const RiderOnboardingWizard: React.FC<RiderOnboardingWizardProps> = ({
     setDrivingLicenseNumber('KA01 20180004921');
     setEmergencyContactName('Sunita Kumar');
     setEmergencyContactPhone('+91 98451 22334');
-    setDocuments(DEFAULT_SAMPLE_DOCS);
+    setHighestQualification('Undergraduate Degree');
+    setOtherQualification('');
+    setQualificationName('Bachelor of Science (B.Sc)');
+    setInstitutionName('St. Xavier\'s College');
+    setCompletionYear('2021');
+    setAdditionalQualification('Certified Food Safety Handler');
+    setQualificationProof('https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=600&auto=format&fit=crop&q=80');
+    setQualificationProofName('BSc_Degree_Certificate.pdf');
+    setQualificationProofSize(1420500);
+    setQualificationProofProgress(100);
+    setProofError(null);
+    setDocuments({
+      ...DEFAULT_SAMPLE_DOCS,
+      qualificationProof: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=600&auto=format&fit=crop&q=80'
+    });
     setBankDetails({
       accountHolderName: 'Rajesh Kumar',
       bankName: 'State Bank of India',
@@ -610,8 +718,18 @@ export const RiderOnboardingWizard: React.FC<RiderOnboardingWizardProps> = ({
 
   // Helper to handle document upload / preview
   const handleDocUpload = (key: keyof RiderKycDocuments, file: File) => {
+    if (file.size > 5 * 1024 * 1024) {
+      setErrors((prev) => ({ ...prev, [key]: 'File size must be 5MB or less' }));
+      return;
+    }
+    const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'application/pdf'];
+    if (!validTypes.includes(file.type) && !file.type.startsWith('image/')) {
+      setErrors((prev) => ({ ...prev, [key]: 'Supported formats: JPEG, PNG, PDF' }));
+      return;
+    }
     const url = URL.createObjectURL(file);
     setDocuments((prev) => ({ ...prev, [key]: url }));
+    setKycDocFiles((prev) => ({ ...prev, [key]: file }));
     setErrors((prev) => {
       const copy = { ...prev };
       delete copy[key];
@@ -661,8 +779,10 @@ export const RiderOnboardingWizard: React.FC<RiderOnboardingWizardProps> = ({
 
   const validateStep3 = (): boolean => {
     const errs: Record<string, string> = {};
-    if (!documents.aadhaarFront) errs.aadhaarFront = 'Aadhaar Card Front photo required';
-    if (!documents.panFront) errs.panFront = 'PAN Card photo required';
+    if (!documents.aadhaarFront) errs.aadhaarFront = 'Aadhaar Card (Front Side) photo required';
+    if (!documents.aadhaarBack) errs.aadhaarBack = 'Aadhaar Card (Back Side) photo required';
+    if (!documents.panFront) errs.panFront = 'Personal PAN Card (Front Side) photo required';
+    if (!documents.panBack) errs.panBack = 'Personal PAN Card (Back Side) photo required';
     if (vehicleType !== 'Bicycle') {
       if (!documents.drivingLicenseFront) {
         errs.drivingLicenseFront = 'Driving License Front photo required';
@@ -694,6 +814,22 @@ export const RiderOnboardingWizard: React.FC<RiderOnboardingWizardProps> = ({
 
     setIsSubmitting(true);
 
+    const finalHighestQual = highestQualification === 'Other'
+      ? (otherQualification.trim() || 'Other')
+      : highestQualification;
+
+    const educationData = {
+      highestQualification: finalHighestQual,
+      qualificationName: qualificationName.trim() || undefined,
+      institutionName: institutionName.trim() || undefined,
+      completionYear: completionYear.trim() || undefined,
+      additionalQualification: additionalQualification.trim() || undefined,
+      proofDocumentUrl: qualificationProof || undefined,
+      proofFileName: qualificationProofName || undefined,
+      proofFileSize: qualificationProofSize || undefined,
+      verificationStatus: 'pending' as const
+    };
+
     const appData = {
       applicationRef,
       fullName: fullName.trim(),
@@ -714,23 +850,37 @@ export const RiderOnboardingWizard: React.FC<RiderOnboardingWizardProps> = ({
       bloodGroup,
       gender,
       dob,
-      documents,
+      documents: {
+        ...documents,
+        qualificationProof: qualificationProof || null
+      },
+      education: educationData,
       bankDetails
     };
 
-    // Simulated short network delay for polished UX
-    await new Promise((r) => setTimeout(r, 600));
-
-    submitRiderOnboarding(appData);
-    setIsSubmitting(false);
-    setSubmissionComplete(true);
-
+    setSubmissionError(null);
     try {
-      confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
-    } catch {}
+      const res = await submitRiderOnboarding(appData, { qualificationProofFile, kycDocFiles });
+      if (!res.success) {
+        setSubmissionError(res.error || 'Failed to submit application. Please check your network and credentials.');
+        setIsSubmitting(false);
+        return;
+      }
 
-    if (onSuccess) {
-      onSuccess(applicationRef);
+      setIsSubmitting(false);
+      setSubmissionComplete(true);
+
+      try {
+        confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+      } catch {}
+
+      if (onSuccess) {
+        onSuccess(applicationRef);
+      }
+    } catch (err: any) {
+      console.error('Error in submitRiderOnboarding:', err);
+      setSubmissionError(err?.message || 'Unexpected network error occurred while submitting.');
+      setIsSubmitting(false);
     }
   };
 
@@ -1653,13 +1803,23 @@ export const RiderOnboardingWizard: React.FC<RiderOnboardingWizardProps> = ({
           {[
             {
               key: 'aadhaarFront' as const,
-              title: 'Government ID / Aadhaar Front *',
-              desc: 'Front page showing your photograph and address'
+              title: 'Aadhaar Card (Front Side) *',
+              desc: 'Front side showing your photograph, full name and date of birth (Max 5MB • JPEG, PNG, PDF)'
+            },
+            {
+              key: 'aadhaarBack' as const,
+              title: 'Aadhaar Card (Back Side) *',
+              desc: 'Back side showing your permanent residential address & barcode (Max 5MB • JPEG, PNG, PDF)'
             },
             {
               key: 'panFront' as const,
-              title: 'PAN Card *',
-              desc: 'PAN card photo for mandatory tax TDS compliance'
+              title: 'Personal PAN Card (Front Side) *',
+              desc: 'Front side with PAN number, photo, and signature for tax compliance (Max 5MB • JPEG, PNG, PDF)'
+            },
+            {
+              key: 'panBack' as const,
+              title: 'Personal PAN Card (Back Side) *',
+              desc: 'Back side showing official issuing details and security holograms (Max 5MB • JPEG, PNG, PDF)'
             },
             ...(vehicleType !== 'Bicycle'
               ? [
@@ -1694,10 +1854,15 @@ export const RiderOnboardingWizard: React.FC<RiderOnboardingWizardProps> = ({
                     <div style={{ fontSize: '13px', fontWeight: 700, color: '#FFFFFF' }}>{doc.title}</div>
                     <div style={{ fontSize: '11px', color: '#9CA3AF' }}>{doc.desc}</div>
                   </div>
-                  {hasUploaded && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--color-veg, #2ECC71)', fontWeight: 700 }}>
+                  {hasUploaded ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, backgroundColor: 'rgba(46, 204, 113, 0.15)', color: '#2ECC71' }}>
                       <CheckCircle2 size={13} />
-                      Attached
+                      Uploaded
+                    </span>
+                  ) : (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, backgroundColor: 'rgba(239, 68, 68, 0.12)', color: '#EF4444' }}>
+                      <AlertCircle size={13} />
+                      Missing *
                     </span>
                   )}
                 </div>
@@ -1779,6 +1944,372 @@ export const RiderOnboardingWizard: React.FC<RiderOnboardingWizardProps> = ({
               </div>
             );
           })}
+
+          {/* ========================================================================= */}
+          {/* DEDICATED SECTION: EDUCATIONAL QUALIFICATION & DOCUMENTS */}
+          {/* ========================================================================= */}
+          <div
+            style={{
+              borderRadius: '14px',
+              backgroundColor: '#1E1E24',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              padding: '18px',
+              marginTop: '6px'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+              <div
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(255, 75, 58, 0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--color-primary, #FF4B3A)'
+                }}
+              >
+                <GraduationCap size={18} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#FFFFFF', margin: 0 }}>
+                  Educational Qualification & Documents
+                </h3>
+                <p style={{ fontSize: '11px', color: '#9CA3AF', margin: 0 }}>
+                  Academic background and supporting degree, marksheet, or course certificate.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '16px' }}>
+              {/* Highest Educational Qualification Dropdown */}
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#D1D5DB', marginBottom: '6px' }}>
+                  Highest Educational Qualification *
+                </label>
+                <select
+                  value={highestQualification}
+                  onChange={(e) => setHighestQualification(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    backgroundColor: '#141418',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: '#FFFFFF',
+                    fontSize: '13px'
+                  }}
+                >
+                  <option value="No Formal Education">No Formal Education</option>
+                  <option value="Class 5">Class 5</option>
+                  <option value="Class 8">Class 8</option>
+                  <option value="Class 10">Class 10 (Secondary School)</option>
+                  <option value="Class 12">Class 12 (Higher Secondary)</option>
+                  <option value="Diploma">Diploma / Polytechnic</option>
+                  <option value="Undergraduate Degree">Undergraduate Degree (B.A., B.Sc., B.Com, B.Tech, etc.)</option>
+                  <option value="Postgraduate Degree">Postgraduate Degree (M.A., M.Sc., M.Com, MBA, etc.)</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              {/* If "Other" selected, allow custom input */}
+              {highestQualification === 'Other' && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#D1D5DB', marginBottom: '6px' }}>
+                    Specify Educational Qualification *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Vocational ITI Certification"
+                    value={otherQualification}
+                    onChange={(e) => setOtherQualification(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      backgroundColor: '#141418',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      color: '#FFFFFF',
+                      fontSize: '13px'
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Qualification / Degree Name */}
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#D1D5DB', marginBottom: '6px' }}>
+                  Qualification / Degree / Certificate Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Secondary School Certificate, B.Com, Diploma in Electrical"
+                  value={qualificationName}
+                  onChange={(e) => setQualificationName(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    backgroundColor: '#141418',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: '#FFFFFF',
+                    fontSize: '13px'
+                  }}
+                />
+              </div>
+
+              {/* Institution / School / College Name */}
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#D1D5DB', marginBottom: '6px' }}>
+                  Institution / School / College Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. National High School / Delhi University"
+                  value={institutionName}
+                  onChange={(e) => setInstitutionName(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    backgroundColor: '#141418',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: '#FFFFFF',
+                    fontSize: '13px'
+                  }}
+                />
+              </div>
+
+              {/* Year of Completion & Additional Qualification Row */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#D1D5DB', marginBottom: '6px' }}>
+                    Year of Completion
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={4}
+                    placeholder="YYYY (e.g. 2021)"
+                    value={completionYear}
+                    onChange={(e) => setCompletionYear(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      backgroundColor: '#141418',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      color: '#FFFFFF',
+                      fontSize: '13px'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#D1D5DB', marginBottom: '6px' }}>
+                    Additional Qualification <span style={{ fontSize: '10px', color: '#9CA3AF' }}>(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Basic Computer Skills"
+                    value={additionalQualification}
+                    onChange={(e) => setAdditionalQualification(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      backgroundColor: '#141418',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      color: '#FFFFFF',
+                      fontSize: '13px'
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Qualification Proof Document Upload Card */}
+              <div style={{ marginTop: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#D1D5DB', marginBottom: '4px' }}>
+                  Qualification Proof Document (Degree / Marksheet / Certificate)
+                </label>
+                <p style={{ fontSize: '11px', color: '#9CA3AF', margin: '0 0 8px' }}>
+                  Accepted formats: PDF, JPG, JPEG, PNG (Max 10 MB). Stored securely in private KYC vault.
+                </p>
+
+                {qualificationProof ? (
+                  <div
+                    style={{
+                      borderRadius: '10px',
+                      backgroundColor: '#141418',
+                      border: '1px solid rgba(46, 204, 113, 0.4)',
+                      padding: '12px 14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '12px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                      <div
+                        style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '8px',
+                          backgroundColor: 'rgba(46, 204, 113, 0.15)',
+                          color: 'var(--color-veg, #2ECC71)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}
+                      >
+                        <FileText size={20} />
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            color: '#FFFFFF',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }}
+                        >
+                          {qualificationProofName || 'Qualification_Proof_Document'}
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--color-veg, #2ECC71)', fontWeight: 600 }}>
+                          Ready for verification
+                          {qualificationProofSize ? ` • ${(qualificationProofSize / 1024).toFixed(0)} KB` : ''}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                      <label
+                        style={{
+                          padding: '6px 10px',
+                          borderRadius: '6px',
+                          backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                          color: '#FFFFFF',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Replace
+                        <input
+                          type="file"
+                          accept=".pdf,image/jpeg,image/jpg,image/png"
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleQualificationProofUpload(file);
+                          }}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleRemoveQualificationProof}
+                        style={{
+                          padding: '6px 10px',
+                          borderRadius: '6px',
+                          backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                          color: '#EF4444',
+                          border: 'none',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        <Trash2 size={12} />
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const file = e.dataTransfer.files?.[0];
+                      if (file) handleQualificationProofUpload(file);
+                    }}
+                    style={{
+                      borderRadius: '10px',
+                      border: '1.5px dashed rgba(255, 255, 255, 0.2)',
+                      backgroundColor: 'rgba(255, 255, 255, 0.02)',
+                      padding: '20px 16px',
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <label style={{ cursor: 'pointer', display: 'block' }}>
+                      <div
+                        style={{
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '50%',
+                          backgroundColor: 'rgba(255, 75, 58, 0.1)',
+                          color: 'var(--color-primary, #FF4B3A)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          margin: '0 auto 8px'
+                        }}
+                      >
+                        <UploadCloud size={20} />
+                      </div>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#FFFFFF', marginBottom: '2px' }}>
+                        Click to select document or drag & drop here
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#9CA3AF' }}>
+                        PDF, JPG, JPEG, or PNG up to 10 MB
+                      </div>
+                      <input
+                        type="file"
+                        accept=".pdf,image/jpeg,image/jpg,image/png"
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleQualificationProofUpload(file);
+                        }}
+                      />
+                    </label>
+
+                    {isUploadingProof && (
+                      <div style={{ marginTop: '12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#9CA3AF', marginBottom: '4px' }}>
+                          <span>Uploading qualification proof...</span>
+                          <span>{qualificationProofProgress}%</span>
+                        </div>
+                        <div style={{ width: '100%', height: '4px', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
+                          <div
+                            style={{
+                              width: `${qualificationProofProgress}%`,
+                              height: '100%',
+                              backgroundColor: 'var(--color-primary, #FF4B3A)',
+                              transition: 'width 0.2s ease'
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {proofError && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#EF4444', marginTop: '6px' }}>
+                    <AlertCircle size={13} />
+                    <span>{proofError}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
 
           {/* Action Navigation */}
           <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
@@ -1965,32 +2496,119 @@ export const RiderOnboardingWizard: React.FC<RiderOnboardingWizardProps> = ({
               </button>
             </div>
 
-            <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', gap: '8px', paddingBottom: '4px' }}>
               {documents.aadhaarFront && (
                 <div style={{ textAlign: 'center', fontSize: '10px', color: '#9CA3AF' }}>
-                  <img src={documents.aadhaarFront} alt="Aadhaar" style={{ width: '48px', height: '34px', objectFit: 'cover', borderRadius: '4px' }} />
-                  <div>Aadhaar</div>
+                  <img src={documents.aadhaarFront} alt="Aadhaar Front" style={{ width: '100%', height: '42px', objectFit: 'cover', borderRadius: '4px' }} />
+                  <div style={{ marginTop: '2px', fontWeight: 600 }}>Aadhaar Front</div>
+                </div>
+              )}
+              {documents.aadhaarBack && (
+                <div style={{ textAlign: 'center', fontSize: '10px', color: '#9CA3AF' }}>
+                  <img src={documents.aadhaarBack} alt="Aadhaar Back" style={{ width: '100%', height: '42px', objectFit: 'cover', borderRadius: '4px' }} />
+                  <div style={{ marginTop: '2px', fontWeight: 600 }}>Aadhaar Back</div>
                 </div>
               )}
               {documents.panFront && (
                 <div style={{ textAlign: 'center', fontSize: '10px', color: '#9CA3AF' }}>
-                  <img src={documents.panFront} alt="PAN" style={{ width: '48px', height: '34px', objectFit: 'cover', borderRadius: '4px' }} />
-                  <div>PAN</div>
+                  <img src={documents.panFront} alt="PAN Front" style={{ width: '100%', height: '42px', objectFit: 'cover', borderRadius: '4px' }} />
+                  <div style={{ marginTop: '2px', fontWeight: 600 }}>PAN Front</div>
+                </div>
+              )}
+              {documents.panBack && (
+                <div style={{ textAlign: 'center', fontSize: '10px', color: '#9CA3AF' }}>
+                  <img src={documents.panBack} alt="PAN Back" style={{ width: '100%', height: '42px', objectFit: 'cover', borderRadius: '4px' }} />
+                  <div style={{ marginTop: '2px', fontWeight: 600 }}>PAN Back</div>
                 </div>
               )}
               {documents.drivingLicenseFront && (
                 <div style={{ textAlign: 'center', fontSize: '10px', color: '#9CA3AF' }}>
-                  <img src={documents.drivingLicenseFront} alt="DL" style={{ width: '48px', height: '34px', objectFit: 'cover', borderRadius: '4px' }} />
-                  <div>Licence</div>
+                  <img src={documents.drivingLicenseFront} alt="DL" style={{ width: '100%', height: '42px', objectFit: 'cover', borderRadius: '4px' }} />
+                  <div style={{ marginTop: '2px', fontWeight: 600 }}>Licence</div>
                 </div>
               )}
               {documents.vehicleRc && (
                 <div style={{ textAlign: 'center', fontSize: '10px', color: '#9CA3AF' }}>
-                  <img src={documents.vehicleRc} alt="RC" style={{ width: '48px', height: '34px', objectFit: 'cover', borderRadius: '4px' }} />
-                  <div>RC Book</div>
+                  <img src={documents.vehicleRc} alt="RC" style={{ width: '100%', height: '42px', objectFit: 'cover', borderRadius: '4px' }} />
+                  <div style={{ marginTop: '2px', fontWeight: 600 }}>RC Book</div>
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Section 3b Review: Educational Qualification */}
+          <div
+            style={{
+              borderRadius: '12px',
+              backgroundColor: '#1E1E24',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              padding: '14px'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--color-primary, #FF4B3A)' }}>
+                4. Educational Qualification & Proof
+              </div>
+              <button
+                type="button"
+                onClick={() => setStep(3)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#60A5FA',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+              >
+                Edit
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '11px', marginBottom: '10px' }}>
+              <div>
+                <span style={{ color: '#9CA3AF' }}>Highest Qualification:</span>{' '}
+                <strong>{highestQualification === 'other' ? (otherQualification || 'Other') : (highestQualification || 'Not provided')}</strong>
+              </div>
+              <div>
+                <span style={{ color: '#9CA3AF' }}>Degree / Field:</span>{' '}
+                <strong>{qualificationName || 'N/A'}</strong>
+              </div>
+              <div style={{ gridColumn: 'span 2' }}>
+                <span style={{ color: '#9CA3AF' }}>Institution / Board:</span>{' '}
+                <strong>{institutionName || 'N/A'}</strong>
+              </div>
+              {completionYear && (
+                <div>
+                  <span style={{ color: '#9CA3AF' }}>Year of Completion:</span>{' '}
+                  <strong>{completionYear}</strong>
+                </div>
+              )}
+              {additionalQualification && (
+                <div style={{ gridColumn: 'span 2' }}>
+                  <span style={{ color: '#9CA3AF' }}>Additional Certifications:</span>{' '}
+                  <strong>{additionalQualification}</strong>
+                </div>
+              )}
+            </div>
+
+            {qualificationProof ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', backgroundColor: 'rgba(46, 204, 113, 0.08)', borderRadius: '8px', border: '1px solid rgba(46, 204, 113, 0.2)' }}>
+                {qualificationProof.startsWith('data:image/') ? (
+                  <img src={qualificationProof} alt="Qualification Proof" style={{ width: '40px', height: '30px', objectFit: 'cover', borderRadius: '4px' }} />
+                ) : (
+                  <FileText size={20} color="var(--color-veg, #2ECC71)" />
+                )}
+                <div style={{ fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                  <span style={{ color: 'var(--color-veg, #2ECC71)', fontWeight: 700 }}>Proof Attached: </span>
+                  <span style={{ color: '#E5E7EB' }}>{qualificationProofName || 'Certificate/Marksheet'}</span>
+                </div>
+              </div>
+            ) : (
+              <div style={{ fontSize: '11px', color: '#9CA3AF', fontStyle: 'italic' }}>
+                No physical qualification document attached.
+              </div>
+            )}
           </div>
 
           {/* Section 4 Review: Payout UPI */}
@@ -2003,7 +2621,7 @@ export const RiderOnboardingWizard: React.FC<RiderOnboardingWizardProps> = ({
             }}
           >
             <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--color-primary, #FF4B3A)', marginBottom: '8px' }}>
-              4. Daily Earnings Payout
+              5. Daily Earnings Payout
             </div>
             <div style={{ fontSize: '12px', color: '#D1D5DB' }}>
               Daily delivery earnings & incentives will be deposited via UPI to:{' '}
@@ -2051,6 +2669,26 @@ export const RiderOnboardingWizard: React.FC<RiderOnboardingWizardProps> = ({
           {errors.consent && (
             <div style={{ fontSize: '11px', color: '#EF4444', textAlign: 'center' }}>
               {errors.consent}
+            </div>
+          )}
+
+          {submissionError && (
+            <div
+              style={{
+                padding: '10px 14px',
+                backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid rgba(239, 68, 68, 0.4)',
+                borderRadius: '10px',
+                color: '#FCA5A5',
+                fontSize: '12px',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              <AlertCircle size={16} color="#EF4444" />
+              <span>{submissionError}</span>
             </div>
           )}
 

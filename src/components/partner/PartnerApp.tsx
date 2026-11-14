@@ -7,6 +7,7 @@ import { RejectOrderModal } from './RejectOrderModal';
 import { OutletProfileModal } from './OutletProfileModal';
 import { RestaurantOnboardingWizard } from './RestaurantOnboardingWizard';
 import { PartnerApplicationStatus } from './PartnerApplicationStatus';
+import { UnifiedAuthModal } from '../auth/UnifiedAuthModal';
 import {
   Store,
   Clock,
@@ -44,7 +45,11 @@ import {
   CreditCard,
   MapPin,
   User,
-  Check
+  Check,
+  LogIn,
+  LogOut,
+  Building,
+  ChevronDown
 } from 'lucide-react';
 
 export const PartnerApp: React.FC = () => {
@@ -60,7 +65,14 @@ export const PartnerApp: React.FC = () => {
     partnerCancelOrder,
     menuStockMap,
     toggleItemStock,
-    triggerSimulatedCustomerOrder
+    triggerSimulatedCustomerOrder,
+    partnerSession,
+    loginPartner,
+    logoutPartner,
+    switchPartnerRestaurant,
+    partnerRestaurants,
+    selectedPartnerRestaurant,
+    allRestaurantApplications
   } = useTomattto();
 
   const [activeTab, setActiveTab] = useState<'orders' | 'menu' | 'earnings' | 'reviews' | 'marketing' | 'analytics' | 'application_status'>('orders');
@@ -73,6 +85,8 @@ export const PartnerApp: React.FC = () => {
   const [rejectOrderId, setRejectOrderId] = useState<string | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isOutletDropdownOpen, setIsOutletDropdownOpen] = useState(false);
   const [isMobileScreen, setIsMobileScreen] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
 
   // Phase 1: Order Dashboard Controls State
@@ -164,7 +178,7 @@ export const PartnerApp: React.FC = () => {
   });
   const [replyInput, setReplyInput] = useState<Record<string, string>>({});
 
-  const restaurant = selectedRestaurant || restaurants[0]; // Behrouz Biryani default
+  const restaurant = selectedPartnerRestaurant || selectedRestaurant || restaurants[0];
 
   // Sound chime when incoming order arrives
   useEffect(() => {
@@ -191,6 +205,690 @@ export const PartnerApp: React.FC = () => {
   // If user opens the Become a Restaurant Partner Onboarding Wizard
   if (isOnboardingOpen) {
     return <RestaurantOnboardingWizard onBack={() => setIsOnboardingOpen(false)} />;
+  }
+
+  // 1. Unauthenticated or Not Registered: Render Partner Portal Gateway
+  if (!partnerSession || partnerSession.status === 'not_registered') {
+    return (
+      <div
+        style={{
+          flex: 1,
+          backgroundColor: '#0F0F12',
+          minHeight: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '40px 20px',
+          color: '#FFFFFF'
+        }}
+      >
+        <div style={{ maxWidth: '880px', width: '100%' }}>
+          {/* Header & Logo */}
+          <div style={{ textAlign: 'center', marginBottom: '36px' }}>
+            <div
+              style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '16px',
+                backgroundColor: 'var(--color-primary)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '32px',
+                marginBottom: '16px',
+                boxShadow: '0 8px 24px rgba(255, 75, 58, 0.4)'
+              }}
+            >
+              🏪
+            </div>
+            <h1 style={{ fontSize: '30px', fontWeight: 900, margin: '0 0 10px', letterSpacing: '-0.5px' }}>
+              Tomattto Merchant Partner Portal
+            </h1>
+            <p style={{ fontSize: '15px', color: '#9CA3AF', margin: 0, maxWidth: '580px', marginInline: 'auto', lineHeight: 1.5 }}>
+              Manage your live kitchen tickets, menu availability, multi-outlet analytics, and daily earnings on India’s fastest food delivery network.
+            </p>
+          </div>
+
+          {/* Two Distinguishable Options: Existing Partner Login vs Become a Partner */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: isMobileScreen ? '1fr' : '1fr 1fr',
+              gap: '24px',
+              marginBottom: '32px'
+            }}
+          >
+            {/* Card 1: Existing Restaurant Partner Login */}
+            <div
+              style={{
+                backgroundColor: '#18181D',
+                borderRadius: '20px',
+                border: '2px solid rgba(255, 75, 58, 0.4)',
+                padding: '28px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                boxShadow: '0 12px 32px rgba(0,0,0,0.4)',
+                position: 'relative'
+              }}
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '16px',
+                  right: '16px',
+                  backgroundColor: 'rgba(255, 75, 58, 0.15)',
+                  color: 'var(--color-primary)',
+                  fontSize: '11px',
+                  fontWeight: 800,
+                  padding: '4px 10px',
+                  borderRadius: '100px',
+                  textTransform: 'uppercase'
+                }}
+              >
+                Registered Outlets
+              </div>
+
+              <div>
+                <div
+                  style={{
+                    width: '52px',
+                    height: '52px',
+                    borderRadius: '14px',
+                    backgroundColor: 'rgba(255, 75, 58, 0.15)',
+                    color: 'var(--color-primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: '18px'
+                  }}
+                >
+                  <LogIn size={26} />
+                </div>
+
+                <h2 style={{ fontSize: '20px', fontWeight: 800, margin: '0 0 8px' }}>
+                  Existing Restaurant Partner Login
+                </h2>
+                <p style={{ fontSize: '13px', color: '#9CA3AF', margin: '0 0 20px', lineHeight: 1.5 }}>
+                  Already registered your kitchen with Tomattto? Log in with your registered phone number, OTP, email, or Google to manage your store directly.
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#D1D5DB' }}>
+                    <CheckCircle2 size={15} color="var(--color-veg)" />
+                    <span>Real-time Live Order Receiving & Kitchen Prep</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#D1D5DB' }}>
+                    <CheckCircle2 size={15} color="var(--color-veg)" />
+                    <span>Menu Price, Addon, & Out-of-Stock Controls</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#D1D5DB' }}>
+                    <CheckCircle2 size={15} color="var(--color-veg)" />
+                    <span>Multi-Outlet Switcher & Daily Financial Payouts</span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setIsAuthModalOpen(true)}
+                  style={{
+                    width: '100%',
+                    padding: '14px',
+                    borderRadius: '12px',
+                    backgroundColor: 'var(--color-primary)',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    fontSize: '14px',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    boxShadow: '0 4px 16px rgba(255, 75, 58, 0.35)'
+                  }}
+                >
+                  <LogIn size={16} />
+                  <span>Log In to Partner Portal</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Card 2: Become a Restaurant Partner */}
+            <div
+              style={{
+                backgroundColor: '#18181D',
+                borderRadius: '20px',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                padding: '28px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                boxShadow: '0 12px 32px rgba(0,0,0,0.4)',
+                position: 'relative'
+              }}
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '16px',
+                  right: '16px',
+                  backgroundColor: 'rgba(46, 204, 113, 0.15)',
+                  color: 'var(--color-veg)',
+                  fontSize: '11px',
+                  fontWeight: 800,
+                  padding: '4px 10px',
+                  borderRadius: '100px',
+                  textTransform: 'uppercase'
+                }}
+              >
+                New Partner
+              </div>
+
+              <div>
+                <div
+                  style={{
+                    width: '52px',
+                    height: '52px',
+                    borderRadius: '14px',
+                    backgroundColor: 'rgba(46, 204, 113, 0.15)',
+                    color: 'var(--color-veg)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: '18px'
+                  }}
+                >
+                  <ChefHat size={26} />
+                </div>
+
+                <h2 style={{ fontSize: '20px', fontWeight: 800, margin: '0 0 8px' }}>
+                  Become a Restaurant Partner
+                </h2>
+                <p style={{ fontSize: '13px', color: '#9CA3AF', margin: '0 0 20px', lineHeight: 1.5 }}>
+                  Expand your business reach. Partner with Tomattto to receive online orders, leverage our high-speed delivery fleet, and grow your brand.
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#D1D5DB' }}>
+                    <CheckCircle2 size={15} color="var(--color-veg)" />
+                    <span>Simple 4-Step Registration with Digital FSSAI & PAN</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#D1D5DB' }}>
+                    <CheckCircle2 size={15} color="var(--color-veg)" />
+                    <span>Transparent Commission & Weekly / Daily Bank Settlements</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#D1D5DB' }}>
+                    <CheckCircle2 size={15} color="var(--color-veg)" />
+                    <span>Free Dedicated Merchant Partner Manager Support</span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setIsOnboardingOpen(true)}
+                  style={{
+                    width: '100%',
+                    padding: '14px',
+                    borderRadius: '12px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                    color: '#FFFFFF',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    fontSize: '14px',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  <Plus size={16} />
+                  <span>Register New Restaurant</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Demo Access Bar */}
+          <div
+            style={{
+              padding: '16px 20px',
+              borderRadius: '14px',
+              backgroundColor: '#141418',
+              border: '1px dashed rgba(255, 255, 255, 0.12)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '12px'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '16px' }}>⚡</span>
+              <div>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: '#FFFFFF' }}>
+                  Development Demo Shortcut:
+                </span>
+                <span style={{ fontSize: '12px', color: '#9CA3AF', marginLeft: '6px' }}>
+                  Log in immediately as verified multi-outlet partner Behrouz Biryani & Truffles.
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                loginPartner({
+                  user: {
+                    id: 'demo-partner-behrouz',
+                    fullName: 'Faasos Hospitality Ltd',
+                    phone: '+91 98765 43210'
+                  },
+                  status: 'approved',
+                  restaurant: restaurants[0],
+                  restaurants: restaurants.slice(0, 3)
+                });
+                setToast({ type: 'success', message: 'Logged in as Approved Merchant Partner (Behrouz Biryani)' });
+              }}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                color: '#FFFFFF',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                fontSize: '12px',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              Demo Partner One-Click Login ➔
+            </button>
+          </div>
+        </div>
+
+        <UnifiedAuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          role="restaurant_owner"
+          onSuccess={() => {
+            setIsAuthModalOpen(false);
+          }}
+        />
+      </div>
+    );
+  }
+
+  // 2. Pending Application Status View
+  if (partnerSession.status === 'pending') {
+    const app = partnerSession.application || allRestaurantApplications[0];
+    return (
+      <div
+        style={{
+          flex: 1,
+          backgroundColor: '#0F0F12',
+          minHeight: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '30px 20px',
+          color: '#FFFFFF'
+        }}
+      >
+        <div
+          style={{
+            maxWidth: '560px',
+            width: '100%',
+            backgroundColor: '#18181D',
+            borderRadius: '20px',
+            border: '1px solid rgba(245, 158, 11, 0.3)',
+            padding: '32px',
+            boxShadow: '0 12px 32px rgba(0,0,0,0.5)'
+          }}
+        >
+          <div
+            style={{
+              width: '60px',
+              height: '60px',
+              borderRadius: '16px',
+              backgroundColor: 'rgba(245, 158, 11, 0.15)',
+              color: '#F59E0B',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 18px'
+            }}
+          >
+            <Clock size={32} />
+          </div>
+          <h2 style={{ fontSize: '22px', fontWeight: 800, textAlign: 'center', margin: '0 0 8px' }}>
+            Application Under Review
+          </h2>
+          <p style={{ fontSize: '13px', color: '#9CA3AF', textAlign: 'center', margin: '0 0 24px', lineHeight: 1.5 }}>
+            Thank you for applying to partner with Tomattto. Your documents and FSSAI credentials are currently being verified by our compliance team.
+          </p>
+
+          <div style={{ backgroundColor: '#101014', borderRadius: '12px', padding: '16px', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              <span style={{ color: '#9CA3AF' }}>Application Reference:</span>
+              <span style={{ fontWeight: 700, fontFamily: 'monospace' }}>{app?.applicationRef || 'TOM-REST-9481'}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              <span style={{ color: '#9CA3AF' }}>Restaurant Name:</span>
+              <span style={{ fontWeight: 700 }}>{app?.restaurantName || 'Royal Biryani & Kebabs'}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '12px' }}>
+              <span style={{ color: '#9CA3AF' }}>Review SLA:</span>
+              <span style={{ fontWeight: 700, color: '#F59E0B' }}>24 - 48 Business Hours</span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button
+              onClick={() => setActiveTab('application_status')}
+              style={{
+                flex: 1,
+                padding: '12px',
+                borderRadius: '10px',
+                backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                color: '#FFFFFF',
+                border: '1px solid rgba(255,255,255,0.15)',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              Detailed Status Timeline
+            </button>
+            <button
+              onClick={logoutPartner}
+              style={{
+                padding: '12px 18px',
+                borderRadius: '10px',
+                backgroundColor: 'transparent',
+                color: '#EF4444',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              Log Out
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. Action Required / Needs Resubmission
+  if (partnerSession.status === 'action_required') {
+    const app = partnerSession.application || allRestaurantApplications[0];
+    return (
+      <div
+        style={{
+          flex: 1,
+          backgroundColor: '#0F0F12',
+          minHeight: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '30px 20px',
+          color: '#FFFFFF'
+        }}
+      >
+        <div
+          style={{
+            maxWidth: '560px',
+            width: '100%',
+            backgroundColor: '#18181D',
+            borderRadius: '20px',
+            border: '1px solid rgba(239, 68, 68, 0.4)',
+            padding: '32px',
+            boxShadow: '0 12px 32px rgba(0,0,0,0.5)'
+          }}
+        >
+          <div
+            style={{
+              width: '60px',
+              height: '60px',
+              borderRadius: '16px',
+              backgroundColor: 'rgba(239, 68, 68, 0.15)',
+              color: '#EF4444',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 18px'
+            }}
+          >
+            <AlertCircle size={32} />
+          </div>
+          <h2 style={{ fontSize: '22px', fontWeight: 800, textAlign: 'center', margin: '0 0 8px' }}>
+            Action Required on Application
+          </h2>
+          <p style={{ fontSize: '13px', color: '#9CA3AF', textAlign: 'center', margin: '0 0 20px', lineHeight: 1.5 }}>
+            Our compliance team reviewed your application and noted items that need clarification or resubmission before clearance.
+          </p>
+
+          <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '12px', padding: '16px', marginBottom: '24px' }}>
+            <div style={{ fontSize: '11px', color: '#F87171', fontWeight: 800, textTransform: 'uppercase', marginBottom: '6px' }}>
+              Reviewer Comments:
+            </div>
+            <div style={{ fontSize: '13px', color: '#FFFFFF', lineHeight: 1.5 }}>
+              {app?.rejectionReason || 'Please upload a clear scanned copy of your FSSAI certificate. The previously submitted photo was blurry or obscured at the license number section.'}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button
+              onClick={() => setIsOnboardingOpen(true)}
+              style={{
+                flex: 1,
+                padding: '12px',
+                borderRadius: '10px',
+                backgroundColor: 'var(--color-primary)',
+                color: '#FFFFFF',
+                border: 'none',
+                fontSize: '13px',
+                fontWeight: 800,
+                cursor: 'pointer'
+              }}
+            >
+              Update Documents & Resubmit
+            </button>
+            <button
+              onClick={logoutPartner}
+              style={{
+                padding: '12px 18px',
+                borderRadius: '10px',
+                backgroundColor: 'transparent',
+                color: '#9CA3AF',
+                border: '1px solid rgba(255,255,255,0.15)',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              Log Out
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 4. Rejected Application View
+  if (partnerSession.status === 'rejected') {
+    const app = partnerSession.application || allRestaurantApplications[0];
+    return (
+      <div
+        style={{
+          flex: 1,
+          backgroundColor: '#0F0F12',
+          minHeight: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '30px 20px',
+          color: '#FFFFFF'
+        }}
+      >
+        <div
+          style={{
+            maxWidth: '560px',
+            width: '100%',
+            backgroundColor: '#18181D',
+            borderRadius: '20px',
+            border: '1px solid rgba(239, 68, 68, 0.4)',
+            padding: '32px',
+            boxShadow: '0 12px 32px rgba(0,0,0,0.5)'
+          }}
+        >
+          <div
+            style={{
+              width: '60px',
+              height: '60px',
+              borderRadius: '16px',
+              backgroundColor: 'rgba(239, 68, 68, 0.15)',
+              color: '#EF4444',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 18px'
+            }}
+          >
+            <ShieldAlert size={32} />
+          </div>
+          <h2 style={{ fontSize: '22px', fontWeight: 800, textAlign: 'center', margin: '0 0 8px' }}>
+            Application Not Approved
+          </h2>
+          <p style={{ fontSize: '13px', color: '#9CA3AF', textAlign: 'center', margin: '0 0 20px', lineHeight: 1.5 }}>
+            We regret to inform you that your restaurant partner onboarding application could not be approved at this time.
+          </p>
+
+          <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '12px', padding: '16px', marginBottom: '24px' }}>
+            <div style={{ fontSize: '11px', color: '#F87171', fontWeight: 800, textTransform: 'uppercase', marginBottom: '6px' }}>
+              Rejection Reason:
+            </div>
+            <div style={{ fontSize: '13px', color: '#FFFFFF', lineHeight: 1.5 }}>
+              {app?.rejectionReason || 'FSSAI License registration details could not be validated against national regulatory registries.'}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button
+              onClick={() => setIsOnboardingOpen(true)}
+              style={{
+                flex: 1,
+                padding: '12px',
+                borderRadius: '10px',
+                backgroundColor: 'var(--color-primary)',
+                color: '#FFFFFF',
+                border: 'none',
+                fontSize: '13px',
+                fontWeight: 800,
+                cursor: 'pointer'
+              }}
+            >
+              Re-apply with New Documents
+            </button>
+            <button
+              onClick={logoutPartner}
+              style={{
+                padding: '12px 18px',
+                borderRadius: '10px',
+                backgroundColor: 'transparent',
+                color: '#9CA3AF',
+                border: '1px solid rgba(255,255,255,0.15)',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              Log Out
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 5. Suspended Outlet View
+  if (partnerSession.status === 'suspended') {
+    return (
+      <div
+        style={{
+          flex: 1,
+          backgroundColor: '#0F0F12',
+          minHeight: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '30px 20px',
+          color: '#FFFFFF'
+        }}
+      >
+        <div
+          style={{
+            maxWidth: '540px',
+            width: '100%',
+            backgroundColor: '#18181D',
+            borderRadius: '20px',
+            border: '1px solid rgba(239, 68, 68, 0.4)',
+            padding: '32px',
+            boxShadow: '0 12px 32px rgba(0,0,0,0.5)',
+            textAlign: 'center'
+          }}
+        >
+          <div
+            style={{
+              width: '60px',
+              height: '60px',
+              borderRadius: '16px',
+              backgroundColor: 'rgba(239, 68, 68, 0.15)',
+              color: '#EF4444',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 18px'
+            }}
+          >
+            <ShieldAlert size={32} />
+          </div>
+          <h2 style={{ fontSize: '22px', fontWeight: 800, margin: '0 0 8px' }}>
+            Outlet Account Suspended
+          </h2>
+          <p style={{ fontSize: '13px', color: '#9CA3AF', margin: '0 0 24px', lineHeight: 1.5 }}>
+            This restaurant account has been temporarily suspended due to compliance, license expiry, or policy audit review.
+          </p>
+
+          <button
+            onClick={logoutPartner}
+            style={{
+              padding: '12px 24px',
+              borderRadius: '10px',
+              backgroundColor: 'rgba(255, 255, 255, 0.08)',
+              color: '#FFFFFF',
+              border: '1px solid rgba(255,255,255,0.15)',
+              fontSize: '13px',
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+          >
+            Log Out & Switch Account
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -251,8 +949,86 @@ export const PartnerApp: React.FC = () => {
             </div>
           </div>
 
-          {/* Right Header Buttons: Become Partner, KYC Profile & Online Toggle */}
+          {/* Right Header Buttons: Outlet Switcher, Become Partner, KYC Profile, Online Toggle & Logout */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            {partnerRestaurants.length > 1 && (
+              <div style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsOutletDropdownOpen(!isOutletDropdownOpen)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '7px 12px',
+                    borderRadius: 'var(--radius-full)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                    color: '#FFFFFF',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                  title="Switch Outlets"
+                >
+                  <Building size={13} color="var(--color-primary)" />
+                  <span>Outlets ({partnerRestaurants.length})</span>
+                  <ChevronDown size={12} />
+                </button>
+
+                {isOutletDropdownOpen && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      right: 0,
+                      marginTop: '6px',
+                      backgroundColor: '#1E1E24',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      borderRadius: '10px',
+                      padding: '6px',
+                      minWidth: '220px',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                      zIndex: 1000
+                    }}
+                  >
+                    <div style={{ fontSize: '10px', color: '#9CA3AF', padding: '6px 8px', fontWeight: 700, textTransform: 'uppercase' }}>
+                      Your Outlets
+                    </div>
+                    {partnerRestaurants.map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => {
+                          switchPartnerRestaurant(r.id);
+                          setIsOutletDropdownOpen(false);
+                          setToast({ type: 'success', message: `Switched active outlet to ${r.name}` });
+                        }}
+                        style={{
+                          width: '100%',
+                          textAlign: 'left',
+                          padding: '8px 10px',
+                          borderRadius: '6px',
+                          backgroundColor: r.id === restaurant.id ? 'rgba(255, 75, 58, 0.15)' : 'transparent',
+                          color: r.id === restaurant.id ? 'var(--color-primary)' : '#FFFFFF',
+                          border: 'none',
+                          fontSize: '12px',
+                          fontWeight: r.id === restaurant.id ? 800 : 500,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between'
+                        }}
+                      >
+                        <span>{r.name}</span>
+                        {r.id === restaurant.id && <span>✓</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             <button
               onClick={() => setIsOnboardingOpen(true)}
               style={{
@@ -335,6 +1111,28 @@ export const PartnerApp: React.FC = () => {
             >
               <Power size={14} />
               <span>{isOnline ? 'Online' : 'Go Online'}</span>
+            </button>
+
+            {/* Logout Partner Button */}
+            <button
+              onClick={logoutPartner}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '7px 12px',
+                borderRadius: 'var(--radius-full)',
+                backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                color: '#F87171',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                fontSize: '11px',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+              title="Sign out of Partner Terminal"
+            >
+              <LogOut size={13} />
+              <span>Logout</span>
             </button>
           </div>
         </div>

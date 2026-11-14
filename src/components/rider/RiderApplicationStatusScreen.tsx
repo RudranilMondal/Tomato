@@ -383,6 +383,125 @@ export const RiderApplicationStatusScreen: React.FC<RiderApplicationStatusScreen
         </div>
       )}
 
+      {/* Educational Qualification Verification Section */}
+      {application?.education && (
+        <div
+          style={{
+            borderRadius: '14px',
+            backgroundColor: '#1E1E24',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            padding: '16px',
+            marginBottom: '20px'
+          }}
+        >
+          <div
+            style={{
+              fontSize: '13px',
+              fontWeight: 800,
+              color: '#FFFFFF',
+              marginBottom: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <FileText size={16} color="var(--color-primary, #FF4B3A)" />
+              <span>Educational Qualification Verification</span>
+            </div>
+            <span
+              style={{
+                fontSize: '10px',
+                padding: '3px 8px',
+                borderRadius: '4px',
+                backgroundColor:
+                  application.education.qualificationStatus === 'verified'
+                    ? 'rgba(46, 204, 113, 0.2)'
+                    : application.education.qualificationStatus === 'rejected'
+                    ? 'rgba(239, 68, 68, 0.2)'
+                    : 'rgba(59, 130, 246, 0.2)',
+                color:
+                  application.education.qualificationStatus === 'verified'
+                    ? 'var(--color-veg, #2ECC71)'
+                    : application.education.qualificationStatus === 'rejected'
+                    ? '#EF4444'
+                    : '#60A5FA',
+                fontWeight: 800,
+                textTransform: 'uppercase'
+              }}
+            >
+              {application.education.qualificationStatus === 'verified'
+                ? 'Verified'
+                : application.education.qualificationStatus === 'rejected'
+                ? 'Action Required'
+                : 'Pending Review'}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#9CA3AF' }}>
+              <span>Highest Qualification:</span>
+              <span style={{ color: '#FFFFFF', fontWeight: 600 }}>
+                {application.education.highestQualification || 'Not specified'}
+              </span>
+            </div>
+            {application.education.qualificationName && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#9CA3AF' }}>
+                <span>Degree / Specialization:</span>
+                <span style={{ color: '#FFFFFF', fontWeight: 600 }}>
+                  {application.education.qualificationName}
+                </span>
+              </div>
+            )}
+            {application.education.institutionName && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#9CA3AF' }}>
+                <span>Board / University / School:</span>
+                <span style={{ color: '#FFFFFF', fontWeight: 600 }}>
+                  {application.education.institutionName}
+                </span>
+              </div>
+            )}
+            {application.education.completionYear && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#9CA3AF' }}>
+                <span>Passing Year:</span>
+                <span style={{ color: '#FFFFFF', fontWeight: 600 }}>
+                  {application.education.completionYear}
+                </span>
+              </div>
+            )}
+            {application.education.additionalQualification && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#9CA3AF' }}>
+                <span>Certifications:</span>
+                <span style={{ color: '#FFFFFF', fontWeight: 600 }}>
+                  {application.education.additionalQualification}
+                </span>
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#9CA3AF' }}>
+              <span>Proof Document:</span>
+              <span style={{ color: application.documents?.qualificationProof ? 'var(--color-veg, #2ECC71)' : '#9CA3AF', fontWeight: 600 }}>
+                {application.documents?.qualificationProof ? 'Certificate Uploaded' : 'Not Uploaded'}
+              </span>
+            </div>
+            {application.education.qualificationStatus === 'rejected' && application.education.qualificationRejectionReason && (
+              <div
+                style={{
+                  marginTop: '6px',
+                  padding: '8px 10px',
+                  borderRadius: '6px',
+                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  color: '#FECACA',
+                  fontSize: '11px'
+                }}
+              >
+                <strong>Qualification Note:</strong> {application.education.qualificationRejectionReason}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Timeline Tracking */}
       {application?.timeline && application.timeline.length > 0 && (
         <div

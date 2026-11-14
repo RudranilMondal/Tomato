@@ -10,6 +10,8 @@ import { RiderKycModal } from './RiderKycModal';
 import { RiderProfileModal } from './RiderProfileModal';
 import { RiderOnboardingWizard } from './RiderOnboardingWizard';
 import { RiderAuthModal } from './RiderAuthModal';
+import { UnifiedAuthModal } from '../auth/UnifiedAuthModal';
+import { RiderSelfieModal } from './RiderSelfieModal';
 import { RiderWelcomeScreen } from './RiderWelcomeScreen';
 import { RiderApplicationStatusScreen } from './RiderApplicationStatusScreen';
 import {
@@ -77,7 +79,15 @@ export const RiderApp: React.FC = () => {
     signOutSupabase,
     allRiderApplications,
     loginDemoRider,
-    setAppMode
+    setAppMode,
+    riderTier,
+    riderWorkingHours,
+    riderCompletedOrdersCount,
+    tierConfigurations,
+    activeSelfiePrompt,
+    promptSelfieVerification,
+    submitSelfieVerification,
+    dismissSelfieVerification
   } = useTomattto();
 
   const [isRegistering, setIsRegistering] = useState(false);
@@ -206,12 +216,14 @@ export const RiderApp: React.FC = () => {
               setToast({ type: 'success', message: 'Logged in as Vikram Singh (Approved Demo Rider)' });
             }}
           />
-          <RiderAuthModal
+          <UnifiedAuthModal
             isOpen={isAuthModalOpen}
             onClose={() => setIsAuthModalOpen(false)}
+            role="rider"
             onSuccess={() => {
               setIsAuthModalOpen(false);
               loginDemoRider();
+              setToast({ type: 'success', message: 'Logged in as Vikram Singh (Approved Demo Rider)' });
             }}
           />
         </div>
@@ -341,6 +353,43 @@ export const RiderApp: React.FC = () => {
                   }}
                 >
                   DEMO
+                </span>
+                <span
+                  style={{
+                    fontSize: '9px',
+                    fontWeight: 800,
+                    textTransform: 'uppercase',
+                    backgroundColor:
+                      riderTier === 'gold'
+                        ? 'rgba(245, 158, 11, 0.25)'
+                        : riderTier === 'silver'
+                        ? 'rgba(192, 192, 192, 0.25)'
+                        : 'rgba(205, 127, 50, 0.25)',
+                    color:
+                      riderTier === 'gold'
+                        ? '#FBBF24'
+                        : riderTier === 'silver'
+                        ? '#E5E7EB'
+                        : '#F59E0B',
+                    border: `1px solid ${
+                      riderTier === 'gold'
+                        ? 'rgba(245, 158, 11, 0.5)'
+                        : riderTier === 'silver'
+                        ? 'rgba(192, 192, 192, 0.5)'
+                        : 'rgba(205, 127, 50, 0.5)'
+                    }`,
+                    padding: '1px 6px',
+                    borderRadius: '4px',
+                    letterSpacing: '0.4px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '2px',
+                    flexShrink: 0
+                  }}
+                  title={`Rider Tier: ${riderTier.toUpperCase()} • ${riderWorkingHours.toFixed(1)} hrs online • ${riderCompletedOrdersCount} deliveries`}
+                >
+                  <Award size={9} />
+                  <span>{riderTier}</span>
                 </span>
               </div>
               <p
@@ -575,6 +624,130 @@ export const RiderApp: React.FC = () => {
               >
                 Sign Out
               </button>
+            </div>
+          )}
+        </div>
+
+        {/* Rider Tier & Payout Multiplier Card */}
+        <div
+          style={{
+            marginTop: '12px',
+            padding: '12px 14px',
+            borderRadius: 'var(--radius-md)',
+            background:
+              riderTier === 'gold'
+                ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(30, 30, 36, 0.9) 100%)'
+                : riderTier === 'silver'
+                ? 'linear-gradient(135deg, rgba(156, 163, 175, 0.15) 0%, rgba(30, 30, 36, 0.9) 100%)'
+                : 'linear-gradient(135deg, rgba(205, 127, 50, 0.15) 0%, rgba(30, 30, 36, 0.9) 100%)',
+            border: `1px solid ${
+              riderTier === 'gold'
+                ? 'rgba(245, 158, 11, 0.4)'
+                : riderTier === 'silver'
+                ? 'rgba(156, 163, 175, 0.3)'
+                : 'rgba(205, 127, 50, 0.3)'
+            }`
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  backgroundColor:
+                    riderTier === 'gold'
+                      ? 'rgba(245, 158, 11, 0.2)'
+                      : riderTier === 'silver'
+                      ? 'rgba(156, 163, 175, 0.2)'
+                      : 'rgba(205, 127, 50, 0.2)',
+                  color:
+                    riderTier === 'gold'
+                      ? '#FBBF24'
+                      : riderTier === 'silver'
+                      ? '#E5E7EB'
+                      : '#F59E0B',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <Award size={18} />
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 800, textTransform: 'capitalize' }}>
+                    {riderTier} Partner Tier
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      padding: '1px 6px',
+                      borderRadius: '4px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                      color: '#9CA3AF'
+                    }}
+                  >
+                    {riderTier === 'gold' ? '1.10x Payout' : riderTier === 'silver' ? '1.05x Payout' : 'Base Rate'}
+                  </span>
+                </div>
+                <div style={{ fontSize: '10px', color: '#9CA3AF', marginTop: '1px' }}>
+                  Logged: {riderWorkingHours.toFixed(1)} hrs • {riderCompletedOrdersCount} trips • Rating: 4.9 ★
+                </div>
+              </div>
+            </div>
+
+            {/* Quick selfie verification trigger button */}
+            <button
+              type="button"
+              onClick={() => promptSelfieVerification('order_assignment')}
+              style={{
+                fontSize: '10px',
+                fontWeight: 700,
+                color: '#60A5FA',
+                backgroundColor: 'rgba(96, 165, 250, 0.1)',
+                border: '1px solid rgba(96, 165, 250, 0.25)',
+                padding: '5px 9px',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+              title="Verify duty selfie compliance"
+            >
+              <Camera size={11} />
+              <span>Verify Selfie</span>
+            </button>
+          </div>
+
+          {/* Progress bar towards next tier */}
+          {riderTier !== 'gold' && (
+            <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.06)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#9CA3AF', marginBottom: '4px' }}>
+                <span>Next: {riderTier === 'bronze' ? 'Silver (50h / 100 trips)' : 'Gold (150h / 300 trips)'}</span>
+                <span>
+                  {riderTier === 'bronze'
+                    ? `${Math.min(100, Math.round((riderWorkingHours / 50) * 100))}% hrs`
+                    : `${Math.min(100, Math.round((riderWorkingHours / 150) * 100))}% hrs`}
+                </span>
+              </div>
+              <div style={{ width: '100%', height: '4px', backgroundColor: 'rgba(255, 255, 255, 0.1)', borderRadius: '2px', overflow: 'hidden' }}>
+                <div
+                  style={{
+                    height: '100%',
+                    width: `${
+                      riderTier === 'bronze'
+                        ? Math.min(100, (riderWorkingHours / 50) * 100)
+                        : Math.min(100, (riderWorkingHours / 150) * 100)
+                    }%`,
+                    backgroundColor: riderTier === 'bronze' ? '#C0C0C0' : '#FBBF24',
+                    borderRadius: '2px'
+                  }}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -1817,6 +1990,7 @@ export const RiderApp: React.FC = () => {
         onClose={() => setIsEarningsModalOpen(false)}
         earningsToday={riderEarningsToday}
         tripsToday={riderTripsToday}
+        riderTier={riderTier}
       />
 
       {/* Emergency SOS Modal */}
@@ -1846,19 +2020,31 @@ export const RiderApp: React.FC = () => {
         onClose={() => setIsProfileModalOpen(false)}
       />
 
-      {/* Supabase Phone OTP Authentication Modal for Delivery Partners */}
-      <RiderAuthModal
+      {/* Duty Selfie Verification Modal */}
+      {activeSelfiePrompt && (
+        <RiderSelfieModal
+          prompt={activeSelfiePrompt}
+          tier={riderTier}
+          onSubmit={async (selfieUrl, orderId, notes) => {
+            const res = await submitSelfieVerification(selfieUrl, orderId, notes);
+            if (res.success) {
+              setToast({ type: 'success', message: 'Duty selfie verified! Verification recorded in compliance log.' });
+            }
+            return res;
+          }}
+          onDismiss={() => dismissSelfieVerification()}
+        />
+      )}
+
+      {/* Unified Multi-Channel Auth Modal for Delivery Partners */}
+      <UnifiedAuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
+        role="rider"
         onSuccess={() => {
           setIsAuthModalOpen(false);
-          setIsOnboardingPreview(false);
-          setIsOnboardingOpen(true);
-        }}
-        onDevPreview={() => {
-          setIsAuthModalOpen(false);
-          setIsOnboardingPreview(true);
-          setIsOnboardingOpen(true);
+          loginDemoRider();
+          setToast({ type: 'success', message: 'Logged in as Delivery Partner' });
         }}
       />
     </div>

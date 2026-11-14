@@ -55,16 +55,16 @@ BEGIN
     PERFORM set_config('request.jwt.claim.sub', '', true);
     PERFORM set_config('request.jwt.claim.role', '', true);
     PERFORM set_config('request.jwt.claims', '{}', true);
-  ELSIF p_role = 'anon' OR p_user_id IS NULL THEN
-    EXECUTE 'SET LOCAL ROLE anon';
-    PERFORM set_config('request.jwt.claim.sub', '', true);
-    PERFORM set_config('request.jwt.claim.role', 'anon', true);
-    PERFORM set_config('request.jwt.claims', '{"role":"anon"}', true);
   ELSIF p_role = 'service_role' THEN
     EXECUTE 'SET LOCAL ROLE service_role';
     PERFORM set_config('request.jwt.claim.sub', COALESCE(p_user_id::text, ''), true);
     PERFORM set_config('request.jwt.claim.role', 'service_role', true);
     PERFORM set_config('request.jwt.claims', '{"role":"service_role"}', true);
+  ELSIF p_role = 'anon' OR p_user_id IS NULL THEN
+    EXECUTE 'SET LOCAL ROLE anon';
+    PERFORM set_config('request.jwt.claim.sub', '', true);
+    PERFORM set_config('request.jwt.claim.role', 'anon', true);
+    PERFORM set_config('request.jwt.claims', '{"role":"anon"}', true);
   ELSE
     EXECUTE 'SET LOCAL ROLE authenticated';
     PERFORM set_config('request.jwt.claim.sub', p_user_id::text, true);
@@ -694,7 +694,587 @@ BEGIN
 END $$;
 
 -- ------------------------------------------------------------------------------
--- 9. SUMMARY AND CLEAN ROLLBACK
+-- 9. TEST: RIDER EDUCATIONAL QUALIFICATION PERSISTENCE & ADMIN REVIEW RPC
+-- ------------------------------------------------------------------------------
+
+DO $$
+DECLARE
+  v_admin_id UUID := gen_random_uuid();
+  v_rider_user UUID := gen_random_uuid();
+  v_rider_app_id UUID := gen_random_uuid();
+  v_doc_id UUID := gen_random_uuid();
+  v_res JSONB;
+  v_qual_status verification_status;
+  v_app_status application_status;
+  v_verified_at TIMESTAMPTZ;
+  v_verified_by UUID;
+  v_rejection_reason TEXT;
+  v_doc_status verification_status;
+  v_highest_qual TEXT;
+  v_inst_name TEXT;
+  v_comp_year TEXT;
+BEGIN
+  RAISE NOTICE '============================================================';
+  RAISE NOTICE '🎓 TESTING RIDER QUALIFICATION PERSISTENCE & REVIEW RPC';
+  RAISE NOTICE '============================================================';
+
+  -- 1. Setup isolated admin and rider profiles using random UUIDs
+  INSERT INTO auth.users (id, email) VALUES
+    (v_admin_id, 'adm_' || replace(v_admin_id::text, '-', '') || '@staging.local'),
+    (v_rider_user, 'rdr_' || replace(v_rider_user::text, '-', '') || '@staging.local');
+
+  INSERT INTO public.profiles (id, full_name, phone, role) VALUES
+    (v_admin_id, 'Admin Verifier', '+9191' || substr(replace(v_admin_id::text, '-', ''), 1, 8), 'admin'),
+    (v_rider_user, 'Applicant Rider', '+9191' || substr(replace(v_rider_user::text, '-', ''), 8, 8), 'rider');
+
+  -- 2. Create rider application with educational qualification fields
+  INSERT INTO public.rider_applications (
+    id, user_id, application_ref, full_name, phone, city, vehicle_type, vehicle_number, status,
+    highest_qualification, qualification_name, institution_name, completion_year, additional_qualification,
+    qualification_status
+  ) VALUES (
+    v_rider_app_id, v_rider_user, 'RIDER-APP-' || replace(v_rider_app_id::text, '-', ''),
+    'Applicant Rider', '+9191' || substr(replace(v_rider_user::text, '-', ''), 8, 8), 'Bengaluru',
+    'Electric Bike', 'KA-05-EV-9999', 'submitted',
+    'Bachelor of Engineering', 'Electronics & Comm', 'State Technical University', '2023', 'First Class with Distinction',
+    'pending'
+  );
+
+  -- Verify educational qualification fields persisted accurately
+  SELECT highest_qualification, institution_name, completion_year, qualification_status
+  INTO v_highest_qual, v_inst_name, v_comp_year, v_qual_status
+  FROM public.rider_applications WHERE id = v_rider_app_id;
+
+  PERFORM public.assert_test('Rider Education Fields Persisted',
+    v_highest_qual = 'Bachelor of Engineering' AND v_inst_name = 'State Technical University' AND v_comp_year = '2023' AND v_qual_status = 'pending',
+    'Qualification details stored on rider application');
+
+  -- 3. Associate qualification proof document with the rider application
+  INSERT INTO public.rider_documents (
+    id, rider_application_id, doc_type, storage_bucket, storage_path, file_name, file_size, mime_type, status
+  ) VALUES (
+    v_doc_id, v_rider_app_id, 'qualification_proof', 'rider-kyc-documents',
+    v_rider_app_id::text || '/degree_cert.pdf', 'degree_cert.pdf', 1048576, 'application/pdf', 'pending'
+  );
+
+  SELECT status INTO v_doc_status FROM public.rider_documents WHERE id = v_doc_id;
+  PERFORM public.assert_test('Qualification Proof Document Associated',
+    v_doc_status = 'pending',
+    'Document row created with doc_type qualification_proof');
+
+  -- 4. Test unauthorized non-admin caller attempting verification -> Must be rejected (FORBIDDEN)
+  PERFORM public.set_test_auth_context(v_rider_user, 'authenticated');
+  v_res := public.admin_review_rider_qualification(v_rider_app_id, 'verified');
+  PERFORM public.assert_test('Unauthorized Rider Qualification Review Blocked',
+    (v_res->>'success')::boolean IS FALSE AND (v_res->>'error') = 'FORBIDDEN',
+    'Non-admin cannot verify qualification documents');
+
+  -- 5. Test admin rejection with NULL, empty, and whitespace-only reasons -> All rejected (INVALID_ARGUMENT)
+  PERFORM public.set_test_auth_context(v_admin_id, 'authenticated');
+
+  v_res := public.admin_review_rider_qualification(v_rider_app_id, 'rejected', NULL);
+  PERFORM public.assert_test('NULL Rejection Reason Blocked',
+    (v_res->>'success')::boolean IS FALSE AND (v_res->>'error') = 'INVALID_ARGUMENT',
+    'NULL rejection reason rejected');
+
+  v_res := public.admin_review_rider_qualification(v_rider_app_id, 'rejected', '');
+  PERFORM public.assert_test('Empty Rejection Reason Blocked',
+    (v_res->>'success')::boolean IS FALSE AND (v_res->>'error') = 'INVALID_ARGUMENT',
+    'Empty string rejection reason rejected');
+
+  v_res := public.admin_review_rider_qualification(v_rider_app_id, 'rejected', '    ');
+  PERFORM public.assert_test('Whitespace-Only Rejection Reason Blocked',
+    (v_res->>'success')::boolean IS FALSE AND (v_res->>'error') = 'INVALID_ARGUMENT',
+    'Whitespace-only rejection reason rejected');
+
+  -- 6. Test authorized admin rejection with valid explanation
+  v_res := public.admin_review_rider_qualification(v_rider_app_id, 'rejected', 'Document illegible. Watermark obscures university seal.');
+  PERFORM public.assert_test('Admin Qualification Rejection Success',
+    (v_res->>'success')::boolean IS TRUE AND (v_res->>'qualification_status') = 'rejected',
+    'Admin successfully rejected qualification with reason');
+
+  SELECT qualification_status, qualification_rejection_reason, status
+  INTO v_qual_status, v_rejection_reason, v_app_status
+  FROM public.rider_applications WHERE id = v_rider_app_id;
+
+  PERFORM public.assert_test('Qualification Rejection Reason Persisted',
+    v_qual_status = 'rejected' AND v_rejection_reason LIKE '%Document illegible%',
+    'Rejection status and reason stored');
+
+  PERFORM public.assert_test('Qualification Rejection Preserves Overall Application Status',
+    v_app_status = 'submitted',
+    'Overall application status remains submitted when qualification is rejected');
+
+  -- 7. Test authorized admin approval
+  v_res := public.admin_review_rider_qualification(v_rider_app_id, 'verified');
+  PERFORM public.assert_test('Admin Qualification Approval Success',
+    (v_res->>'success')::boolean IS TRUE AND (v_res->>'qualification_status') = 'verified',
+    'Admin approved qualification');
+
+  SELECT qualification_status, status, qualification_verified_at, qualification_verified_by, qualification_rejection_reason
+  INTO v_qual_status, v_app_status, v_verified_at, v_verified_by, v_rejection_reason
+  FROM public.rider_applications WHERE id = v_rider_app_id;
+
+  SELECT status INTO v_doc_status FROM public.rider_documents WHERE id = v_doc_id;
+
+  PERFORM public.assert_test('Qualification Verification Metadata Persisted',
+    v_qual_status = 'verified' AND v_verified_by = v_admin_id AND v_verified_at IS NOT NULL AND v_rejection_reason IS NULL,
+    'Verification timestamp and admin ID recorded, rejection reason cleared');
+
+  PERFORM public.assert_test('Qualification Approval Preserves Overall Application Status',
+    v_app_status = 'submitted',
+    'Overall application status remains submitted when qualification is verified');
+
+  PERFORM public.assert_test('Rider Document Verification Synchronized',
+    v_doc_status = 'verified',
+    'qualification_proof document status synchronized to verified');
+
+  -- Reset role to postgres
+  PERFORM public.set_test_auth_context(NULL, 'postgres');
+END $$;
+
+-- ------------------------------------------------------------------------------
+-- 10. TEST: RESTAURANT APPLICATION REVIEW RPC, DUPLICATE PREVENTION & REJECTION
+-- ------------------------------------------------------------------------------
+
+DO $$
+DECLARE
+  v_admin_id UUID := gen_random_uuid();
+  v_owner_user UUID := gen_random_uuid();
+  v_app_id UUID := gen_random_uuid();
+  v_res JSONB;
+  v_rest_count INTEGER;
+  v_app_status application_status;
+  v_rejection_reason TEXT;
+  v_reviewer_notes TEXT;
+  v_reviewed_by UUID;
+  v_reviewed_at TIMESTAMPTZ;
+BEGIN
+  RAISE NOTICE '============================================================';
+  RAISE NOTICE '🍽️ TESTING RESTAURANT APPLICATION REVIEW RPC';
+  RAISE NOTICE '============================================================';
+
+  -- Setup admin and partner applicant
+  INSERT INTO auth.users (id, email) VALUES
+    (v_admin_id, 'adm_' || replace(v_admin_id::text, '-', '') || '@staging.local'),
+    (v_owner_user, 'own_' || replace(v_owner_user::text, '-', '') || '@staging.local');
+
+  INSERT INTO public.profiles (id, full_name, phone, role) VALUES
+    (v_admin_id, 'Admin Reviewer', '+9192' || substr(replace(v_admin_id::text, '-', ''), 1, 8), 'admin'),
+    (v_owner_user, 'Restaurant Partner', '+9192' || substr(replace(v_owner_user::text, '-', ''), 8, 8), 'restaurant_owner');
+
+  -- Create submitted restaurant application
+  INSERT INTO public.restaurant_partner_applications (
+    id, user_id, application_ref, ownership_token_hash, status, restaurant_name,
+    phone, address_line1, city, postal_code, estimated_cost_for_two, pure_veg
+  ) VALUES (
+    v_app_id, v_owner_user, 'REST-APP-' || replace(v_app_id::text, '-', ''), 'dummy_token_hash', 'submitted',
+    'Saffron Spice Kitchen', '+9192' || substr(replace(v_owner_user::text, '-', ''), 8, 8),
+    '100 Feet Road, HAL 2nd Stage', 'Bengaluru', '560038', 650, false
+  );
+
+  -- 1. Test unauthorized reviewer rejected (FORBIDDEN)
+  PERFORM public.set_test_auth_context(v_owner_user, 'authenticated');
+  v_res := public.admin_review_restaurant_application(v_app_id, 'approve');
+  PERFORM public.assert_test('Unauthorized Restaurant Review Blocked',
+    (v_res->>'success')::boolean IS FALSE AND (v_res->>'error') = 'FORBIDDEN',
+    'Applicant cannot approve own restaurant application');
+
+  -- 2. Test invalid action rejected (INVALID_ACTION)
+  PERFORM public.set_test_auth_context(v_admin_id, 'authenticated');
+  v_res := public.admin_review_restaurant_application(v_app_id, 'INVALID_ACTION');
+  PERFORM public.assert_test('Invalid Restaurant Review Action Blocked',
+    (v_res->>'success')::boolean IS FALSE AND (v_res->>'error') = 'INVALID_ACTION',
+    'Arbitrary action name rejected');
+
+  -- 3. Test rejection and action_required without reason -> Blocked (INVALID_ARGUMENT)
+  v_res := public.admin_review_restaurant_application(v_app_id, 'reject', NULL);
+  PERFORM public.assert_test('Restaurant Rejection Without Reason Blocked (NULL)',
+    (v_res->>'success')::boolean IS FALSE AND (v_res->>'error') = 'INVALID_ARGUMENT',
+    'NULL rejection reason rejected');
+
+  v_res := public.admin_review_restaurant_application(v_app_id, 'reject', '   ');
+  PERFORM public.assert_test('Restaurant Rejection Without Reason Blocked (Whitespace)',
+    (v_res->>'success')::boolean IS FALSE AND (v_res->>'error') = 'INVALID_ARGUMENT',
+    'Whitespace rejection reason rejected');
+
+  v_res := public.admin_review_restaurant_application(v_app_id, 'action_required', '');
+  PERFORM public.assert_test('Restaurant Action Required Without Reason Blocked',
+    (v_res->>'success')::boolean IS FALSE AND (v_res->>'error') = 'INVALID_ARGUMENT',
+    'Empty reason blocked for action_required');
+
+  -- 4. Test valid action_required flow
+  v_res := public.admin_review_restaurant_application(v_app_id, 'action_required', 'FSSAI license image expired. Upload renewal.', 'Need renewed cert');
+  PERFORM public.assert_test('Restaurant Action Required Success',
+    (v_res->>'success')::boolean IS TRUE AND (v_res->>'action') = 'action_required',
+    'Resubmission requested successfully');
+
+  SELECT status, rejection_reason, reviewer_notes, reviewed_by, reviewed_at
+  INTO v_app_status, v_rejection_reason, v_reviewer_notes, v_reviewed_by, v_reviewed_at
+  FROM public.restaurant_partner_applications WHERE id = v_app_id;
+
+  PERFORM public.assert_test('Restaurant Application Action Required Metadata',
+    v_app_status = 'action_required' AND v_rejection_reason LIKE '%FSSAI license image expired%' AND v_reviewed_by = v_admin_id AND v_reviewed_at IS NOT NULL,
+    'Action required status and review metadata persisted');
+
+  -- 5. Test valid approval and restaurant record provisioning
+  v_res := public.admin_review_restaurant_application(v_app_id, 'approve', NULL, 'On-site kitchen hygiene verified.');
+  PERFORM public.assert_test('Restaurant Application Approval Success',
+    (v_res->>'success')::boolean IS TRUE AND (v_res->>'action') = 'approved',
+    'Application approved by administrator');
+
+  SELECT status, reviewed_by INTO v_app_status, v_reviewed_by
+  FROM public.restaurant_partner_applications WHERE id = v_app_id;
+  PERFORM public.assert_test('Restaurant Application Status Approved',
+    v_app_status = 'approved' AND v_reviewed_by = v_admin_id,
+    'Application marked approved with reviewer ID');
+
+  SELECT COUNT(*) INTO v_rest_count
+  FROM public.restaurants
+  WHERE name = 'Saffron Spice Kitchen' AND owner_id = v_owner_user;
+  PERFORM public.assert_test('Restaurant Provisioned in Public Table',
+    v_rest_count = 1,
+    'New restaurant created in public.restaurants matching application details');
+
+  -- 6. Test duplicate prevention on repeated approval
+  v_res := public.admin_review_restaurant_application(v_app_id, 'approve');
+  SELECT COUNT(*) INTO v_rest_count
+  FROM public.restaurants
+  WHERE name = 'Saffron Spice Kitchen' AND owner_id = v_owner_user;
+  PERFORM public.assert_test('Duplicate Restaurant Prevention Enforced',
+    v_rest_count = 1,
+    'Repeated approval does not create duplicate restaurant rows');
+
+  -- Reset role to postgres
+  PERFORM public.set_test_auth_context(NULL, 'postgres');
+END $$;
+
+-- ------------------------------------------------------------------------------
+-- 11. TEST: APPLICATION VISIBILITY & CROSS-APPLICANT RLS ENFORCEMENT
+-- ------------------------------------------------------------------------------
+
+DO $$
+DECLARE
+  v_user_1 UUID := gen_random_uuid();
+  v_user_2 UUID := gen_random_uuid();
+  v_admin_id UUID := gen_random_uuid();
+  v_app_1 UUID := gen_random_uuid();
+  v_app_2 UUID := gen_random_uuid();
+  v_rider_app_1 UUID := gen_random_uuid();
+  v_rider_app_2 UUID := gen_random_uuid();
+  v_visible_count INTEGER;
+  v_insert_failed BOOLEAN := FALSE;
+BEGIN
+  RAISE NOTICE '============================================================';
+  RAISE NOTICE '🔒 TESTING APPLICATION VISIBILITY & CROSS-APPLICANT RLS';
+  RAISE NOTICE '============================================================';
+
+  -- Create 2 applicant users and 1 admin user
+  INSERT INTO auth.users (id, email) VALUES
+    (v_user_1, 'u1_' || replace(v_user_1::text, '-', '') || '@staging.local'),
+    (v_user_2, 'u2_' || replace(v_user_2::text, '-', '') || '@staging.local'),
+    (v_admin_id, 'adm_' || replace(v_admin_id::text, '-', '') || '@staging.local');
+
+  INSERT INTO public.profiles (id, full_name, phone, role) VALUES
+    (v_user_1, 'Applicant One', '+9193' || substr(replace(v_user_1::text, '-', ''), 1, 8), 'restaurant_owner'),
+    (v_user_2, 'Applicant Two', '+9193' || substr(replace(v_user_2::text, '-', ''), 8, 8), 'restaurant_owner'),
+    (v_admin_id, 'Admin Auditor', '+9193' || substr(replace(v_admin_id::text, '-', ''), 16, 8), 'admin');
+
+  -- App 1 for User 1
+  INSERT INTO public.restaurant_partner_applications (
+    id, user_id, application_ref, ownership_token_hash, status, restaurant_name, phone, address_line1, city, postal_code
+  ) VALUES (
+    v_app_1, v_user_1, 'APP-ONE-' || replace(v_app_1::text, '-', ''), 'tok1', 'submitted',
+    'Bistro One', '+9193' || substr(replace(v_user_1::text, '-', ''), 1, 8), 'Main St', 'Bengaluru', '560001'
+  );
+
+  -- App 2 for User 2
+  INSERT INTO public.restaurant_partner_applications (
+    id, user_id, application_ref, ownership_token_hash, status, restaurant_name, phone, address_line1, city, postal_code
+  ) VALUES (
+    v_app_2, v_user_2, 'APP-TWO-' || replace(v_app_2::text, '-', ''), 'tok2', 'submitted',
+    'Bistro Two', '+9193' || substr(replace(v_user_2::text, '-', ''), 8, 8), 'Cross St', 'Bengaluru', '560002'
+  );
+
+  -- Rider App 1 for User 1
+  INSERT INTO public.rider_applications (
+    id, user_id, application_ref, full_name, phone, city, vehicle_type, vehicle_number, status
+  ) VALUES (
+    v_rider_app_1, v_user_1, 'RIDER-ONE-' || replace(v_rider_app_1::text, '-', ''),
+    'Rider One', '+9193' || substr(replace(v_user_1::text, '-', ''), 1, 8), 'Bengaluru', 'Bike', 'KA-01-A-1111', 'submitted'
+  );
+
+  -- Rider App 2 for User 2
+  INSERT INTO public.rider_applications (
+    id, user_id, application_ref, full_name, phone, city, vehicle_type, vehicle_number, status
+  ) VALUES (
+    v_rider_app_2, v_user_2, 'RIDER-TWO-' || replace(v_rider_app_2::text, '-', ''),
+    'Rider Two', '+9193' || substr(replace(v_user_2::text, '-', ''), 8, 8), 'Bengaluru', 'Bike', 'KA-02-B-2222', 'submitted'
+  );
+
+  -- 1. Applicant 1 SELECT partner applications -> Sees App 1, does NOT see App 2
+  PERFORM public.set_test_auth_context(v_user_1, 'authenticated');
+
+  SELECT COUNT(*) INTO v_visible_count
+  FROM public.restaurant_partner_applications WHERE id = v_app_1;
+  PERFORM public.assert_test('Applicant 1 Can View Own Partner Application',
+    v_visible_count = 1, 'App 1 visible to owner');
+
+  SELECT COUNT(*) INTO v_visible_count
+  FROM public.restaurant_partner_applications WHERE id = v_app_2;
+  PERFORM public.assert_test('Cross-Applicant Isolation Enforced (Partner App 2 Hidden)',
+    v_visible_count = 0, 'App 2 not visible to Applicant 1');
+
+  -- 2. Applicant 1 SELECT rider applications -> Sees Rider App 1, does NOT see Rider App 2
+  SELECT COUNT(*) INTO v_visible_count
+  FROM public.rider_applications WHERE id = v_rider_app_1;
+  PERFORM public.assert_test('Rider 1 Can View Own Rider Application',
+    v_visible_count = 1, 'Rider App 1 visible to owner');
+
+  SELECT COUNT(*) INTO v_visible_count
+  FROM public.rider_applications WHERE id = v_rider_app_2;
+  PERFORM public.assert_test('Cross-Rider Isolation Enforced (Rider App 2 Hidden)',
+    v_visible_count = 0, 'Rider App 2 not visible to Rider 1');
+
+  -- 3. Applicant 1 attempts to INSERT partner application impersonating User 2
+  v_insert_failed := FALSE;
+  BEGIN
+    INSERT INTO public.restaurant_partner_applications (
+      id, user_id, application_ref, ownership_token_hash, status, restaurant_name, phone, address_line1, city, postal_code
+    ) VALUES (
+      gen_random_uuid(), v_user_2, 'APP-SPOOF-' || substr(gen_random_uuid()::text, 1, 8), 'tokspoof', 'draft',
+      'Spoofed Kitchen', '+919300000000', 'Spoofed St', 'Bengaluru', '560001'
+    );
+  EXCEPTION WHEN OTHERS THEN
+    v_insert_failed := TRUE;
+  END;
+
+  SELECT COUNT(*) INTO v_visible_count
+  FROM public.restaurant_partner_applications
+  WHERE user_id = v_user_2 AND restaurant_name = 'Spoofed Kitchen';
+
+  PERFORM public.assert_test('Applicant Cannot Insert Application for Another User',
+    (v_insert_failed IS TRUE OR v_visible_count = 0),
+    'RLS and ownership trigger prevent applicant from creating application for another user');
+
+  -- 4. Admin SELECT -> Sees both partner apps and both rider apps
+  PERFORM public.set_test_auth_context(v_admin_id, 'authenticated');
+
+  SELECT COUNT(*) INTO v_visible_count
+  FROM public.restaurant_partner_applications WHERE id IN (v_app_1, v_app_2);
+  PERFORM public.assert_test('Admin Can View All Partner Applications',
+    v_visible_count = 2, 'Admin sees both partner applications');
+
+  SELECT COUNT(*) INTO v_visible_count
+  FROM public.rider_applications WHERE id IN (v_rider_app_1, v_rider_app_2);
+  PERFORM public.assert_test('Admin Can View All Rider Applications',
+    v_visible_count = 2, 'Admin sees both rider applications');
+
+  -- Reset role to postgres
+  PERFORM public.set_test_auth_context(NULL, 'postgres');
+END $$;
+
+-- ------------------------------------------------------------------------------
+-- 12. TEST: FINANCIAL RECORDS RLS, OWNERSHIP & UNIQUE CONSTRAINT
+-- ------------------------------------------------------------------------------
+
+DO $$
+DECLARE
+  v_user_1 UUID := gen_random_uuid();
+  v_user_2 UUID := gen_random_uuid();
+  v_admin_id UUID := gen_random_uuid();
+  v_app_1 UUID := gen_random_uuid();
+  v_app_2 UUID := gen_random_uuid();
+  v_fin_id_1 UUID := gen_random_uuid();
+  v_fin_id_dup UUID := gen_random_uuid();
+  v_visible_count INTEGER;
+  v_insert_spoof_failed BOOLEAN := FALSE;
+  v_unique_violation_caught BOOLEAN := FALSE;
+BEGIN
+  RAISE NOTICE '============================================================';
+  RAISE NOTICE '💳 TESTING FINANCIAL RECORDS RLS & UNIQUE CONSTRAINT';
+  RAISE NOTICE '============================================================';
+
+  -- Setup 2 users and 1 admin
+  INSERT INTO auth.users (id, email) VALUES
+    (v_user_1, 'fin1_' || replace(v_user_1::text, '-', '') || '@staging.local'),
+    (v_user_2, 'fin2_' || replace(v_user_2::text, '-', '') || '@staging.local'),
+    (v_admin_id, 'admfin_' || replace(v_admin_id::text, '-', '') || '@staging.local');
+
+  INSERT INTO public.profiles (id, full_name, phone, role) VALUES
+    (v_user_1, 'Fin Owner One', '+9194' || substr(replace(v_user_1::text, '-', ''), 1, 8), 'restaurant_owner'),
+    (v_user_2, 'Fin Owner Two', '+9194' || substr(replace(v_user_2::text, '-', ''), 8, 8), 'restaurant_owner'),
+    (v_admin_id, 'Fin Admin', '+9194' || substr(replace(v_admin_id::text, '-', ''), 16, 8), 'admin');
+
+  -- App 1 for User 1
+  INSERT INTO public.restaurant_partner_applications (
+    id, user_id, application_ref, ownership_token_hash, status, restaurant_name, phone, address_line1, city, postal_code
+  ) VALUES (
+    v_app_1, v_user_1, 'APP-F1-' || replace(v_app_1::text, '-', ''), 'th1', 'submitted',
+    'Financial Test Kitchen', '+9194' || substr(replace(v_user_1::text, '-', ''), 1, 8), 'Brigade Road', 'Bengaluru', '560025'
+  );
+
+  -- App 2 for User 2
+  INSERT INTO public.restaurant_partner_applications (
+    id, user_id, application_ref, ownership_token_hash, status, restaurant_name, phone, address_line1, city, postal_code
+  ) VALUES (
+    v_app_2, v_user_2, 'APP-F2-' || replace(v_app_2::text, '-', ''), 'th2', 'submitted',
+    'Other Kitchen', '+9194' || substr(replace(v_user_2::text, '-', ''), 8, 8), 'MG Road', 'Bengaluru', '560001'
+  );
+
+  -- 1. Applicant 1 inserts financial record for own application -> Succeeded
+  PERFORM public.set_test_auth_context(v_user_1, 'authenticated');
+  INSERT INTO public.restaurant_partner_financials (
+    id, application_id, legal_entity_name, business_type, pan_number_masked, fssai_license_number,
+    fssai_expiry_date, bank_name, bank_account_holder, bank_account_number_masked, bank_ifsc
+  ) VALUES (
+    v_fin_id_1, v_app_1, 'Synthetic Rest Ltd', 'Private Limited', 'ABCDE9999Z', '10019000000001',
+    CURRENT_DATE + INTERVAL '2 years', 'Synthetic Bank', 'Synthetic Rest Ltd', '••••••••9999', 'SYNT0001234'
+  );
+
+  SELECT COUNT(*) INTO v_visible_count
+  FROM public.restaurant_partner_financials WHERE application_id = v_app_1;
+  PERFORM public.assert_test('Applicant Successfully Inserted Own Financials',
+    v_visible_count = 1, 'Financial record created by owner');
+
+  -- 2. Applicant 1 views own financials -> Succeeded
+  SELECT COUNT(*) INTO v_visible_count
+  FROM public.restaurant_partner_financials WHERE id = v_fin_id_1;
+  PERFORM public.assert_test('Applicant Can View Own Financial Record',
+    v_visible_count = 1, 'Financial record visible to owner');
+
+  -- 3. Applicant 2 views Applicant 1 financials -> Blocked by RLS (0 rows)
+  PERFORM public.set_test_auth_context(v_user_2, 'authenticated');
+  SELECT COUNT(*) INTO v_visible_count
+  FROM public.restaurant_partner_financials WHERE id = v_fin_id_1;
+  PERFORM public.assert_test('Cross-Applicant Financial Access Blocked by RLS',
+    v_visible_count = 0, 'Applicant 2 cannot read Applicant 1 financials');
+
+  -- 4. Applicant 2 attempts to insert financials for Applicant 1 application -> Blocked by RLS
+  v_insert_spoof_failed := FALSE;
+  BEGIN
+    INSERT INTO public.restaurant_partner_financials (
+      id, application_id, legal_entity_name, business_type, pan_number_masked, fssai_license_number,
+      fssai_expiry_date, bank_name, bank_account_holder, bank_account_number_masked, bank_ifsc
+    ) VALUES (
+      gen_random_uuid(), v_app_1, 'Spoofed Fin', 'LLP', 'XYZAB1111A', '10019000000002',
+      CURRENT_DATE + INTERVAL '1 year', 'Spoof Bank', 'Spoofed Fin', '••••••••1111', 'SPOO0001234'
+    );
+  EXCEPTION WHEN OTHERS THEN
+    v_insert_spoof_failed := TRUE;
+  END;
+  PERFORM public.assert_test('Cross-Applicant Financial Insert Blocked by RLS',
+    v_insert_spoof_failed IS TRUE,
+    'RLS policy prevented user 2 from inserting financials for application owned by user 1');
+
+  -- 5. Duplicate application_id insert -> Rejected by unique constraint uq_restaurant_financials_app
+  PERFORM public.set_test_auth_context(v_user_1, 'authenticated');
+  v_unique_violation_caught := FALSE;
+  BEGIN
+    INSERT INTO public.restaurant_partner_financials (
+      id, application_id, legal_entity_name, business_type, pan_number_masked, fssai_license_number,
+      fssai_expiry_date, bank_name, bank_account_holder, bank_account_number_masked, bank_ifsc
+    ) VALUES (
+      v_fin_id_dup, v_app_1, 'Synthetic Rest Duplicate', 'Private Limited', 'ABCDE9999Z', '10019000000001',
+      CURRENT_DATE + INTERVAL '2 years', 'Synthetic Bank', 'Synthetic Rest Duplicate', '••••••••9999', 'SYNT0001234'
+    );
+  EXCEPTION WHEN unique_violation THEN
+    v_unique_violation_caught := TRUE;
+  END;
+  PERFORM public.assert_test('Unique Constraint uq_restaurant_financials_app Enforced',
+    v_unique_violation_caught IS TRUE,
+    'Duplicate insert on application_id raised unique_violation');
+
+  -- 6. Admin views financials -> Allowed
+  PERFORM public.set_test_auth_context(v_admin_id, 'authenticated');
+  SELECT COUNT(*) INTO v_visible_count
+  FROM public.restaurant_partner_financials WHERE id = v_fin_id_1;
+  PERFORM public.assert_test('Admin Can View Financial Records',
+    v_visible_count = 1, 'Admin can read financial record under admin policy');
+
+  -- Reset role to postgres
+  PERFORM public.set_test_auth_context(NULL, 'postgres');
+END $$;
+
+-- ------------------------------------------------------------------------------
+-- 13. TEST: STORAGE OBJECTS RLS ENFORCEMENT (SQL LEVEL)
+-- ------------------------------------------------------------------------------
+
+DO $$
+DECLARE
+  v_user_1 UUID := gen_random_uuid();
+  v_user_2 UUID := gen_random_uuid();
+  v_admin_id UUID := gen_random_uuid();
+  v_app_1 UUID := gen_random_uuid();
+  v_obj_id_1 UUID := gen_random_uuid();
+  v_upload_spoof_failed BOOLEAN := FALSE;
+  v_upload_success BOOLEAN := FALSE;
+BEGIN
+  RAISE NOTICE '============================================================';
+  RAISE NOTICE '📁 TESTING STORAGE OBJECTS RLS ENFORCEMENT (SQL LEVEL)';
+  RAISE NOTICE '============================================================';
+
+  -- Create users
+  INSERT INTO auth.users (id, email) VALUES
+    (v_user_1, 'stor1_' || replace(v_user_1::text, '-', '') || '@staging.local'),
+    (v_user_2, 'stor2_' || replace(v_user_2::text, '-', '') || '@staging.local'),
+    (v_admin_id, 'adm_stor_' || replace(v_admin_id::text, '-', '') || '@staging.local');
+
+  INSERT INTO public.profiles (id, full_name, phone, role) VALUES
+    (v_user_1, 'Storage Applicant 1', '+9199' || substr(replace(v_user_1::text, '-', ''), 1, 8), 'rider'),
+    (v_user_2, 'Storage Applicant 2', '+9199' || substr(replace(v_user_2::text, '-', ''), 8, 8), 'rider'),
+    (v_admin_id, 'Storage Admin', '+9199' || substr(replace(v_admin_id::text, '-', ''), 16, 8), 'admin');
+
+  -- App 1 for User 1
+  INSERT INTO public.rider_applications (
+    id, user_id, application_ref, full_name, phone, city, vehicle_type, vehicle_number, status
+  ) VALUES (
+    v_app_1, v_user_1, 'RIDER-ST-' || replace(v_app_1::text, '-', ''),
+    'Storage Applicant 1', '+9199' || substr(replace(v_user_1::text, '-', ''), 1, 8),
+    'Bengaluru', 'Bike', 'KA-01-SS-1111', 'submitted'
+  );
+
+  -- 1. Applicant 1 inserts storage object inside own application folder -> Allowed by RLS
+  PERFORM public.set_test_auth_context(v_user_1, 'authenticated');
+  v_upload_success := FALSE;
+  BEGIN
+    INSERT INTO storage.objects (
+      id, bucket_id, name, owner, metadata
+    ) VALUES (
+      v_obj_id_1, 'rider-kyc-documents', v_app_1::text || '/synthetic_id_card.pdf', v_user_1,
+      '{"mimetype": "application/pdf", "size": 1024}'::jsonb
+    );
+    v_upload_success := TRUE;
+  EXCEPTION WHEN OTHERS THEN
+    v_upload_success := FALSE;
+  END;
+  PERFORM public.assert_test('Applicant Upload to Own KYC Storage Folder Succeeded',
+    v_upload_success IS TRUE,
+    'Storage RLS policy Riders upload rider kyc files allowed file insert');
+
+  -- 2. Applicant 2 attempts to insert storage object inside Applicant 1 folder -> Blocked by RLS
+  PERFORM public.set_test_auth_context(v_user_2, 'authenticated');
+  v_upload_spoof_failed := FALSE;
+  BEGIN
+    INSERT INTO storage.objects (
+      id, bucket_id, name, owner, metadata
+    ) VALUES (
+      gen_random_uuid(), 'rider-kyc-documents', v_app_1::text || '/unauthorized_file.pdf', v_user_2,
+      '{"mimetype": "application/pdf", "size": 1024}'::jsonb
+    );
+  EXCEPTION WHEN OTHERS THEN
+    v_upload_spoof_failed := TRUE;
+  END;
+  PERFORM public.assert_test('Cross-Applicant Storage Upload Blocked by RLS',
+    v_upload_spoof_failed IS TRUE,
+    'Storage RLS policy rejected upload into foreign application directory');
+
+  -- Reset role to postgres
+  PERFORM public.set_test_auth_context(NULL, 'postgres');
+END $$;
+
+-- ------------------------------------------------------------------------------
+-- 14. SUMMARY AND CLEAN ROLLBACK
 -- ------------------------------------------------------------------------------
 
 DO $$

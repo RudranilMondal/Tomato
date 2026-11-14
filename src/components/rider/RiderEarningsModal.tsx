@@ -1,20 +1,26 @@
 import React from 'react';
-import { X, DollarSign, TrendingUp, CheckCircle2, ArrowDownLeft, ShieldCheck } from 'lucide-react';
+import { X, DollarSign, TrendingUp, CheckCircle2, ArrowDownLeft, ShieldCheck, Award } from 'lucide-react';
+import { RiderTier } from '../../types';
 
 interface RiderEarningsModalProps {
   isOpen: boolean;
   onClose: () => void;
   earningsToday: number;
   tripsToday: number;
+  riderTier?: RiderTier;
 }
 
 export const RiderEarningsModal: React.FC<RiderEarningsModalProps> = ({
   isOpen,
   onClose,
   earningsToday,
-  tripsToday
+  tripsToday,
+  riderTier = 'bronze'
 }) => {
   if (!isOpen) return null;
+
+  const tierBonus = riderTier === 'gold' ? 30 : riderTier === 'silver' ? 15 : 0;
+  const multiplier = riderTier === 'gold' ? '1.10x' : riderTier === 'silver' ? '1.05x' : '1.00x';
 
   const trips = [
     { id: 'TRIP-901', rest: 'Behrouz Biryani', fare: 65, tip: 30, surge: 15, time: '17:15', status: 'Delivered' },
@@ -92,23 +98,47 @@ export const RiderEarningsModal: React.FC<RiderEarningsModalProps> = ({
               boxShadow: 'var(--shadow-md)'
             }}
           >
-            <span style={{ fontSize: '11px', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              TODAY'S TOTAL PAYOUT
-            </span>
-            <h2 style={{ fontSize: '32px', fontWeight: 900, marginTop: '4px' }}>₹{earningsToday}</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <span style={{ fontSize: '11px', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  TODAY'S TOTAL PAYOUT
+                </span>
+                <h2 style={{ fontSize: '32px', fontWeight: 900, marginTop: '4px' }}>₹{earningsToday}</h2>
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  backgroundColor: 'rgba(0,0,0,0.3)',
+                  padding: '4px 10px',
+                  borderRadius: '20px',
+                  fontSize: '11px',
+                  fontWeight: 800,
+                  textTransform: 'uppercase'
+                }}
+              >
+                <Award size={13} color="#FFD700" />
+                <span>{riderTier} ({multiplier})</span>
+              </div>
+            </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginTop: '16px', paddingTop: '14px', borderTop: '1px solid rgba(255,255,255,0.15)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginTop: '16px', paddingTop: '14px', borderTop: '1px solid rgba(255,255,255,0.15)' }}>
               <div>
                 <span style={{ fontSize: '10px', opacity: 0.8 }}>Base Pay</span>
-                <span style={{ fontSize: '14px', fontWeight: 800, display: 'block' }}>₹{tripsToday * 40}</span>
+                <span style={{ fontSize: '13px', fontWeight: 800, display: 'block' }}>₹{tripsToday * 40}</span>
               </div>
               <div>
-                <span style={{ fontSize: '10px', opacity: 0.8 }}>Surge Incentives</span>
-                <span style={{ fontSize: '14px', fontWeight: 800, display: 'block' }}>₹{tripsToday * 15}</span>
+                <span style={{ fontSize: '10px', opacity: 0.8 }}>Surge</span>
+                <span style={{ fontSize: '13px', fontWeight: 800, display: 'block' }}>₹{tripsToday * 15}</span>
               </div>
               <div>
-                <span style={{ fontSize: '10px', opacity: 0.8 }}>Customer Tips</span>
-                <span style={{ fontSize: '14px', fontWeight: 800, display: 'block', color: '#FFD700' }}>₹60</span>
+                <span style={{ fontSize: '10px', opacity: 0.8 }}>Tier Bonus</span>
+                <span style={{ fontSize: '13px', fontWeight: 800, display: 'block', color: '#6EE7B7' }}>+₹{tripsToday * tierBonus}</span>
+              </div>
+              <div>
+                <span style={{ fontSize: '10px', opacity: 0.8 }}>Tips</span>
+                <span style={{ fontSize: '13px', fontWeight: 800, display: 'block', color: '#FFD700' }}>₹60</span>
               </div>
             </div>
           </div>

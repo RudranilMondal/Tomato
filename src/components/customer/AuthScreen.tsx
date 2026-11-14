@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTomattto } from '../../context/TomatttoContext';
+import { supabase } from '../../lib/supabase';
 import {
   ArrowLeft,
   Smartphone,
@@ -9,7 +10,8 @@ import {
   Sparkles,
   ArrowRight,
   UserCheck,
-  MapPin
+  MapPin,
+  Info
 } from 'lucide-react';
 
 export const AuthScreen: React.FC = () => {
@@ -24,7 +26,7 @@ export const AuthScreen: React.FC = () => {
   const [streetInput, setStreetInput] = useState('');
   const [areaInput, setAreaInput] = useState('');
   const [pincodeInput, setPincodeInput] = useState('');
-  const [otp, setOtp] = useState(['', '', '', '']);
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [otpTimer, setOtpTimer] = useState(30);
   const [errorMsg, setErrorMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -40,20 +42,44 @@ export const AuthScreen: React.FC = () => {
     return () => clearInterval(interval);
   }, [authStep, otpTimer]);
 
-  const handleSendOtp = (e?: React.FormEvent) => {
+  const handleSendOtp = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const cleanPhone = phoneNumber.replace(/\D/g, '');
     if (cleanPhone.length < 10) {
       setErrorMsg('Please enter a valid 10-digit mobile number');
       return;
     }
+    const formattedPhone = `+91${cleanPhone.length === 10 ? cleanPhone : cleanPhone.slice(-10)}`;
     setErrorMsg('');
     setIsLoading(true);
-    setTimeout(() => {
+
+    if (!supabase) {
+      setErrorMsg('Supabase client is not initialized. Please verify configuration.');
       setIsLoading(false);
+      return;
+    }
+
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        phone: formattedPhone
+      });
+
+      if (error) {
+        setErrorMsg(
+          `SMS Provider Error: ${error.message}. In local development, use test phone number 98765 43210 with test OTP 123456, or use '⚡ Quick Demo Customer Login' below.`
+        );
+        setIsLoading(false);
+        return;
+      }
+
       setAuthStep('otp');
       setOtpTimer(30);
-    }, 600);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'An error occurred while dispatching verification SMS';
+      setErrorMsg(msg);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleOtpChange = (index: number, val: string) => {
@@ -65,7 +91,7 @@ export const AuthScreen: React.FC = () => {
     setOtp(newOtp);
 
     // Auto-focus next input
-    if (val && index < 3) {
+    if (val && index < 5) {
       const nextInput = document.getElementById(`otp-box-${index + 1}`);
       nextInput?.focus();
     }
@@ -78,24 +104,43 @@ export const AuthScreen: React.FC = () => {
     }
   };
 
-  const handleFillDemoOtp = () => {
-    setOtp(['1', '2', '3', '4']);
-    setErrorMsg('');
-  };
-
-  const handleVerifyOtp = () => {
+  const handleVerifyOtp = async () => {
     const entered = otp.join('');
-    if (entered.length < 4) {
-      setErrorMsg('Please enter the 4-digit verification code');
+    if (entered.length !== 6) {
+      setErrorMsg('Please enter the complete 6-digit verification code');
       return;
     }
     setErrorMsg('');
     setIsLoading(true);
-    setTimeout(() => {
+
+    if (!supabase) {
+      setErrorMsg('Supabase client is unavailable.');
       setIsLoading(false);
-      // Advance to Profile Setup step to ask for Name and Email
+      return;
+    }
+
+    try {
+      const cleanPhone = phoneNumber.replace(/\D/g, '');
+      const formattedPhone = `+91${cleanPhone.length === 10 ? cleanPhone : cleanPhone.slice(-10)}`;
+      const { data, error } = await supabase.auth.verifyOtp({
+        phone: formattedPhone,
+        token: entered,
+        type: 'sms'
+      });
+
+      if (error) {
+        setErrorMsg(error.message || 'Invalid or expired verification code');
+        setIsLoading(false);
+        return;
+      }
+
       setAuthStep('details');
-    }, 500);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error verifying OTP';
+      setErrorMsg(msg);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleCompleteProfile = (e: React.FormEvent) => {
@@ -155,15 +200,46 @@ export const AuthScreen: React.FC = () => {
     }, 600);
   };
 
-  const handleSocialLogin = (provider: 'Google' | 'Apple') => {
+  const handleSocialLogin = async (provider: 'Google' | 'Apple') => {
+    if (provider === 'Apple') {
+      setErrorMsg('Apple Sign-In requires an Apple Developer configuration.');
+      return;
+    }
+
+    if (!supabase) {
+      setErrorMsg('Supabase client unavailable.');
+      return;
+    }
+
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      loginUser({
-        name: provider === 'Google' ? 'Alex Rivera (Google)' : 'Alex Rivera (Apple)',
-        email: `alex.${provider.toLowerCase()}@example.com`
+    setErrorMsg('');
+
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin
+        }
       });
-    }, 500);
+
+      if (error) {
+        setErrorMsg(
+          `Google OAuth Setup Notice: ${error.message}. In local Supabase: 1) Open Dashboard -> Auth -> Providers -> Google, 2) Add Client ID & Secret, 3) Set Redirect: ${window.location.origin}`
+        );
+      }
+    } catch (err: any) {
+      setErrorMsg(`OAuth initiation error: ${err?.message || 'Failed to connect to Google provider.'}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleExplicitDevLogin = () => {
+    loginUser({
+      name: 'Ananya Sharma (Customer)',
+      phone: '+919876543210',
+      email: 'ananya.sharma@example.com'
+    });
   };
 
   return (
@@ -258,7 +334,7 @@ export const AuthScreen: React.FC = () => {
             </div>
             <h2 style={{ fontSize: '22px', fontWeight: 900, color: 'var(--color-text-main)', lineHeight: 1.2 }}>
               {authStep === 'otp'
-                ? 'Enter 4-Digit OTP'
+                ? 'Enter 6-Digit OTP'
                 : authStep === 'details'
                 ? 'Complete Your Profile'
                 : authStep === 'email'
@@ -379,34 +455,6 @@ export const AuthScreen: React.FC = () => {
                     }}
                   />
                 ))}
-              </div>
-
-              {/* Quick Fill Demo Helper */}
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  marginBottom: '20px'
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={handleFillDemoOtp}
-                  style={{
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    color: 'var(--color-primary)',
-                    backgroundColor: 'var(--color-primary-light)',
-                    padding: '6px 12px',
-                    borderRadius: 'var(--radius-full)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px'
-                  }}
-                >
-                  <Sparkles size={13} />
-                  <span>Auto-Fill Demo Code: 1234</span>
-                </button>
               </div>
 
               {errorMsg && (
@@ -942,6 +990,30 @@ export const AuthScreen: React.FC = () => {
                 >
                   <UserCheck size={14} />
                   <span>Continue as Guest Demo Account</span>
+                </button>
+
+                {/* Explicit Dev-Only Quick Login */}
+                <button
+                  type="button"
+                  onClick={handleExplicitDevLogin}
+                  style={{
+                    width: '100%',
+                    padding: '11px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1.5px dashed var(--color-primary)',
+                    backgroundColor: 'rgba(255, 75, 58, 0.08)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    fontSize: '12px',
+                    fontWeight: 800,
+                    color: 'var(--color-primary)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Sparkles size={14} />
+                  <span>⚡ Quick Demo Customer Login (Ananya Sharma)</span>
                 </button>
               </div>
             </div>

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useTomattto } from '../../context/TomatttoContext';
-import { Restaurant } from '../../types';
+import { supabase } from '../../lib/supabase';
+import { Restaurant, RestaurantPartnerApplication } from '../../types';
+import { maskPan, maskAadhaar, maskBankAccount } from '../../lib/masking';
 import { CreateCouponModal } from './CreateCouponModal';
 import { RestaurantManageModal } from './RestaurantManageModal';
 import { LiveOperationsMapModal } from './LiveOperationsMapModal';
@@ -38,7 +40,11 @@ import {
   FileText,
   CreditCard,
   RotateCcw,
-  ShieldAlert
+  ShieldAlert,
+  RefreshCw,
+  GraduationCap,
+  Award,
+  Camera
 } from 'lucide-react';
 
 interface SupportTicket {
@@ -67,10 +73,25 @@ export const AdminApp: React.FC = () => {
     allRiderApplications,
     approveRiderKyc,
     rejectRiderKyc,
-    requestResubmissionRiderKyc
+    requestResubmissionRiderKyc,
+    allRestaurantApplications,
+    isAppsLoading,
+    appsError,
+    fetchAdminRestaurantApplications,
+    approveRestaurantApplication,
+    rejectRestaurantApplication,
+    requestResubmissionRestaurantApplication,
+    verifyRestaurantDocument,
+    verifyRiderQualification,
+    verifyRiderDocument,
+    tierConfigurations,
+    updateTierConfig,
+    selfieVerifications,
+    refreshAllApplications
   } = useTomattto();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'restaurants' | 'riders' | 'customers' | 'tickets' | 'coupons'>('overview');
+  const [restaurantSubView, setRestaurantSubView] = useState<'onboarded' | 'applications'>('onboarded');
   const [riderFilter, setRiderFilter] = useState<'all' | 'under_review' | 'action_required' | 'approved' | 'rejected'>('all');
   const [inspectedRiderApp, setInspectedRiderApp] = useState<any | null>(null);
   const [resubmitModalAppId, setResubmitModalAppId] = useState<string | null>(null);
@@ -83,7 +104,73 @@ export const AdminApp: React.FC = () => {
   const [isMonsoonSurge, setIsMonsoonSurge] = useState(false);
   const [refundSuccessMsg, setRefundSuccessMsg] = useState<string | null>(null);
   const [kycSuccessMsg, setKycSuccessMsg] = useState<string | null>(null);
+  const [restSuccessMsg, setRestSuccessMsg] = useState<string | null>(null);
   const [selectedDocPreview, setSelectedDocPreview] = useState<{ title: string; url: string } | null>(null);
+
+  const handlePreviewDoc = async (
+    title: string,
+    rawUrlOrPath?: string | null,
+    bucket: 'rider-kyc-documents' | 'partner-kyc-documents' = 'rider-kyc-documents'
+  ) => {
+    if (!rawUrlOrPath) return;
+    if (rawUrlOrPath.startsWith('http') || rawUrlOrPath.startsWith('data:') || rawUrlOrPath.startsWith('blob:')) {
+      setSelectedDocPreview({ title, url: rawUrlOrPath });
+      return;
+    }
+    // If it's a Supabase storage path, generate temporary signed URL
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.storage.from(bucket).createSignedUrl(rawUrlOrPath, 3600);
+        if (data?.signedUrl) {
+          setSelectedDocPreview({ title, url: data.signedUrl });
+          return;
+        }
+      } catch (e) {
+        console.warn('Error generating signed URL:', e);
+      }
+    }
+    setSelectedDocPreview({ title, url: rawUrlOrPath });
+  };
+
+  const handleDownloadDoc = async (
+    rawUrlOrPath?: string | null,
+    fileName: string = 'document',
+    bucket: 'rider-kyc-documents' | 'partner-kyc-documents' = 'partner-kyc-documents'
+  ) => {
+    if (!rawUrlOrPath) return;
+    let downloadUrl = rawUrlOrPath;
+    if (!rawUrlOrPath.startsWith('http') && !rawUrlOrPath.startsWith('data:') && !rawUrlOrPath.startsWith('blob:') && supabase) {
+      try {
+        const { data } = await supabase.storage.from(bucket).createSignedUrl(rawUrlOrPath, 3600);
+        if (data?.signedUrl) {
+          downloadUrl = data.signedUrl;
+        }
+      } catch (e) {
+        console.warn('Error creating download URL:', e);
+      }
+    }
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = fileName;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  // Restaurant Partner Applications State
+  const [restaurantAppFilter, setRestaurantAppFilter] = useState<'all' | 'pending' | 'action_required' | 'approved' | 'rejected'>('all');
+  const [inspectedRestaurantApp, setInspectedRestaurantApp] = useState<RestaurantPartnerApplication | null>(null);
+  const [resubmitRestModalAppId, setResubmitRestModalAppId] = useState<string | null>(null);
+  const [resubmitRestReasonText, setResubmitRestReasonText] = useState('');
+  const [rejectRestModalAppId, setRejectRestModalAppId] = useState<string | null>(null);
+  const [rejectRestReasonText, setRejectRestReasonText] = useState('');
+  const [isRefreshingApps, setIsRefreshingApps] = useState(false);
+
+  // Rider Qualification Verification Rejection State
+  const [qualRejectModalAppId, setQualRejectModalAppId] = useState<string | null>(null);
+  const [qualRejectReasonText, setQualRejectReasonText] = useState('');
 
   // Support Tickets State
   const [tickets, setTickets] = useState<SupportTicket[]>([
@@ -661,73 +748,1192 @@ export const AdminApp: React.FC = () => {
           </div>
         )}
 
-        {/* Tab 3: Restaurants Directory */}
+        {/* Tab 3: Restaurants Directory & Partner Applications */}
         {activeTab === 'restaurants' && (
-          <div
-            style={{
-              backgroundColor: 'var(--color-surface)',
-              borderRadius: 'var(--radius-lg)',
-              padding: '20px',
-              border: '1px solid var(--color-border)'
-            }}
-          >
-            <h4 style={{ fontSize: '16px', fontWeight: 800, marginBottom: '14px' }}>
-              Onboarded Restaurant Partners ({restaurants.length})
-            </h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* Restaurant Success Banner */}
+            {restSuccessMsg && (
+              <div
+                style={{
+                  backgroundColor: 'rgba(46, 204, 113, 0.15)',
+                  border: '1px solid var(--color-veg)',
+                  color: 'var(--color-veg)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '12px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  boxShadow: 'var(--shadow-sm)'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <CheckCircle2 size={18} />
+                  <span style={{ fontSize: '13px', fontWeight: 800 }}>{restSuccessMsg}</span>
+                </div>
+                <button
+                  onClick={() => setRestSuccessMsg(null)}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--color-veg)', cursor: 'pointer' }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '14px' }}>
-              {restaurants.map((r) => (
+            {/* Sub-Navigation: Onboarded Restaurants vs Partner Applications & KYC */}
+            <div
+              style={{
+                display: 'flex',
+                gap: '12px',
+                borderBottom: '1px solid var(--color-border)',
+                paddingBottom: '14px',
+                flexWrap: 'wrap'
+              }}
+            >
+              <button
+                type="button"
+                data-testid="onboarded-restaurants-tab"
+                onClick={() => setRestaurantSubView('onboarded')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '10px 20px',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: restaurantSubView === 'onboarded' ? 'var(--color-primary)' : 'var(--color-surface)',
+                  color: restaurantSubView === 'onboarded' ? '#FFFFFF' : 'var(--color-text-main)',
+                  fontWeight: 800,
+                  fontSize: '13px',
+                  border: restaurantSubView === 'onboarded' ? '1.5px solid var(--color-primary)' : '1.5px solid var(--color-border)',
+                  cursor: 'pointer',
+                  boxShadow: restaurantSubView === 'onboarded' ? 'var(--shadow-glow)' : 'var(--shadow-sm)',
+                  transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)'
+                }}
+              >
+                <Store size={16} />
+                <span>Onboarded Restaurants ({restaurants.length})</span>
+              </button>
+
+              <button
+                type="button"
+                data-testid="restaurant-applications-tab"
+                onClick={() => setRestaurantSubView('applications')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '10px 20px',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: restaurantSubView === 'applications' ? 'var(--color-primary)' : 'var(--color-surface)',
+                  color: restaurantSubView === 'applications' ? '#FFFFFF' : 'var(--color-text-main)',
+                  fontWeight: 800,
+                  fontSize: '13px',
+                  border: restaurantSubView === 'applications' ? '1.5px solid var(--color-primary)' : '1.5px solid var(--color-border)',
+                  cursor: 'pointer',
+                  boxShadow: restaurantSubView === 'applications' ? 'var(--shadow-glow)' : 'var(--shadow-sm)',
+                  transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)'
+                }}
+              >
+                <FileText size={16} />
+                <span>Restaurant Applications & KYC ({allRestaurantApplications.length})</span>
+                {allRestaurantApplications.filter(a => a.status === 'submitted' || a.status === 'under_review').length > 0 ? (
+                  <span
+                    style={{
+                      backgroundColor: restaurantSubView === 'applications' ? '#FFFFFF' : 'var(--color-primary)',
+                      color: restaurantSubView === 'applications' ? 'var(--color-primary)' : '#FFFFFF',
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      padding: '2px 8px',
+                      borderRadius: '10px'
+                    }}
+                  >
+                    {allRestaurantApplications.filter(a => a.status === 'submitted' || a.status === 'under_review').length} Pending
+                  </span>
+                ) : (
+                  <span
+                    style={{
+                      backgroundColor: restaurantSubView === 'applications' ? 'rgba(255, 255, 255, 0.2)' : 'var(--color-surface-muted)',
+                      color: restaurantSubView === 'applications' ? '#FFFFFF' : 'var(--color-text-muted)',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: '10px'
+                    }}
+                  >
+                    0
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* VIEW A: Existing Onboarded Restaurants Directory (Preserved Exactly) */}
+            {restaurantSubView === 'onboarded' && (
+              <div
+                style={{
+                  backgroundColor: 'var(--color-surface)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '20px',
+                  border: '1px solid var(--color-border)'
+                }}
+              >
+                <h4 style={{ fontSize: '16px', fontWeight: 800, marginBottom: '14px' }}>
+                  Onboarded Restaurant Partners ({restaurants.length})
+                </h4>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '14px' }}>
+                  {restaurants.map((r) => (
+                    <div
+                      key={r.id}
+                      onClick={() => setSelectedManageRestaurant(r)}
+                      style={{
+                        padding: '14px',
+                        borderRadius: 'var(--radius-md)',
+                        backgroundColor: 'var(--color-surface-muted)',
+                        border: '1px solid var(--color-border)',
+                        display: 'flex',
+                        gap: '12px',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <div style={{ width: '60px', height: '60px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
+                        <img src={r.coverImage} alt={r.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <h5 style={{ fontSize: '14px', fontWeight: 800 }}>{r.name}</h5>
+                          <span
+                            style={{
+                              fontSize: '9px',
+                              fontWeight: 800,
+                              backgroundColor: r.status === 'suspended' ? 'rgba(231, 76, 60, 0.15)' : 'var(--color-veg-bg)',
+                              color: r.status === 'suspended' ? '#E74C3C' : 'var(--color-veg)',
+                              padding: '2px 6px',
+                              borderRadius: '4px'
+                            }}
+                          >
+                            {r.status === 'suspended' ? 'SUSPENDED' : 'ACTIVE'}
+                          </span>
+                        </div>
+                        <p style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{r.address}</p>
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '6px', fontSize: '11px', flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 700, color: 'var(--color-primary)' }}>
+                            {r.commissionRate || 18}% Take-Rate
+                          </span>
+                          <span>•</span>
+                          <span>{r.categories.reduce((sum, cat) => sum + cat.items.length, 0)} Dishes</span>
+                          <span>•</span>
+                          <span>{r.rating} ★ ({r.ratingCount || 120})</span>
+                          <span>•</span>
+                          <span style={{ color: 'var(--color-primary)', fontWeight: 800 }}>Manage Menu & Store ➔</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* VIEW B: Restaurant Applications & KYC Document Verification */}
+            {restaurantSubView === 'applications' && (
+              <div
+                style={{
+                  backgroundColor: 'var(--color-surface)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '20px',
+                  border: '1px solid var(--color-border)'
+                }}
+              >
                 <div
-                  key={r.id}
-                  onClick={() => setSelectedManageRestaurant(r)}
                   style={{
-                    padding: '14px',
-                    borderRadius: 'var(--radius-md)',
-                    backgroundColor: 'var(--color-surface-muted)',
-                    border: '1px solid var(--color-border)',
                     display: 'flex',
-                    gap: '12px',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease'
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    marginBottom: '16px',
+                    flexWrap: 'wrap',
+                    gap: '12px'
                   }}
                 >
-                  <div style={{ width: '60px', height: '60px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
-                    <img src={r.coverImage} alt={r.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <h5 style={{ fontSize: '14px', fontWeight: 800 }}>{r.name}</h5>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <Store size={20} color="var(--color-primary)" />
+                      <h4 style={{ fontSize: '16px', fontWeight: 800, margin: 0 }}>
+                        Restaurant Partner Applications & KYC Verification
+                      </h4>
                       <span
                         style={{
-                          fontSize: '9px',
+                          fontSize: '11px',
                           fontWeight: 800,
-                          backgroundColor: r.status === 'suspended' ? 'rgba(231, 76, 60, 0.15)' : 'var(--color-veg-bg)',
-                          color: r.status === 'suspended' ? '#E74C3C' : 'var(--color-veg)',
-                          padding: '2px 6px',
-                          borderRadius: '4px'
+                          backgroundColor: 'rgba(255, 75, 58, 0.15)',
+                          color: 'var(--color-primary)',
+                          padding: '2px 8px',
+                          borderRadius: '12px'
                         }}
                       >
-                        {r.status === 'suspended' ? 'SUSPENDED' : 'ACTIVE'}
+                        {allRestaurantApplications.filter(a => a.status === 'submitted' || a.status === 'under_review').length} Pending
                       </span>
                     </div>
-                    <p style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{r.address}</p>
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '6px', fontSize: '11px', flexWrap: 'wrap' }}>
-                      <span style={{ fontWeight: 700, color: 'var(--color-primary)' }}>
-                        {r.commissionRate || 18}% Take-Rate
-                      </span>
-                      <span>•</span>
-                      <span>{r.categories.reduce((sum, cat) => sum + cat.items.length, 0)} Dishes</span>
-                      <span>•</span>
-                      <span>{r.rating} ★ ({r.ratingCount || 120})</span>
-                      <span>•</span>
-                      <span style={{ color: 'var(--color-primary)', fontWeight: 800 }}>Manage Menu & Store ➔</span>
+                    <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', margin: '4px 0 0' }}>
+                      Verify regulatory documents (Business PAN, FSSAI License, GSTIN, Settlement Bank Proof) and provision active store terminals.
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    {/* Realtime Active Pill */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '4px 10px',
+                        borderRadius: 'var(--radius-full)',
+                        backgroundColor: 'rgba(46, 204, 113, 0.12)',
+                        border: '1px solid rgba(46, 204, 113, 0.3)',
+                        color: 'var(--color-veg)',
+                        fontSize: '11px',
+                        fontWeight: 700
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: '6px',
+                          height: '6px',
+                          borderRadius: '50%',
+                          backgroundColor: 'var(--color-veg)',
+                          boxShadow: '0 0 6px var(--color-veg)'
+                        }}
+                      />
+                      <span>Realtime Active</span>
                     </div>
+
+                    {/* Manual Refresh Button */}
+                    <button
+                      onClick={async () => {
+                        setIsRefreshingApps(true);
+                        await refreshAllApplications();
+                        setTimeout(() => setIsRefreshingApps(false), 500);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '7px 14px',
+                        borderRadius: 'var(--radius-sm)',
+                        backgroundColor: 'var(--color-surface)',
+                        border: '1.5px solid var(--color-border)',
+                        color: 'var(--color-text-main)',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <RefreshCw size={13} className={isRefreshingApps || isAppsLoading ? 'animate-spin' : ''} />
+                      <span>Refresh Applications</span>
+                    </button>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
+
+                {/* Filter Tabs */}
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', overflowX: 'auto', paddingBottom: '4px' }}>
+                  {[
+                    { id: 'all', label: `All (${allRestaurantApplications.length})` },
+                    {
+                      id: 'pending',
+                      label: `Pending (${allRestaurantApplications.filter(a => a.status === 'submitted' || a.status === 'under_review').length})`
+                    },
+                    {
+                      id: 'action_required',
+                      label: `Action Required (${allRestaurantApplications.filter(a => a.status === 'action_required').length})`
+                    },
+                    {
+                      id: 'approved',
+                      label: `Approved (${allRestaurantApplications.filter(a => a.status === 'approved').length})`
+                    },
+                    {
+                      id: 'rejected',
+                      label: `Rejected (${allRestaurantApplications.filter(a => a.status === 'rejected').length})`
+                    }
+                  ].map((f) => (
+                    <button
+                      key={f.id}
+                      onClick={() => setRestaurantAppFilter(f.id as any)}
+                      style={{
+                        padding: '7px 14px',
+                        borderRadius: 'var(--radius-sm)',
+                        backgroundColor: restaurantAppFilter === f.id ? 'var(--color-primary)' : 'var(--color-surface)',
+                        color: restaurantAppFilter === f.id ? '#FFFFFF' : 'var(--color-text-main)',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        border: restaurantAppFilter === f.id ? '1.5px solid var(--color-primary)' : '1.5px solid var(--color-border)',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        boxShadow: restaurantAppFilter === f.id ? 'var(--shadow-glow)' : 'none',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Loading State */}
+                {isAppsLoading && (
+                  <div
+                    style={{
+                      padding: '48px 24px',
+                      textAlign: 'center',
+                      backgroundColor: 'var(--color-surface)',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1.5px dashed var(--color-border)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '12px'
+                    }}
+                  >
+                    <RefreshCw size={28} className="animate-spin" color="var(--color-primary)" />
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-text-main)' }}>
+                      Loading restaurant partner applications...
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                      Querying database and verifying regulatory KYC documents.
+                    </div>
+                  </div>
+                )}
+
+                {/* Error Banner with Retry */}
+                {!isAppsLoading && appsError && (
+                  <div
+                    style={{
+                      padding: '16px 20px',
+                      backgroundColor: 'rgba(231, 76, 60, 0.08)',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1.5px solid var(--color-nonveg)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '16px',
+                      flexWrap: 'wrap',
+                      marginBottom: '16px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <AlertTriangle size={22} color="var(--color-nonveg)" />
+                      <div>
+                        <div style={{ fontSize: '14px', fontWeight: 800, color: 'var(--color-nonveg)' }}>
+                          Unable to fetch restaurant applications
+                        </div>
+                        <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+                          {appsError}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => fetchAdminRestaurantApplications()}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '8px 16px',
+                        borderRadius: 'var(--radius-sm)',
+                        backgroundColor: 'var(--color-nonveg)',
+                        color: '#FFFFFF',
+                        fontWeight: 700,
+                        fontSize: '12px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <RotateCcw size={14} />
+                      <span>Retry</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Applications List or Empty States */}
+                {!isAppsLoading && !appsError && allRestaurantApplications.length === 0 && (
+                  <div
+                    data-testid="empty-restaurant-applications"
+                    style={{
+                      padding: '56px 24px',
+                      textAlign: 'center',
+                      backgroundColor: 'var(--color-surface)',
+                      borderRadius: 'var(--radius-lg)',
+                      border: '1.5px dashed var(--color-border)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      maxWidth: '620px',
+                      margin: '16px auto'
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '64px',
+                        height: '64px',
+                        borderRadius: '50%',
+                        backgroundColor: 'var(--color-primary-light)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginBottom: '16px',
+                        color: 'var(--color-primary)'
+                      }}
+                    >
+                      <Store size={32} />
+                    </div>
+                    <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--color-text-main)', marginBottom: '8px' }}>
+                      No restaurant applications received yet.
+                    </h3>
+                    <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', lineHeight: '1.6', maxWidth: '460px', margin: '0 0 20px' }}>
+                      Submitted restaurant partner applications and compliance documents from the onboarding wizard will appear here in real time.
+                    </p>
+                    <div
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px 16px',
+                        borderRadius: 'var(--radius-full)',
+                        backgroundColor: 'var(--color-surface-muted)',
+                        border: '1px solid var(--color-border)',
+                        fontSize: '12px',
+                        color: 'var(--color-text-muted)'
+                      }}
+                    >
+                      <Activity size={14} color="var(--color-veg)" />
+                      <span>Listening for incoming partner applications on realtime sync channel</span>
+                    </div>
+                  </div>
+                )}
+
+                {!isAppsLoading && !appsError && allRestaurantApplications.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {allRestaurantApplications
+                      .filter((app) => {
+                        if (restaurantAppFilter === 'all') return true;
+                        if (restaurantAppFilter === 'pending') return app.status === 'submitted' || app.status === 'under_review';
+                        return app.status === restaurantAppFilter;
+                      }).length === 0 ? (
+                        <div
+                          style={{
+                            padding: '36px 20px',
+                            textAlign: 'center',
+                            backgroundColor: 'var(--color-surface)',
+                            borderRadius: 'var(--radius-md)',
+                            border: '1px dashed var(--color-border)',
+                            color: 'var(--color-text-muted)'
+                          }}
+                        >
+                          <div style={{ fontSize: '13px', fontWeight: 600 }}>
+                            No restaurant applications found with status &ldquo;{restaurantAppFilter}&rdquo;.
+                          </div>
+                        </div>
+                      ) : (
+                        allRestaurantApplications
+                          .filter((app) => {
+                            if (restaurantAppFilter === 'all') return true;
+                            if (restaurantAppFilter === 'pending') return app.status === 'submitted' || app.status === 'under_review';
+                            return app.status === restaurantAppFilter;
+                          })
+                          .map((app) => {
+                        const isPending = app.status === 'submitted' || app.status === 'under_review';
+                        const isActionRequired = app.status === 'action_required';
+                        const isApproved = app.status === 'approved';
+                        const isRejected = app.status === 'rejected';
+
+                        // Document presence checks
+                        const hasPan = Boolean(app.documents?.panDoc);
+                        const hasFssai = Boolean(app.documents?.fssaiDoc);
+                        const hasBank = Boolean(app.documents?.chequeDoc);
+                        const isFssaiExpired = Boolean(app.fssaiExpiryDate && new Date(app.fssaiExpiryDate).getTime() < Date.now());
+                        const hasRejectedDoc =
+                          app.documentStatuses?.panDoc === 'rejected' ||
+                          app.documentStatuses?.fssaiDoc === 'rejected' ||
+                          app.documentStatuses?.chequeDoc === 'rejected' ||
+                          (app.hasGst && app.documentStatuses?.gstDoc === 'rejected');
+
+                        const blockerReasons: string[] = [];
+                        if (!hasPan) blockerReasons.push('Business PAN Card missing');
+                        if (!hasFssai) blockerReasons.push('FSSAI License document missing');
+                        if (!hasBank) blockerReasons.push('Bank Proof / Cancelled Cheque missing');
+                        if (isFssaiExpired) blockerReasons.push(`FSSAI License expired on ${app.fssaiExpiryDate}`);
+                        if (app.documentStatuses?.panDoc === 'rejected') blockerReasons.push('Business PAN marked as rejected');
+                        if (app.documentStatuses?.fssaiDoc === 'rejected') blockerReasons.push('FSSAI License marked as rejected');
+                        if (app.documentStatuses?.chequeDoc === 'rejected') blockerReasons.push('Bank Proof marked as rejected');
+                        if (app.hasGst && app.documentStatuses?.gstDoc === 'rejected') blockerReasons.push('GST Certificate marked as rejected');
+
+                        const isApprovalBlocked = blockerReasons.length > 0;
+
+                        return (
+                          <div
+                            key={app.id}
+                            style={{
+                              borderRadius: 'var(--radius-md)',
+                              border: isPending
+                                ? '2px solid rgba(243, 156, 18, 0.5)'
+                                : '1px solid var(--color-border)',
+                              backgroundColor: isPending ? 'rgba(243, 156, 18, 0.03)' : 'var(--color-surface-muted)',
+                              padding: '18px',
+                              boxShadow: isPending ? '0 0 12px rgba(243, 156, 18, 0.15)' : 'none'
+                            }}
+                          >
+                            {/* Top Bar: Restaurant & Owner Details */}
+                            <div
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'flex-start',
+                                flexWrap: 'wrap',
+                                gap: '12px',
+                                borderBottom: '1px solid var(--color-border)',
+                                paddingBottom: '14px',
+                                marginBottom: '14px'
+                              }}
+                            >
+                              <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+                                <div
+                                  style={{
+                                    width: '54px',
+                                    height: '54px',
+                                    borderRadius: '12px',
+                                    overflow: 'hidden',
+                                    backgroundColor: 'var(--color-surface)',
+                                    border: '2px solid var(--color-primary)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: 'var(--color-primary)',
+                                    fontWeight: 900,
+                                    fontSize: '20px',
+                                    flexShrink: 0
+                                  }}
+                                >
+                                  {app.logoUrl ? (
+                                    <img src={app.logoUrl} alt={app.restaurantName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  ) : (
+                                    app.restaurantName.charAt(0).toUpperCase()
+                                  )}
+                                </div>
+                                <div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                    <h4 style={{ fontSize: '16px', fontWeight: 800, margin: 0 }}>{app.restaurantName}</h4>
+                                    <span
+                                      style={{
+                                        fontSize: '10px',
+                                        fontFamily: 'monospace',
+                                        padding: '2px 6px',
+                                        borderRadius: '4px',
+                                        backgroundColor: 'rgba(255,255,255,0.08)',
+                                        color: 'var(--color-primary)',
+                                        fontWeight: 700
+                                      }}
+                                    >
+                                      {app.applicationRef || app.id}
+                                    </span>
+                                    <span
+                                      style={{
+                                        fontSize: '10px',
+                                        fontWeight: 700,
+                                        padding: '2px 8px',
+                                        borderRadius: '4px',
+                                        backgroundColor: 'rgba(255, 255, 255, 0.06)',
+                                        color: 'var(--color-text-muted)'
+                                      }}
+                                    >
+                                      {app.restaurantType || 'Dine-In & Delivery'}
+                                    </span>
+                                  </div>
+
+                                  <div
+                                    style={{
+                                      display: 'flex',
+                                      flexWrap: 'wrap',
+                                      gap: '10px',
+                                      fontSize: '11px',
+                                      color: 'var(--color-text-muted)',
+                                      marginTop: '5px'
+                                    }}
+                                  >
+                                    <span>👤 Owner: <strong>{app.ownerName || app.managerName || 'Partner'}</strong></span>
+                                    <span>📞 <strong>{app.phone}</strong></span>
+                                    {app.email && <span>✉️ {app.email}</span>}
+                                    <span>🏙️ <strong>{app.city}</strong>{app.state ? `, ${app.state}` : ''} {app.pincode ? `- ${app.pincode}` : ''}</span>
+                                    <span>⏰ {app.openingTime || '10:00 AM'} - {app.closingTime || '11:00 PM'}</span>
+                                    {app.cuisines && app.cuisines.length > 0 && (
+                                      <span>🍽️ <strong>{app.cuisines.join(', ')}</strong></span>
+                                    )}
+                                  </div>
+
+                                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '3px' }}>
+                                    📍 <em>{app.address || `${app.city}, ${app.state || ''}`}</em> {app.landmark ? `(Near ${app.landmark})` : ''} • Submitted: {app.submittedAt ? new Date(app.submittedAt).toLocaleString() : 'Recent'}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Application Status Badge */}
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+                                <span
+                                  style={{
+                                    fontSize: '11px',
+                                    fontWeight: 800,
+                                    padding: '5px 12px',
+                                    borderRadius: 'var(--radius-full)',
+                                    backgroundColor: isPending
+                                      ? 'rgba(243, 156, 18, 0.2)'
+                                      : isApproved
+                                      ? 'var(--color-veg-bg)'
+                                      : isActionRequired
+                                      ? 'rgba(245, 158, 11, 0.2)'
+                                      : 'rgba(231, 76, 60, 0.15)',
+                                    color: isPending
+                                      ? '#F39C12'
+                                      : isApproved
+                                      ? 'var(--color-veg)'
+                                      : isActionRequired
+                                      ? '#F59E0B'
+                                      : '#E74C3C',
+                                    border: `1px solid ${
+                                      isPending
+                                        ? 'rgba(243, 156, 18, 0.4)'
+                                        : isApproved
+                                        ? 'rgba(46, 204, 113, 0.4)'
+                                        : isActionRequired
+                                        ? 'rgba(245, 158, 11, 0.4)'
+                                        : 'rgba(231, 76, 60, 0.4)'
+                                    }`
+                                  }}
+                                >
+                                  {isPending
+                                    ? '⏳ PENDING COMPLIANCE REVIEW'
+                                    : isApproved
+                                    ? '✓ APPROVED & STORE ACTIVATED'
+                                    : isActionRequired
+                                    ? '⚠️ ACTION REQUIRED (RESUBMISSION)'
+                                    : '✕ APPLICATION REJECTED'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Middle: Regulatory Documents Verification Grid (4 Document Slots) */}
+                            <div style={{ marginBottom: '16px' }}>
+                              <div style={{ fontSize: '12px', fontWeight: 800, marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <FileText size={14} color="var(--color-primary)" />
+                                  <span>Submitted Regulatory & Compliance Documents (4 Verification Slots)</span>
+                                </div>
+                                {isFssaiExpired && (
+                                  <span style={{ fontSize: '11px', color: '#EF4444', fontWeight: 800, backgroundColor: 'rgba(239, 68, 68, 0.15)', padding: '2px 8px', borderRadius: '4px' }}>
+                                    ⚠️ FSSAI License Expired
+                                  </span>
+                                )}
+                              </div>
+
+                              <div
+                                style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+                                  gap: '12px'
+                                }}
+                              >
+                                {[
+                                  {
+                                    key: 'panDoc' as const,
+                                    title: 'Business PAN Card',
+                                    docName: app.documents?.panDocName || 'Business PAN',
+                                    url: app.documents?.panDoc,
+                                    status: app.documentStatuses?.panDoc,
+                                    extra: maskPan(app.panNumberMasked || app.panNumber) || 'Masked for Security',
+                                    isRequired: true
+                                  },
+                                  {
+                                    key: 'fssaiDoc' as const,
+                                    title: 'FSSAI License',
+                                    docName: app.documents?.fssaiDocName || 'FSSAI Certificate',
+                                    url: app.documents?.fssaiDoc,
+                                    status: app.documentStatuses?.fssaiDoc,
+                                    extra: app.fssaiLicenseNumber || app.fssaiNumber ? `Lic: ${app.fssaiLicenseNumber || app.fssaiNumber}` : 'Pending validation',
+                                    expiryDate: app.fssaiExpiryDate,
+                                    isExpired: isFssaiExpired,
+                                    isRequired: true
+                                  },
+                                  {
+                                    key: 'gstDoc' as const,
+                                    title: 'GST Certificate',
+                                    docName: app.documents?.gstDocName || 'GSTIN Certificate',
+                                    url: app.documents?.gstDoc,
+                                    status: app.documentStatuses?.gstDoc,
+                                    extra: app.hasGst || app.gstRegistered ? (app.gstin ? `GSTIN: ${app.gstin}` : 'Registered') : 'Unregistered / Exempt',
+                                    isRequired: Boolean(app.hasGst || app.gstRegistered)
+                                  },
+                                  {
+                                    key: 'chequeDoc' as const,
+                                    title: 'Bank Proof / Cheque',
+                                    docName: app.documents?.chequeDocName || 'Cancelled Cheque',
+                                    url: app.documents?.chequeDoc,
+                                    status: app.documentStatuses?.chequeDoc,
+                                    extra: app.bankName ? `${app.bankName} (${app.bankAccountNumberMasked || 'Masked'})` : 'Settlement Account',
+                                    isRequired: true
+                                  },
+                                  {
+                                    key: 'aadhaarFront' as const,
+                                    title: 'Aadhaar Card (Front) *',
+                                    docName: 'Aadhaar Front',
+                                    url: app.documents?.aadhaarFront || (app as any).partnerKycDocuments?.aadhaarFront,
+                                    status: (app.documentStatuses as any)?.aadhaarFront,
+                                    extra: 'Owner Photo & Date of Birth',
+                                    isRequired: true
+                                  },
+                                  {
+                                    key: 'aadhaarBack' as const,
+                                    title: 'Aadhaar Card (Back) *',
+                                    docName: 'Aadhaar Back',
+                                    url: app.documents?.aadhaarBack || (app as any).partnerKycDocuments?.aadhaarBack,
+                                    status: (app.documentStatuses as any)?.aadhaarBack,
+                                    extra: 'Residential Address & QR Code',
+                                    isRequired: true
+                                  },
+                                  {
+                                    key: 'personalPanFront' as const,
+                                    title: 'Personal PAN (Front) *',
+                                    docName: 'Personal PAN Front',
+                                    url: app.documents?.personalPanFront || (app as any).partnerKycDocuments?.personalPanFront,
+                                    status: (app.documentStatuses as any)?.personalPanFront,
+                                    extra: 'Owner PAN & Signature',
+                                    isRequired: true
+                                  },
+                                  {
+                                    key: 'personalPanBack' as const,
+                                    title: 'Personal PAN (Back) *',
+                                    docName: 'Personal PAN Back',
+                                    url: app.documents?.personalPanBack || (app as any).partnerKycDocuments?.personalPanBack,
+                                    status: (app.documentStatuses as any)?.personalPanBack,
+                                    extra: 'Official Issuance & Security',
+                                    isRequired: true
+                                  }
+                                ].map((doc) => {
+                                  const isExempt = !doc.isRequired;
+                                  const docStatus = isExempt
+                                    ? 'Not Required'
+                                    : doc.isExpired
+                                    ? 'Expired'
+                                    : doc.status === 'verified'
+                                    ? 'Verified'
+                                    : doc.status === 'rejected'
+                                    ? 'Rejected'
+                                    : doc.url
+                                    ? 'Uploaded'
+                                    : 'Missing';
+
+                                  return (
+                                    <div
+                                      key={doc.key}
+                                      style={{
+                                        backgroundColor: 'var(--color-surface)',
+                                        borderRadius: 'var(--radius-sm)',
+                                        border: `1px solid ${
+                                          docStatus === 'Expired' || docStatus === 'Rejected'
+                                            ? 'rgba(239, 68, 68, 0.4)'
+                                            : docStatus === 'Verified'
+                                            ? 'rgba(46, 204, 113, 0.4)'
+                                            : 'var(--color-border)'
+                                        }`,
+                                        padding: '10px',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: '6px'
+                                      }}
+                                    >
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--color-text-main)' }}>{doc.title}</span>
+                                        <span
+                                          style={{
+                                            fontSize: '9px',
+                                            fontWeight: 800,
+                                            padding: '2px 6px',
+                                            borderRadius: '4px',
+                                            backgroundColor:
+                                              docStatus === 'Verified'
+                                                ? 'var(--color-veg-bg)'
+                                                : docStatus === 'Rejected' || docStatus === 'Expired'
+                                                ? 'rgba(239, 68, 68, 0.15)'
+                                                : docStatus === 'Not Required'
+                                                ? 'rgba(255, 255, 255, 0.08)'
+                                                : 'rgba(243, 156, 18, 0.15)',
+                                            color:
+                                              docStatus === 'Verified'
+                                                ? 'var(--color-veg)'
+                                                : docStatus === 'Rejected' || docStatus === 'Expired'
+                                                ? '#EF4444'
+                                                : docStatus === 'Not Required'
+                                                ? '#9CA3AF'
+                                                : '#F39C12'
+                                          }}
+                                        >
+                                          {docStatus === 'Verified' && '✓ Verified'}
+                                          {docStatus === 'Rejected' && '✕ Rejected'}
+                                          {docStatus === 'Expired' && '⚠️ Expired'}
+                                          {docStatus === 'Uploaded' && 'Uploaded'}
+                                          {docStatus === 'Missing' && 'Missing'}
+                                          {docStatus === 'Not Required' && 'Not Required'}
+                                        </span>
+                                      </div>
+
+                                      <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
+                                        {doc.extra}
+                                        {doc.expiryDate && (
+                                          <div style={{ color: doc.isExpired ? '#EF4444' : 'var(--color-text-muted)' }}>
+                                            Exp: {doc.expiryDate}
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      {/* Preview box */}
+                                      <div
+                                        style={{
+                                          height: '75px',
+                                          borderRadius: '6px',
+                                          overflow: 'hidden',
+                                          backgroundColor: 'rgba(0,0,0,0.3)',
+                                          position: 'relative',
+                                          cursor: doc.url ? 'pointer' : 'default',
+                                          border: '1px solid rgba(255,255,255,0.06)'
+                                        }}
+                                        onClick={() => {
+                                          if (doc.url) handlePreviewDoc(`${app.restaurantName} - ${doc.title}`, doc.url, 'partner-kyc-documents');
+                                        }}
+                                      >
+                                        {isExempt ? (
+                                          <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.03)', color: '#9CA3AF' }}>
+                                            <ShieldCheck size={20} />
+                                            <span style={{ fontSize: '9px', fontWeight: 700, marginTop: '2px' }}>Exempted</span>
+                                          </div>
+                                        ) : doc.url ? (
+                                          doc.url.startsWith('data:image/') || doc.url.startsWith('http') ? (
+                                            <>
+                                              <img src={doc.url} alt={doc.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                              <div
+                                                style={{
+                                                  position: 'absolute',
+                                                  inset: 0,
+                                                  backgroundColor: 'rgba(0,0,0,0.35)',
+                                                  opacity: 0,
+                                                  transition: 'opacity 0.2s',
+                                                  display: 'flex',
+                                                  alignItems: 'center',
+                                                  justifyContent: 'center',
+                                                  color: '#FFFFFF'
+                                                }}
+                                                onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                                                onMouseLeave={(e) => (e.currentTarget.style.opacity = '0')}
+                                              >
+                                                <Eye size={18} />
+                                              </div>
+                                            </>
+                                          ) : (
+                                            <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#60A5FA', gap: '4px' }}>
+                                              <FileText size={22} />
+                                              <span style={{ fontSize: '9px', fontWeight: 700 }}>Inspect Document</span>
+                                            </div>
+                                          )
+                                        ) : (
+                                          <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#EF4444', fontSize: '10px', fontWeight: 700 }}>
+                                            Document Missing
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      {/* Slot Document Controls */}
+                                      <div style={{ display: 'flex', gap: '4px', marginTop: '2px' }}>
+                                        {doc.url && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleDownloadDoc(doc.url, `${app.restaurantName}_${doc.key}.pdf`, 'partner-kyc-documents');
+                                            }}
+                                            title="Download Document"
+                                            style={{
+                                              padding: '4px 8px',
+                                              borderRadius: '4px',
+                                              backgroundColor: 'var(--color-surface)',
+                                              color: 'var(--color-text-main)',
+                                              border: '1px solid var(--color-border)',
+                                              fontSize: '10px',
+                                              cursor: 'pointer',
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              justifyContent: 'center'
+                                            }}
+                                          >
+                                            <Download size={11} />
+                                          </button>
+                                        )}
+                                        {doc.url && !isExempt && (
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={async (e) => {
+                                                e.stopPropagation();
+                                                await verifyRestaurantDocument(app.id, doc.key, 'verified');
+                                              }}
+                                              style={{
+                                                flex: 1,
+                                                padding: '4px',
+                                                borderRadius: '4px',
+                                                backgroundColor: doc.status === 'verified' ? 'var(--color-veg)' : 'rgba(46, 204, 113, 0.15)',
+                                                color: doc.status === 'verified' ? '#FFFFFF' : 'var(--color-veg)',
+                                                border: '1px solid rgba(46, 204, 113, 0.3)',
+                                                fontSize: '10px',
+                                                fontWeight: 700,
+                                                cursor: 'pointer'
+                                              }}
+                                            >
+                                              ✓ Verify
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={async (e) => {
+                                                e.stopPropagation();
+                                                const reason = window.prompt(`Enter mandatory rejection reason for ${doc.title}:`);
+                                                if (reason === null) return;
+                                                if (!reason.trim()) {
+                                                  alert('A rejection reason is mandatory to reject this document.');
+                                                  return;
+                                                }
+                                                await verifyRestaurantDocument(app.id, doc.key, 'rejected', reason.trim());
+                                              }}
+                                              style={{
+                                                flex: 1,
+                                                padding: '4px',
+                                                borderRadius: '4px',
+                                                backgroundColor: doc.status === 'rejected' ? '#EF4444' : 'rgba(239, 68, 68, 0.15)',
+                                                color: doc.status === 'rejected' ? '#FFFFFF' : '#EF4444',
+                                                border: '1px solid rgba(239, 68, 68, 0.3)',
+                                                fontSize: '10px',
+                                                fontWeight: 700,
+                                                cursor: 'pointer'
+                                              }}
+                                            >
+                                              ✕ Reject
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Financial & Banking Information Strip */}
+                            <div
+                              style={{
+                                backgroundColor: 'rgba(255,255,255,0.03)',
+                                borderRadius: 'var(--radius-sm)',
+                                border: '1px dashed var(--color-border)',
+                                padding: '12px 14px',
+                                marginBottom: '14px',
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                                gap: '10px',
+                                fontSize: '11px'
+                              }}
+                            >
+                              <div>
+                                <span style={{ color: 'var(--color-text-muted)' }}>Legal Entity:</span>{' '}
+                                <strong>{app.legalBusinessName || app.legalEntityName || app.restaurantName}</strong>
+                              </div>
+                              <div>
+                                <span style={{ color: 'var(--color-text-muted)' }}>Business Type:</span>{' '}
+                                <strong>{app.businessType || 'Sole Proprietorship'}</strong>
+                              </div>
+                              <div>
+                                <span style={{ color: 'var(--color-text-muted)' }}>Masked PAN:</span>{' '}
+                                <strong style={{ fontFamily: 'monospace' }}>{maskPan(app.panNumberMasked || app.panNumber) || 'N/A'}</strong>
+                              </div>
+                              <div>
+                                <span style={{ color: 'var(--color-text-muted)' }}>Settlement Bank:</span>{' '}
+                                <strong>{app.bankName || app.bankDetails?.bankName || 'HDFC Bank'}</strong>
+                              </div>
+                              <div>
+                                <span style={{ color: 'var(--color-text-muted)' }}>Account No:</span>{' '}
+                                <strong style={{ fontFamily: 'monospace' }}>{app.bankAccountNumberMasked || app.bankDetails?.accountNumber || '••••5821'}</strong>
+                              </div>
+                              <div>
+                                <span style={{ color: 'var(--color-text-muted)' }}>IFSC Code:</span>{' '}
+                                <strong style={{ fontFamily: 'monospace' }}>{app.bankIfscCode || app.bankDetails?.ifscCode || 'HDFC0001234'}</strong>
+                              </div>
+                              <div>
+                                <span style={{ color: 'var(--color-text-muted)' }}>Payout Schedule:</span>{' '}
+                                <strong style={{ color: 'var(--color-veg)' }}>{app.payoutFrequency ? app.payoutFrequency.toUpperCase() : 'WEEKLY'}</strong>
+                              </div>
+                            </div>
+
+                            {/* Approval Blocker Notice */}
+                            {isApprovalBlocked && !isApproved && (
+                              <div
+                                style={{
+                                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                                  color: '#EF4444',
+                                  borderRadius: 'var(--radius-sm)',
+                                  padding: '10px 14px',
+                                  marginBottom: '14px',
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px'
+                                }}
+                              >
+                                <AlertTriangle size={16} />
+                                <div>
+                                  <span>Approval Blocked: </span>
+                                  <span style={{ fontWeight: 600 }}>{blockerReasons.join(' • ')}</span>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Action Decision Controls */}
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                              <button
+                                type="button"
+                                onClick={() => setInspectedRestaurantApp(app)}
+                                style={{
+                                  padding: '8px 14px',
+                                  borderRadius: 'var(--radius-sm)',
+                                  backgroundColor: 'var(--color-surface)',
+                                  color: 'var(--color-text-main)',
+                                  border: '1.5px solid var(--color-border)',
+                                  fontSize: '12px',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '5px'
+                                }}
+                              >
+                                <Eye size={13} />
+                                <span>Inspect Full Application</span>
+                              </button>
+
+                              {!isApproved && (
+                                <button
+                                  type="button"
+                                  disabled={isApprovalBlocked}
+                                  title={isApprovalBlocked ? `Approval blocked: ${blockerReasons.join(', ')}` : 'Approve application and activate restaurant'}
+                                  onClick={async () => {
+                                    if (isApprovalBlocked) return;
+                                    const res = await approveRestaurantApplication(app.id);
+                                    if (res.success) {
+                                      setRestSuccessMsg(`Application for ${app.restaurantName} approved! Restaurant is now onboarded.`);
+                                    } else {
+                                      alert(res.error || 'Failed to approve restaurant application.');
+                                    }
+                                  }}
+                                  style={{
+                                    padding: '9px 18px',
+                                    borderRadius: 'var(--radius-sm)',
+                                    backgroundColor: isApprovalBlocked ? 'rgba(255,255,255,0.08)' : 'var(--color-veg)',
+                                    color: isApprovalBlocked ? '#6B7280' : '#FFFFFF',
+                                    fontSize: '12px',
+                                    fontWeight: 800,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    boxShadow: isApprovalBlocked ? 'none' : 'var(--shadow-sm)',
+                                    cursor: isApprovalBlocked ? 'not-allowed' : 'pointer',
+                                    border: 'none',
+                                    opacity: isApprovalBlocked ? 0.6 : 1
+                                  }}
+                                >
+                                  <CheckCircle2 size={15} />
+                                  <span>Approve Partner & Activate Store</span>
+                                </button>
+                              )}
+
+                              {!isRejected && !isApproved && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setResubmitRestModalAppId(app.id);
+                                      setResubmitRestReasonText('Uploaded regulatory documents are unclear or FSSAI validity could not be validated. Please re-upload clear certificates.');
+                                    }}
+                                    style={{
+                                      padding: '8px 14px',
+                                      borderRadius: 'var(--radius-sm)',
+                                      backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                                      color: '#F59E0B',
+                                      border: '1px solid rgba(245, 158, 11, 0.4)',
+                                      fontSize: '12px',
+                                      fontWeight: 700,
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '5px'
+                                    }}
+                                  >
+                                    <RotateCcw size={13} />
+                                    <span>Request Resubmission</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setRejectRestModalAppId(app.id);
+                                      setRejectRestReasonText('Ineligible business licenses or invalid statutory registrations.');
+                                    }}
+                                    style={{
+                                      padding: '8px 14px',
+                                      borderRadius: 'var(--radius-sm)',
+                                      backgroundColor: 'rgba(231, 76, 60, 0.15)',
+                                      color: '#E74C3C',
+                                      border: '1px solid rgba(231, 76, 60, 0.4)',
+                                      fontSize: '12px',
+                                      fontWeight: 700,
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '5px'
+                                    }}
+                                  >
+                                    <span>Reject Application</span>
+                                  </button>
+                                </>
+                              )}
+
+                              {isApproved && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-veg)', fontSize: '12px', fontWeight: 800 }}>
+                                  <CheckCircle2 size={16} />
+                                  <span>Restaurant Approved • Store Active on Platform</span>
+                                </div>
+                              )}
+
+                              {isActionRequired && (
+                                <div style={{ color: '#F59E0B', fontSize: '12px', fontWeight: 700 }}>
+                                  Resubmission Requested: {app.rejectionReason}
+                                </div>
+                              )}
+
+                              {isRejected && (
+                                <div style={{ color: '#E74C3C', fontSize: '12px', fontWeight: 700 }}>
+                                  Rejection Reason: {app.rejectionReason}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+        </div>
+      )}
 
         {/* Tab 4: Coupons CMS */}
         {activeTab === 'coupons' && (
@@ -895,6 +2101,56 @@ export const AdminApp: React.FC = () => {
                   >
                     ✓ {allRiderApplications.filter((a) => a.status === 'approved').length} Active Fleet
                   </span>
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '4px 10px',
+                      borderRadius: 'var(--radius-full)',
+                      backgroundColor: 'rgba(46, 204, 113, 0.12)',
+                      border: '1px solid rgba(46, 204, 113, 0.3)',
+                      color: 'var(--color-veg)',
+                      fontSize: '11px',
+                      fontWeight: 700
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: '6px',
+                        height: '6px',
+                        borderRadius: '50%',
+                        backgroundColor: 'var(--color-veg)',
+                        boxShadow: '0 0 6px var(--color-veg)'
+                      }}
+                    />
+                    <span>Realtime Active</span>
+                  </div>
+
+                  <button
+                    onClick={async () => {
+                      setIsRefreshingApps(true);
+                      await refreshAllApplications();
+                      setTimeout(() => setIsRefreshingApps(false), 500);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '5px 12px',
+                      borderRadius: 'var(--radius-sm)',
+                      backgroundColor: 'var(--color-surface-muted)',
+                      border: '1px solid var(--color-border)',
+                      color: '#FFFFFF',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <RefreshCw size={12} className={isRefreshingApps ? 'animate-spin' : ''} />
+                    <span>Sync Applications</span>
+                  </button>
                 </div>
               </div>
 
@@ -1128,7 +2384,7 @@ export const AdminApp: React.FC = () => {
                                   cursor: doc.url ? 'pointer' : 'default'
                                 }}
                                 onClick={() => {
-                                  if (doc.url) setSelectedDocPreview({ title: `${app.fullName} - ${doc.title}`, url: doc.url });
+                                  if (doc.url) handlePreviewDoc(`${app.fullName} - ${doc.title}`, doc.url, 'rider-kyc-documents');
                                 }}
                               >
                                 {doc.isExempt ? (
@@ -1322,6 +2578,249 @@ export const AdminApp: React.FC = () => {
                     </div>
                   );
                 })}
+              </div>
+            </div>
+
+            {/* RIDER TIER SYSTEM & COMPLIANCE OPERATIONS */}
+            <div
+              style={{
+                backgroundColor: 'var(--color-surface)',
+                borderRadius: 'var(--radius-lg)',
+                padding: '20px',
+                border: '1px solid var(--color-border)',
+                marginBottom: '24px',
+                boxShadow: 'var(--shadow-sm)'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '8px',
+                      backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                      color: '#F59E0B',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <Award size={20} />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: '17px', fontWeight: 800 }}>
+                      Delivery Rider Tier & Compliance Engine
+                    </h3>
+                    <p style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                      Manage Bronze, Silver & Gold performance tiers, duty selfie audit logs, and tier payout incentives.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      padding: '4px 10px',
+                      borderRadius: 'var(--radius-full)',
+                      backgroundColor: 'rgba(205, 127, 50, 0.15)',
+                      color: '#E09A55',
+                      fontWeight: 800,
+                      border: '1px solid rgba(205, 127, 50, 0.3)'
+                    }}
+                  >
+                    🥉 Bronze: 1 Active
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      padding: '4px 10px',
+                      borderRadius: 'var(--radius-full)',
+                      backgroundColor: 'rgba(192, 192, 192, 0.15)',
+                      color: '#E5E7EB',
+                      fontWeight: 800,
+                      border: '1px solid rgba(192, 192, 192, 0.3)'
+                    }}
+                  >
+                    🥈 Silver: 2 Active
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      padding: '4px 10px',
+                      borderRadius: 'var(--radius-full)',
+                      backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                      color: '#FBBF24',
+                      fontWeight: 800,
+                      border: '1px solid rgba(245, 158, 11, 0.4)'
+                    }}
+                  >
+                    🥇 Gold: 2 Active
+                  </span>
+                </div>
+              </div>
+
+              {/* 3 Tier Configuration Cards Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px', marginBottom: '20px' }}>
+                {/* Bronze Card */}
+                <div style={{ backgroundColor: 'rgba(205, 127, 50, 0.06)', borderRadius: '12px', border: '1px solid rgba(205, 127, 50, 0.25)', padding: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '18px' }}>🥉</span>
+                      <strong style={{ fontSize: '14px', color: '#E09A55' }}>BRONZE TIER</strong>
+                    </div>
+                    <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', backgroundColor: 'rgba(205, 127, 50, 0.2)', color: '#E09A55' }}>
+                      Default Entry
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div>Criteria: <strong>0h • 0 orders • Default</strong></div>
+                    <div>Payout: <strong>₹40 Base + ₹12/km + ₹10 Surge (1.00x)</strong></div>
+                    <div>Tier Incentive: <strong>₹0 / order</strong></div>
+                    <div>Selfie Policy: <strong>Random every 1-2h / order-linked</strong></div>
+                  </div>
+                </div>
+
+                {/* Silver Card */}
+                <div style={{ backgroundColor: 'rgba(192, 192, 192, 0.06)', borderRadius: '12px', border: '1px solid rgba(192, 192, 192, 0.25)', padding: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '18px' }}>🥈</span>
+                      <strong style={{ fontSize: '14px', color: '#E5E7EB' }}>SILVER TIER</strong>
+                    </div>
+                    <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', backgroundColor: 'rgba(192, 192, 192, 0.2)', color: '#E5E7EB' }}>
+                      +1.05x Multiplier
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div>Criteria: <strong>50h • 100 orders • 4.6★ Rating</strong></div>
+                    <div>Payout: <strong>₹45 Base + ₹14/km + ₹15 Surge (1.05x)</strong></div>
+                    <div>Tier Incentive: <strong>+₹15 / order</strong></div>
+                    <div>Selfie Policy: <strong>Periodic every 4 hours</strong></div>
+                  </div>
+                </div>
+
+                {/* Gold Card */}
+                <div style={{ backgroundColor: 'rgba(245, 158, 11, 0.06)', borderRadius: '12px', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '18px' }}>🥇</span>
+                      <strong style={{ fontSize: '14px', color: '#FBBF24' }}>GOLD TIER</strong>
+                    </div>
+                    <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', backgroundColor: 'rgba(245, 158, 11, 0.2)', color: '#FBBF24' }}>
+                      +1.10x Multiplier
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div>Criteria: <strong>150h • 300 orders • 4.8★ Rating</strong></div>
+                    <div>Payout: <strong>₹55 Base + ₹16/km + ₹20 Surge (1.10x)</strong></div>
+                    <div>Tier Incentive: <strong>+₹30 / order</strong></div>
+                    <div>Selfie Policy: <strong>Duty start & end mandatory</strong></div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Duty Selfie Verification Audit Log */}
+              <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--color-border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Camera size={15} color="var(--color-primary)" />
+                    <strong style={{ fontSize: '13px' }}>Duty Selfie Compliance Audit Log ({selfieVerifications.length})</strong>
+                  </div>
+                  <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
+                    Automatic 10-minute grace period enforcement
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {selfieVerifications.map((log) => (
+                    <div
+                      key={log.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '10px 14px',
+                        borderRadius: '8px',
+                        backgroundColor: 'var(--color-surface-muted)',
+                        border: '1px solid var(--color-border)',
+                        fontSize: '11px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div
+                          style={{
+                            width: '36px',
+                            height: '36px',
+                            borderRadius: '6px',
+                            overflow: 'hidden',
+                            backgroundColor: '#000000',
+                            flexShrink: 0,
+                            cursor: log.selfieUrl ? 'pointer' : 'default'
+                          }}
+                          onClick={() => {
+                            if (log.selfieUrl) handlePreviewDoc('Rider Duty Selfie', log.selfieUrl, 'rider-kyc-documents');
+                          }}
+                        >
+                          {log.selfieUrl ? (
+                            <img src={log.selfieUrl} alt="Selfie" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : (
+                            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF' }}>
+                              <Camera size={14} />
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <strong style={{ color: '#FFFFFF' }}>Rider: Vikram Singh (Approved)</strong>
+                            <span
+                              style={{
+                                fontSize: '9px',
+                                padding: '1px 5px',
+                                borderRadius: '3px',
+                                backgroundColor: 'rgba(255,255,255,0.08)',
+                                textTransform: 'uppercase',
+                                color: '#9CA3AF'
+                              }}
+                            >
+                              {(log.triggerReason || log.verificationType || 'duty_start').replace('_', ' ')}
+                            </span>
+                          </div>
+                          <div style={{ color: 'var(--color-text-muted)', fontSize: '10px', marginTop: '2px' }}>
+                            Prompted: {new Date(log.triggeredAt || log.promptedAt || Date.now()).toLocaleTimeString()} • Verified: {log.verifiedAt ? new Date(log.verifiedAt).toLocaleTimeString() : 'Pending'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span
+                          style={{
+                            fontSize: '10px',
+                            fontWeight: 800,
+                            padding: '3px 8px',
+                            borderRadius: '4px',
+                            backgroundColor:
+                              log.status === 'verified'
+                                ? 'rgba(46, 204, 113, 0.15)'
+                                : log.status === 'missed'
+                                ? 'rgba(239, 68, 68, 0.15)'
+                                : 'rgba(243, 156, 18, 0.15)',
+                            color:
+                              log.status === 'verified'
+                                ? 'var(--color-veg)'
+                                : log.status === 'missed'
+                                ? '#EF4444'
+                                : '#F39C12',
+                            textTransform: 'uppercase'
+                          }}
+                        >
+                          {log.status === 'verified' ? '✓ Verified' : log.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -1954,17 +3453,31 @@ export const AdminApp: React.FC = () => {
             </div>
 
             <div style={{ padding: '16px', display: 'flex', justifyContent: 'center', backgroundColor: '#0D0D11' }}>
-              <img
-                src={selectedDocPreview.url}
-                alt={selectedDocPreview.title}
-                style={{
-                  maxWidth: '100%',
-                  maxHeight: '70vh',
-                  objectFit: 'contain',
-                  borderRadius: '6px',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
-                }}
-              />
+              {selectedDocPreview.url.toLowerCase().includes('.pdf') || selectedDocPreview.title.toLowerCase().includes('pdf') ? (
+                <iframe
+                  src={selectedDocPreview.url}
+                  title={selectedDocPreview.title}
+                  style={{
+                    width: '100%',
+                    height: '70vh',
+                    border: 'none',
+                    borderRadius: '6px',
+                    backgroundColor: '#FFFFFF'
+                  }}
+                />
+              ) : (
+                <img
+                  src={selectedDocPreview.url}
+                  alt={selectedDocPreview.title}
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '70vh',
+                    objectFit: 'contain',
+                    borderRadius: '6px',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
+                  }}
+                />
+              )}
             </div>
 
             <div
@@ -2312,45 +3825,283 @@ export const AdminApp: React.FC = () => {
                 </div>
               </div>
 
-              {/* KYC Documents Previews */}
+              {/* KYC Documents Previews with Individual Verification Controls */}
               <div style={{ backgroundColor: '#17171C', borderRadius: '12px', padding: '14px', border: '1px solid rgba(255,255,255,0.06)' }}>
                 <h5 style={{ fontSize: '13px', fontWeight: 800, color: 'var(--color-primary)', marginBottom: '10px' }}>
-                  Uploaded Verification Documents
+                  Uploaded Verification Documents (Aadhaar & PAN Front/Back Mandatory)
                 </h5>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
                   {[
-                    { label: 'Aadhaar Front', url: inspectedRiderApp.documents?.aadhaarFront },
-                    { label: 'Aadhaar Back', url: inspectedRiderApp.documents?.aadhaarBack },
-                    { label: 'PAN Card', url: inspectedRiderApp.documents?.panFront },
-                    { label: 'Driving Licence', url: inspectedRiderApp.documents?.drivingLicenseFront },
-                    { label: 'Vehicle RC', url: inspectedRiderApp.documents?.vehicleRc },
-                    { label: 'Bank Proof', url: inspectedRiderApp.documents?.bankProof }
-                  ].map((doc, idx) => (
-                    <div
-                      key={idx}
-                      onClick={() => {
-                        if (doc.url) setSelectedDocPreview({ title: doc.label, url: doc.url });
+                    { key: 'aadhaarFront', label: 'Aadhaar Card Front *', url: inspectedRiderApp.documents?.aadhaarFront, isRequired: true },
+                    { key: 'aadhaarBack', label: 'Aadhaar Card Back *', url: inspectedRiderApp.documents?.aadhaarBack, isRequired: true },
+                    { key: 'panFront', label: 'Personal PAN Front *', url: inspectedRiderApp.documents?.panFront, isRequired: true },
+                    { key: 'panBack', label: 'Personal PAN Back *', url: inspectedRiderApp.documents?.panBack, isRequired: true },
+                    { key: 'drivingLicenseFront', label: 'Driving Licence Front *', url: inspectedRiderApp.documents?.drivingLicenseFront, isRequired: inspectedRiderApp.vehicleType !== 'Bicycle' },
+                    { key: 'vehicleRc', label: 'Vehicle RC *', url: inspectedRiderApp.documents?.vehicleRc, isRequired: inspectedRiderApp.vehicleType !== 'Bicycle' },
+                    { key: 'bankProof', label: 'Bank Settlement Proof *', url: inspectedRiderApp.documents?.bankProof, isRequired: true },
+                    { key: 'qualificationProof', label: 'Qualification Proof', url: inspectedRiderApp.documents?.qualificationProof, isRequired: false }
+                  ].map((doc) => {
+                    const status = inspectedRiderApp.documentStatuses?.[doc.key] || (doc.url ? 'uploaded' : 'missing');
+                    return (
+                      <div
+                        key={doc.key}
+                        style={{
+                          borderRadius: '8px',
+                          border: `1px solid ${status === 'verified' ? 'rgba(46, 204, 113, 0.4)' : status === 'rejected' ? 'rgba(239, 68, 68, 0.4)' : 'rgba(255,255,255,0.1)'}`,
+                          backgroundColor: '#101014',
+                          padding: '8px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '6px'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '10px', fontWeight: 700, color: '#D1D5DB' }}>{doc.label}</span>
+                          <span
+                            style={{
+                              fontSize: '9px',
+                              fontWeight: 800,
+                              padding: '1px 5px',
+                              borderRadius: '3px',
+                              backgroundColor: status === 'verified' ? 'rgba(46, 204, 113, 0.2)' : status === 'rejected' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255,255,255,0.08)',
+                              color: status === 'verified' ? 'var(--color-veg)' : status === 'rejected' ? '#EF4444' : '#9CA3AF'
+                            }}
+                          >
+                            {status === 'verified' ? '✓ Verified' : status === 'rejected' ? '✕ Rejected' : doc.url ? 'Uploaded' : 'Missing'}
+                          </span>
+                        </div>
+
+                        <div
+                          onClick={() => {
+                            if (doc.url) handlePreviewDoc(doc.label, doc.url, 'rider-kyc-documents');
+                          }}
+                          style={{
+                            height: '70px',
+                            borderRadius: '6px',
+                            overflow: 'hidden',
+                            backgroundColor: 'rgba(0,0,0,0.3)',
+                            position: 'relative',
+                            cursor: doc.url ? 'pointer' : 'default',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                        >
+                          {doc.url ? (
+                            doc.url.startsWith('data:image/') || doc.url.startsWith('http') ? (
+                              <img src={doc.url} alt={doc.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#60A5FA', gap: '2px' }}>
+                                <FileText size={20} />
+                                <span style={{ fontSize: '9px' }}>Preview</span>
+                              </div>
+                            )
+                          ) : (
+                            <div style={{ color: '#EF4444', fontSize: '10px' }}>Not attached</div>
+                          )}
+                        </div>
+
+                        {doc.url && (
+                          <div style={{ display: 'flex', gap: '4px' }}>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await verifyRiderDocument(inspectedRiderApp.id, doc.key as any, 'verified');
+                                setInspectedRiderApp((prev: any) => ({
+                                  ...prev,
+                                  documentStatuses: { ...(prev?.documentStatuses || {}), [doc.key]: 'verified' }
+                                }));
+                              }}
+                              style={{
+                                flex: 1,
+                                padding: '3px',
+                                borderRadius: '4px',
+                                backgroundColor: status === 'verified' ? 'var(--color-veg)' : 'rgba(46, 204, 113, 0.15)',
+                                color: status === 'verified' ? '#FFFFFF' : 'var(--color-veg)',
+                                border: '1px solid rgba(46, 204, 113, 0.3)',
+                                fontSize: '9px',
+                                fontWeight: 700,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              ✓ Verify
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const reason = window.prompt(`Enter mandatory rejection reason for ${doc.label}:`);
+                                if (reason === null) return;
+                                if (!reason.trim()) { alert('Rejection reason is mandatory.'); return; }
+                                await verifyRiderDocument(inspectedRiderApp.id, doc.key as any, 'rejected', reason.trim());
+                                setInspectedRiderApp((prev: any) => ({
+                                  ...prev,
+                                  documentStatuses: { ...(prev?.documentStatuses || {}), [doc.key]: 'rejected' }
+                                }));
+                              }}
+                              style={{
+                                flex: 1,
+                                padding: '3px',
+                                borderRadius: '4px',
+                                backgroundColor: status === 'rejected' ? '#EF4444' : 'rgba(239, 68, 68, 0.15)',
+                                color: status === 'rejected' ? '#FFFFFF' : '#EF4444',
+                                border: '1px solid rgba(239, 68, 68, 0.3)',
+                                fontSize: '9px',
+                                fontWeight: 700,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              ✕ Reject
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Educational Qualification Verification Section */}
+              <div style={{ backgroundColor: '#17171C', borderRadius: '12px', padding: '14px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <GraduationCap size={16} color="var(--color-primary)" />
+                    <h5 style={{ fontSize: '13px', fontWeight: 800, color: 'var(--color-primary)', margin: 0 }}>
+                      Educational Qualification Verification
+                    </h5>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: '10px',
+                      padding: '3px 8px',
+                      borderRadius: '4px',
+                      backgroundColor:
+                        inspectedRiderApp.education?.qualificationStatus === 'verified'
+                          ? 'rgba(46, 204, 113, 0.2)'
+                          : inspectedRiderApp.education?.qualificationStatus === 'rejected'
+                          ? 'rgba(239, 68, 68, 0.2)'
+                          : 'rgba(59, 130, 246, 0.2)',
+                      color:
+                        inspectedRiderApp.education?.qualificationStatus === 'verified'
+                          ? 'var(--color-veg)'
+                          : inspectedRiderApp.education?.qualificationStatus === 'rejected'
+                          ? '#EF4444'
+                          : '#60A5FA',
+                      fontWeight: 800,
+                      textTransform: 'uppercase'
+                    }}
+                  >
+                    {inspectedRiderApp.education?.qualificationStatus
+                      ? inspectedRiderApp.education.qualificationStatus.toUpperCase()
+                      : 'PENDING'}
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px', marginBottom: '12px' }}>
+                  <div>
+                    <span style={{ color: '#9CA3AF' }}>Highest Qualification:</span>{' '}
+                    <strong>{inspectedRiderApp.education?.highestQualification || 'Not specified'}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: '#9CA3AF' }}>Degree / Field:</span>{' '}
+                    <strong>{inspectedRiderApp.education?.qualificationName || 'N/A'}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: '#9CA3AF' }}>Institution / Board:</span>{' '}
+                    <strong>{inspectedRiderApp.education?.institutionName || 'N/A'}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: '#9CA3AF' }}>Year of Completion:</span>{' '}
+                    <strong>{inspectedRiderApp.education?.completionYear || 'N/A'}</strong>
+                  </div>
+                  {inspectedRiderApp.education?.additionalQualification && (
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <span style={{ color: '#9CA3AF' }}>Additional Certifications:</span>{' '}
+                      <strong>{inspectedRiderApp.education.additionalQualification}</strong>
+                    </div>
+                  )}
+                  {inspectedRiderApp.education?.qualificationRejectionReason && (
+                    <div style={{ gridColumn: 'span 2', color: '#FECACA', backgroundColor: 'rgba(239,68,68,0.1)', padding: '6px 8px', borderRadius: '4px', fontSize: '11px' }}>
+                      <strong>Rejection Note:</strong> {inspectedRiderApp.education.qualificationRejectionReason}
+                    </div>
+                  )}
+                </div>
+
+                {/* Qualification Proof Preview & Review Actions */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    {inspectedRiderApp.documents?.qualificationProof ? (
+                      <button
+                        type="button"
+                        onClick={() => handlePreviewDoc('Qualification Proof', inspectedRiderApp.documents.qualificationProof, 'rider-kyc-documents')}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                          color: '#60A5FA',
+                          border: '1px solid rgba(96, 165, 250, 0.3)',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        <Eye size={12} />
+                        <span>Preview Certificate</span>
+                      </button>
+                    ) : (
+                      <span style={{ fontSize: '11px', color: '#6B7280', fontStyle: 'italic' }}>
+                        No physical document proof attached
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await verifyRiderQualification(inspectedRiderApp.id, 'verified');
+                        setInspectedRiderApp((prev: any) => ({
+                          ...prev,
+                          education: {
+                            ...prev?.education,
+                            qualificationStatus: 'verified',
+                            qualificationRejectionReason: undefined
+                          }
+                        }));
+                        setKycSuccessMsg(`Qualification verified for application #${inspectedRiderApp.applicationRef || inspectedRiderApp.id}`);
                       }}
                       style={{
-                        borderRadius: '8px',
-                        overflow: 'hidden',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        cursor: doc.url ? 'pointer' : 'default',
-                        backgroundColor: '#101014'
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        backgroundColor: 'rgba(46, 204, 113, 0.2)',
+                        color: 'var(--color-veg)',
+                        border: '1px solid var(--color-veg)',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        cursor: 'pointer'
                       }}
                     >
-                      {doc.url ? (
-                        <img src={doc.url} alt={doc.label} style={{ width: '100%', height: '80px', objectFit: 'cover' }} />
-                      ) : (
-                        <div style={{ height: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280', fontSize: '10px' }}>
-                          Not attached
-                        </div>
-                      )}
-                      <div style={{ padding: '6px', fontSize: '10px', textAlign: 'center', fontWeight: 700, color: '#D1D5DB', backgroundColor: '#1A1A20' }}>
-                        {doc.label}
-                      </div>
-                    </div>
-                  ))}
+                      Mark Verified
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQualRejectModalAppId(inspectedRiderApp.id)}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                        color: '#EF4444',
+                        border: '1px solid rgba(239, 68, 68, 0.4)',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Reject Qualification
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2370,6 +4121,784 @@ export const AdminApp: React.FC = () => {
                 }}
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Inspected Restaurant Application Modal */}
+      {inspectedRestaurantApp && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.85)',
+            backdropFilter: 'blur(5px)',
+            zIndex: 99998,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+          onClick={() => setInspectedRestaurantApp(null)}
+        >
+          <div
+            style={{
+              backgroundColor: '#1E1E24',
+              borderRadius: '16px',
+              maxWidth: '720px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              border: '1px solid rgba(255,255,255,0.1)',
+              boxShadow: 'var(--shadow-xl)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: '18px 20px',
+                borderBottom: '1px solid rgba(255,255,255,0.08)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}
+            >
+              <div>
+                <h4 style={{ fontSize: '17px', fontWeight: 900, color: '#FFFFFF', margin: 0 }}>
+                  {inspectedRestaurantApp.restaurantName}
+                </h4>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
+                  <span style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--color-primary)' }}>
+                    Ref: {inspectedRestaurantApp.applicationRef || inspectedRestaurantApp.id}
+                  </span>
+                  <span style={{ fontSize: '11px', color: '#9CA3AF' }}>•</span>
+                  <span style={{ fontSize: '11px', color: '#9CA3AF' }}>
+                    Type: {inspectedRestaurantApp.restaurantType || 'Dine-In & Delivery'}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setInspectedRestaurantApp(null)}
+                style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Business & Location Info */}
+              <div style={{ backgroundColor: '#17171C', borderRadius: '12px', padding: '14px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <h5 style={{ fontSize: '13px', fontWeight: 800, color: 'var(--color-primary)', marginBottom: '10px' }}>
+                  Outlet & Contact Details
+                </h5>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px' }}>
+                  <div><span style={{ color: '#9CA3AF' }}>Owner:</span> <strong>{inspectedRestaurantApp.ownerName}</strong></div>
+                  <div><span style={{ color: '#9CA3AF' }}>Mobile:</span> <strong>{inspectedRestaurantApp.phone}</strong></div>
+                  <div><span style={{ color: '#9CA3AF' }}>Email:</span> <strong>{inspectedRestaurantApp.email}</strong></div>
+                  <div><span style={{ color: '#9CA3AF' }}>City & State:</span> <strong>{inspectedRestaurantApp.city}, {inspectedRestaurantApp.state} - {inspectedRestaurantApp.pincode}</strong></div>
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <span style={{ color: '#9CA3AF' }}>Full Address:</span> <strong>{inspectedRestaurantApp.address} {inspectedRestaurantApp.landmark ? `(Near ${inspectedRestaurantApp.landmark})` : ''}</strong>
+                  </div>
+                  {inspectedRestaurantApp.cuisineTypes && (
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <span style={{ color: '#9CA3AF' }}>Cuisines:</span> <strong>{inspectedRestaurantApp.cuisineTypes.join(', ')}</strong>
+                    </div>
+                  )}
+                  <div>
+                    <span style={{ color: '#9CA3AF' }}>Operating Hours:</span> <strong>{inspectedRestaurantApp.openingTime || '10:00'} - {inspectedRestaurantApp.closingTime || '23:00'}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Legal & Regulatory Info */}
+              <div style={{ backgroundColor: '#17171C', borderRadius: '12px', padding: '14px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <h5 style={{ fontSize: '13px', fontWeight: 800, color: 'var(--color-primary)', marginBottom: '10px' }}>
+                  Legal & Regulatory Compliance
+                </h5>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px' }}>
+                  <div><span style={{ color: '#9CA3AF' }}>Legal Entity:</span> <strong>{inspectedRestaurantApp.legalBusinessName || inspectedRestaurantApp.restaurantName}</strong></div>
+                  <div><span style={{ color: '#9CA3AF' }}>Entity Type:</span> <strong>{inspectedRestaurantApp.businessType || 'Sole Proprietorship'}</strong></div>
+                  <div><span style={{ color: '#9CA3AF' }}>PAN Number:</span> <strong>{maskPan(inspectedRestaurantApp.panNumber)}</strong></div>
+                  <div><span style={{ color: '#9CA3AF' }}>GSTIN:</span> <strong>{inspectedRestaurantApp.gstin || 'Not GST Registered'}</strong></div>
+                  <div><span style={{ color: '#9CA3AF' }}>FSSAI Registration:</span> <strong style={{ color: '#60A5FA' }}>{inspectedRestaurantApp.fssaiNumber || 'Pending'}</strong></div>
+                  <div><span style={{ color: '#9CA3AF' }}>FSSAI Expiry:</span> <strong>{inspectedRestaurantApp.fssaiExpiryDate || 'N/A'}</strong></div>
+                </div>
+              </div>
+
+              {/* Settlement Bank Account Details */}
+              <div style={{ backgroundColor: '#17171C', borderRadius: '12px', padding: '14px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <h5 style={{ fontSize: '13px', fontWeight: 800, color: 'var(--color-primary)', marginBottom: '10px' }}>
+                  Settlement Bank & Payout Information
+                </h5>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px' }}>
+                  <div><span style={{ color: '#9CA3AF' }}>Beneficiary:</span> <strong>{inspectedRestaurantApp.bankDetails?.accountHolderName || 'N/A'}</strong></div>
+                  <div><span style={{ color: '#9CA3AF' }}>Bank:</span> <strong>{inspectedRestaurantApp.bankDetails?.bankName || 'N/A'}</strong></div>
+                  <div><span style={{ color: '#9CA3AF' }}>Account Number:</span> <strong>{inspectedRestaurantApp.bankDetails?.accountNumber || 'N/A'}</strong></div>
+                  <div><span style={{ color: '#9CA3AF' }}>IFSC Code:</span> <strong>{inspectedRestaurantApp.bankDetails?.ifscCode || 'N/A'}</strong></div>
+                  <div><span style={{ color: '#9CA3AF' }}>Account Type:</span> <strong>{inspectedRestaurantApp.bankDetails?.accountType || 'Current'}</strong></div>
+                  <div><span style={{ color: '#9CA3AF' }}>Payout Frequency:</span> <strong>{inspectedRestaurantApp.payoutFrequency || 'Daily'}</strong></div>
+                </div>
+              </div>
+
+              {/* Uploaded Verification Documents */}
+              <div style={{ backgroundColor: '#17171C', borderRadius: '12px', padding: '14px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <h5 style={{ fontSize: '13px', fontWeight: 800, color: 'var(--color-primary)', marginBottom: '10px' }}>
+                  Uploaded Regulatory & Bank Documents
+                </h5>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: '10px' }}>
+                  {[
+                    {
+                      key: 'panDoc' as const,
+                      label: 'Business PAN',
+                      url: inspectedRestaurantApp.documents?.panDoc,
+                      status: inspectedRestaurantApp.documentStatuses?.panDoc,
+                      isRequired: true
+                    },
+                    {
+                      key: 'fssaiDoc' as const,
+                      label: 'FSSAI License',
+                      url: inspectedRestaurantApp.documents?.fssaiDoc,
+                      status: inspectedRestaurantApp.documentStatuses?.fssaiDoc,
+                      expiryDate: inspectedRestaurantApp.fssaiExpiryDate,
+                      isExpired: Boolean(inspectedRestaurantApp.fssaiExpiryDate && new Date(inspectedRestaurantApp.fssaiExpiryDate).getTime() < Date.now()),
+                      isRequired: true
+                    },
+                    {
+                      key: 'gstDoc' as const,
+                      label: 'GST Certificate',
+                      url: inspectedRestaurantApp.documents?.gstDoc,
+                      status: inspectedRestaurantApp.documentStatuses?.gstDoc,
+                      isRequired: Boolean(inspectedRestaurantApp.hasGst || inspectedRestaurantApp.gstRegistered)
+                    },
+                    {
+                      key: 'chequeDoc' as const,
+                      label: 'Cancelled Cheque',
+                      url: inspectedRestaurantApp.documents?.chequeDoc,
+                      status: inspectedRestaurantApp.documentStatuses?.chequeDoc,
+                      isRequired: true
+                    },
+                    {
+                      key: 'aadhaarFront' as const,
+                      label: 'Aadhaar Card (Front) *',
+                      url: inspectedRestaurantApp.documents?.aadhaarFront || (inspectedRestaurantApp as any).partnerKycDocuments?.aadhaarFront,
+                      status: (inspectedRestaurantApp.documentStatuses as any)?.aadhaarFront,
+                      isRequired: true
+                    },
+                    {
+                      key: 'aadhaarBack' as const,
+                      label: 'Aadhaar Card (Back) *',
+                      url: inspectedRestaurantApp.documents?.aadhaarBack || (inspectedRestaurantApp as any).partnerKycDocuments?.aadhaarBack,
+                      status: (inspectedRestaurantApp.documentStatuses as any)?.aadhaarBack,
+                      isRequired: true
+                    },
+                    {
+                      key: 'personalPanFront' as const,
+                      label: 'Personal PAN (Front) *',
+                      url: inspectedRestaurantApp.documents?.personalPanFront || (inspectedRestaurantApp as any).partnerKycDocuments?.personalPanFront,
+                      status: (inspectedRestaurantApp.documentStatuses as any)?.personalPanFront,
+                      isRequired: true
+                    },
+                    {
+                      key: 'personalPanBack' as const,
+                      label: 'Personal PAN (Back) *',
+                      url: inspectedRestaurantApp.documents?.personalPanBack || (inspectedRestaurantApp as any).partnerKycDocuments?.personalPanBack,
+                      status: (inspectedRestaurantApp.documentStatuses as any)?.personalPanBack,
+                      isRequired: true
+                    }
+                  ].map((doc) => {
+                    const isExempt = !doc.isRequired;
+                    const docStatus = isExempt
+                      ? 'Not Required'
+                      : doc.isExpired
+                      ? 'Expired'
+                      : doc.status === 'verified'
+                      ? 'Verified'
+                      : doc.status === 'rejected'
+                      ? 'Rejected'
+                      : doc.url
+                      ? 'Uploaded'
+                      : 'Missing';
+
+                    return (
+                      <div
+                        key={doc.key}
+                        style={{
+                          borderRadius: '8px',
+                          border: `1px solid ${
+                            docStatus === 'Expired' || docStatus === 'Rejected'
+                              ? 'rgba(239, 68, 68, 0.4)'
+                              : docStatus === 'Verified'
+                              ? 'rgba(46, 204, 113, 0.4)'
+                              : 'rgba(255,255,255,0.1)'
+                          }`,
+                          backgroundColor: '#101014',
+                          padding: '8px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '6px'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '11px', fontWeight: 700, color: '#D1D5DB' }}>{doc.label}</span>
+                          <span
+                            style={{
+                              fontSize: '9px',
+                              fontWeight: 800,
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              backgroundColor:
+                                docStatus === 'Verified'
+                                  ? 'var(--color-veg-bg)'
+                                  : docStatus === 'Rejected' || docStatus === 'Expired'
+                                  ? 'rgba(239, 68, 68, 0.15)'
+                                  : docStatus === 'Not Required'
+                                  ? 'rgba(255, 255, 255, 0.08)'
+                                  : 'rgba(243, 156, 18, 0.15)',
+                              color:
+                                docStatus === 'Verified'
+                                  ? 'var(--color-veg)'
+                                  : docStatus === 'Rejected' || docStatus === 'Expired'
+                                  ? '#EF4444'
+                                  : docStatus === 'Not Required'
+                                  ? '#9CA3AF'
+                                  : '#F39C12'
+                            }}
+                          >
+                            {docStatus === 'Verified' && '✓ Verified'}
+                            {docStatus === 'Rejected' && '✕ Rejected'}
+                            {docStatus === 'Expired' && '⚠️ Expired'}
+                            {docStatus === 'Uploaded' && 'Uploaded'}
+                            {docStatus === 'Missing' && 'Missing'}
+                            {docStatus === 'Not Required' && 'Not Required'}
+                          </span>
+                        </div>
+
+                        {/* Preview Box */}
+                        <div
+                          onClick={() => {
+                            if (doc.url) handlePreviewDoc(doc.label, doc.url, 'partner-kyc-documents');
+                          }}
+                          style={{
+                            height: '75px',
+                            borderRadius: '6px',
+                            overflow: 'hidden',
+                            backgroundColor: 'rgba(0,0,0,0.3)',
+                            position: 'relative',
+                            cursor: doc.url ? 'pointer' : 'default',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                        >
+                          {isExempt ? (
+                            <div style={{ color: '#9CA3AF', fontSize: '10px', textAlign: 'center' }}>
+                              <ShieldCheck size={20} style={{ margin: '0 auto 2px' }} />
+                              <div>Exempted</div>
+                            </div>
+                          ) : doc.url ? (
+                            doc.url.startsWith('data:image/') || doc.url.startsWith('http') ? (
+                              <img src={doc.url} alt={doc.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#60A5FA', gap: '4px' }}>
+                                <FileText size={22} />
+                                <span style={{ fontSize: '9px' }}>Preview Document</span>
+                              </div>
+                            )
+                          ) : (
+                            <div style={{ color: '#6B7280', fontSize: '10px' }}>Not attached</div>
+                          )}
+                        </div>
+
+                        {/* Controls */}
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          {doc.url && (
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadDoc(doc.url, `${inspectedRestaurantApp.restaurantName}_${doc.key}.pdf`, 'partner-kyc-documents')}
+                              title="Download Document"
+                              style={{
+                                padding: '4px 6px',
+                                borderRadius: '4px',
+                                backgroundColor: 'rgba(255,255,255,0.08)',
+                                color: '#FFFFFF',
+                                border: '1px solid var(--color-border)',
+                                fontSize: '10px',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <Download size={11} />
+                            </button>
+                          )}
+                          {doc.url && !isExempt && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  await verifyRestaurantDocument(inspectedRestaurantApp.id, doc.key, 'verified');
+                                  setInspectedRestaurantApp((prev: any) => ({
+                                    ...prev,
+                                    documentStatuses: { ...(prev?.documentStatuses || {}), [doc.key]: 'verified' }
+                                  }));
+                                }}
+                                style={{
+                                  flex: 1,
+                                  padding: '4px',
+                                  borderRadius: '4px',
+                                  backgroundColor: doc.status === 'verified' ? 'var(--color-veg)' : 'rgba(46, 204, 113, 0.15)',
+                                  color: doc.status === 'verified' ? '#FFFFFF' : 'var(--color-veg)',
+                                  border: '1px solid rgba(46, 204, 113, 0.3)',
+                                  fontSize: '10px',
+                                  fontWeight: 700,
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                ✓ Verify
+                              </button>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  await verifyRestaurantDocument(inspectedRestaurantApp.id, doc.key, 'rejected');
+                                  setInspectedRestaurantApp((prev: any) => ({
+                                    ...prev,
+                                    documentStatuses: { ...(prev?.documentStatuses || {}), [doc.key]: 'rejected' }
+                                  }));
+                                }}
+                                style={{
+                                  flex: 1,
+                                  padding: '4px',
+                                  borderRadius: '4px',
+                                  backgroundColor: doc.status === 'rejected' ? '#EF4444' : 'rgba(239, 68, 68, 0.15)',
+                                  color: doc.status === 'rejected' ? '#FFFFFF' : '#EF4444',
+                                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                                  fontSize: '10px',
+                                  fontWeight: 700,
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                ✕ Reject
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div style={{ padding: '14px 20px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'flex-end', gap: '10px', alignItems: 'center' }}>
+              <button
+                onClick={() => setInspectedRestaurantApp(null)}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                  color: '#FFFFFF',
+                  fontWeight: 600,
+                  fontSize: '12px',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                Close
+              </button>
+
+              {inspectedRestaurantApp.status !== 'approved' && (() => {
+                const isModalBlocked =
+                  !inspectedRestaurantApp.documents?.panDoc ||
+                  !inspectedRestaurantApp.documents?.fssaiDoc ||
+                  !inspectedRestaurantApp.documents?.chequeDoc ||
+                  Boolean(inspectedRestaurantApp.fssaiExpiryDate && new Date(inspectedRestaurantApp.fssaiExpiryDate).getTime() < Date.now()) ||
+                  inspectedRestaurantApp.documentStatuses?.panDoc === 'rejected' ||
+                  inspectedRestaurantApp.documentStatuses?.fssaiDoc === 'rejected' ||
+                  inspectedRestaurantApp.documentStatuses?.chequeDoc === 'rejected' ||
+                  Boolean(inspectedRestaurantApp.hasGst && inspectedRestaurantApp.documentStatuses?.gstDoc === 'rejected');
+
+                return (
+                  <button
+                    disabled={isModalBlocked}
+                    onClick={async () => {
+                      if (isModalBlocked) return;
+                      const res = await approveRestaurantApplication(inspectedRestaurantApp.id);
+                      if (res.success) {
+                        setRestSuccessMsg(`Application for ${inspectedRestaurantApp.restaurantName} approved! Restaurant is now onboarded.`);
+                        setInspectedRestaurantApp(null);
+                      } else {
+                        alert(res.error || 'Failed to approve application.');
+                      }
+                    }}
+                    title={isModalBlocked ? 'Approval blocked: mandatory document missing/rejected or expired FSSAI' : 'Approve partner and activate store'}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: '8px',
+                      backgroundColor: isModalBlocked ? 'rgba(255,255,255,0.08)' : 'var(--color-veg-bg)',
+                      color: isModalBlocked ? '#6B7280' : 'var(--color-veg)',
+                      fontWeight: 700,
+                      fontSize: '12px',
+                      border: `1px solid ${isModalBlocked ? 'rgba(255,255,255,0.1)' : 'var(--color-veg)'}`,
+                      cursor: isModalBlocked ? 'not-allowed' : 'pointer',
+                      opacity: isModalBlocked ? 0.6 : 1
+                    }}
+                  >
+                    Approve Partner & Activate Store
+                  </button>
+                );
+              })()}
+
+              {inspectedRestaurantApp.status !== 'rejected' && inspectedRestaurantApp.status !== 'approved' && (
+                <>
+                  <button
+                    onClick={() => {
+                      setResubmitRestModalAppId(inspectedRestaurantApp.id);
+                      setResubmitRestReasonText('');
+                    }}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: '8px',
+                      backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                      color: '#F59E0B',
+                      fontWeight: 700,
+                      fontSize: '12px',
+                      border: '1px solid rgba(245, 158, 11, 0.4)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Request Resubmission
+                  </button>
+                  <button
+                    onClick={() => {
+                      setRejectRestModalAppId(inspectedRestaurantApp.id);
+                      setRejectRestReasonText('');
+                    }}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: '8px',
+                      backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                      color: '#EF4444',
+                      fontWeight: 700,
+                      fontSize: '12px',
+                      border: '1px solid rgba(239, 68, 68, 0.4)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Reject Application
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Qualification Rejection Modal */}
+      {qualRejectModalAppId && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+          onClick={() => setQualRejectModalAppId(null)}
+        >
+          <div
+            style={{
+              backgroundColor: '#1E1E24',
+              borderRadius: '16px',
+              maxWidth: '460px',
+              width: '100%',
+              padding: '24px',
+              border: '1px solid rgba(239, 68, 68, 0.3)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#EF4444', marginBottom: '14px' }}>
+              <AlertTriangle size={24} />
+              <h4 style={{ fontSize: '16px', fontWeight: 800, margin: 0 }}>Reject Qualification Document</h4>
+            </div>
+            <p style={{ fontSize: '13px', color: '#D1D5DB', marginBottom: '16px', lineHeight: 1.5 }}>
+              Specify the reason for rejecting the applicant's educational qualification certificate. Note: This action will not reject their overall rider profile.
+            </p>
+            <textarea
+              rows={3}
+              value={qualRejectReasonText}
+              onChange={(e) => setQualRejectReasonText(e.target.value)}
+              placeholder="e.g. Uploaded certificate is blurred, illegible, or name does not match applicant."
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '8px',
+                backgroundColor: '#121216',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                color: '#FFFFFF',
+                fontSize: '13px',
+                marginBottom: '18px',
+                resize: 'none'
+              }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => setQualRejectModalAppId(null)}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: '12px'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (qualRejectModalAppId && qualRejectReasonText.trim()) {
+                    await verifyRiderQualification(qualRejectModalAppId, 'rejected', qualRejectReasonText.trim());
+                    if (inspectedRiderApp && inspectedRiderApp.id === qualRejectModalAppId) {
+                      setInspectedRiderApp((prev: any) => ({
+                        ...prev,
+                        education: {
+                          ...prev?.education,
+                          qualificationStatus: 'rejected',
+                          qualificationRejectionReason: qualRejectReasonText.trim()
+                        }
+                      }));
+                    }
+                    setKycSuccessMsg(`Qualification marked rejected with reason.`);
+                    setQualRejectModalAppId(null);
+                    setQualRejectReasonText('');
+                  }
+                }}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  backgroundColor: '#EF4444',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                  fontSize: '12px'
+                }}
+              >
+                Confirm Rejection
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Restaurant Resubmission Modal */}
+      {resubmitRestModalAppId && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+          onClick={() => setResubmitRestModalAppId(null)}
+        >
+          <div
+            style={{
+              backgroundColor: '#1E1E24',
+              borderRadius: '16px',
+              maxWidth: '460px',
+              width: '100%',
+              padding: '24px',
+              border: '1px solid rgba(245, 158, 11, 0.3)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#F59E0B', marginBottom: '14px' }}>
+              <RotateCcw size={24} />
+              <h4 style={{ fontSize: '16px', fontWeight: 800, margin: 0 }}>Request Restaurant Resubmission</h4>
+            </div>
+            <p style={{ fontSize: '13px', color: '#D1D5DB', marginBottom: '16px', lineHeight: 1.5 }}>
+              Specify the compliance corrections or document re-uploads required by the restaurant partner.
+            </p>
+            <textarea
+              rows={3}
+              value={resubmitRestReasonText}
+              onChange={(e) => setResubmitRestReasonText(e.target.value)}
+              placeholder="e.g. FSSAI registration number mismatch or expired certificate."
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '8px',
+                backgroundColor: '#121216',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                color: '#FFFFFF',
+                fontSize: '13px',
+                marginBottom: '18px',
+                resize: 'none'
+              }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => setResubmitRestModalAppId(null)}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: '12px'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (resubmitRestModalAppId && resubmitRestReasonText.trim()) {
+                    await requestResubmissionRestaurantApplication(resubmitRestModalAppId, resubmitRestReasonText.trim());
+                    setRestSuccessMsg(`Requested resubmission for restaurant application.`);
+                    setResubmitRestModalAppId(null);
+                    setResubmitRestReasonText('');
+                    if (inspectedRestaurantApp && inspectedRestaurantApp.id === resubmitRestModalAppId) {
+                      setInspectedRestaurantApp((prev: any) => ({
+                        ...prev,
+                        status: 'action_required',
+                        rejectionReason: resubmitRestReasonText.trim()
+                      }));
+                    }
+                  }
+                }}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  backgroundColor: '#F59E0B',
+                  color: '#000000',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                  fontSize: '12px'
+                }}
+              >
+                Send Request
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Restaurant Rejection Modal */}
+      {rejectRestModalAppId && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+          onClick={() => setRejectRestModalAppId(null)}
+        >
+          <div
+            style={{
+              backgroundColor: '#1E1E24',
+              borderRadius: '16px',
+              maxWidth: '460px',
+              width: '100%',
+              padding: '24px',
+              border: '1px solid rgba(239, 68, 68, 0.3)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#EF4444', marginBottom: '14px' }}>
+              <AlertTriangle size={24} />
+              <h4 style={{ fontSize: '16px', fontWeight: 800, margin: 0 }}>Reject Restaurant Application</h4>
+            </div>
+            <p style={{ fontSize: '13px', color: '#D1D5DB', marginBottom: '16px', lineHeight: 1.5 }}>
+              Specify the reason for rejecting this restaurant partner application.
+            </p>
+            <textarea
+              rows={3}
+              value={rejectRestReasonText}
+              onChange={(e) => setRejectRestReasonText(e.target.value)}
+              placeholder="e.g. Ineligible business license or fraudulent registration data."
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '8px',
+                backgroundColor: '#121216',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                color: '#FFFFFF',
+                fontSize: '13px',
+                marginBottom: '18px',
+                resize: 'none'
+              }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => setRejectRestModalAppId(null)}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: '12px'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (rejectRestModalAppId && rejectRestReasonText.trim()) {
+                    await rejectRestaurantApplication(rejectRestModalAppId, rejectRestReasonText.trim());
+                    setRestSuccessMsg(`Restaurant application marked as rejected.`);
+                    setRejectRestModalAppId(null);
+                    setRejectRestReasonText('');
+                    if (inspectedRestaurantApp && inspectedRestaurantApp.id === rejectRestModalAppId) {
+                      setInspectedRestaurantApp((prev: any) => ({
+                        ...prev,
+                        status: 'rejected',
+                        rejectionReason: rejectRestReasonText.trim()
+                      }));
+                    }
+                  }
+                }}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  backgroundColor: '#EF4444',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                  fontSize: '12px'
+                }}
+              >
+                Confirm Rejection
               </button>
             </div>
           </div>

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useTomattto } from '../../context/TomatttoContext';
 import {
   FileText,
   Clock,
@@ -22,7 +23,7 @@ import {
   FileCheck
 } from 'lucide-react';
 
-export type ApplicationStatusType = 'Draft' | 'Submitted' | 'Under Review' | 'Approved' | 'Rejected';
+export type ApplicationStatusType = 'Draft' | 'Submitted' | 'Under Review' | 'Approved' | 'Rejected' | 'Action Required';
 
 interface PartnerApplicationStatusProps {
   onBack: () => void;
@@ -64,9 +65,63 @@ export const PartnerApplicationStatus: React.FC<PartnerApplicationStatusProps> =
   onBack,
   onOpenWizard
 }) => {
-  // Allow user to toggle between different statuses to view all demo states
-  const [currentStatus, setCurrentStatus] = useState<ApplicationStatusType>('Under Review');
-  const [appData] = useState<DemoApplicationData>(DEFAULT_DEMO_APPLICATION);
+  const { allRestaurantApplications, refreshAllApplications } = useTomattto();
+  const latestApp = allRestaurantApplications && allRestaurantApplications.length > 0 ? allRestaurantApplications[0] : null;
+
+  const mapStatus = (s?: string): ApplicationStatusType => {
+    if (s === 'approved') return 'Approved';
+    if (s === 'action_required') return 'Action Required';
+    if (s === 'rejected') return 'Rejected';
+    if (s === 'draft') return 'Draft';
+    if (s === 'submitted') return 'Submitted';
+    return 'Under Review';
+  };
+
+  const initialStatus: ApplicationStatusType = latestApp ? mapStatus(latestApp.status) : 'Under Review';
+  const [currentStatus, setCurrentStatus] = useState<ApplicationStatusType>(initialStatus);
+
+  const initialAppData: DemoApplicationData = latestApp
+    ? {
+        referenceId: latestApp.applicationRef || latestApp.id,
+        restaurantName: latestApp.restaurantName,
+        restaurantType: latestApp.restaurantType || 'Dine-In & Delivery (Restaurant)',
+        businessName: latestApp.legalBusinessName || latestApp.restaurantName,
+        submissionDate: latestApp.submittedAt || new Date().toLocaleDateString('en-IN', { dateStyle: 'medium' }),
+        contactEmail: latestApp.email || 'partner@tomattto.com',
+        contactPhone: latestApp.phone,
+        outletLocation: `${latestApp.address || ''}, ${latestApp.city || 'Bengaluru'}, ${latestApp.state || 'Karnataka'} - ${latestApp.pincode || ''}`,
+        fssaiNumber: latestApp.fssaiNumber || 'Under Verification',
+        accountNumberMasked: latestApp.bankDetails?.accountNumber
+          ? `•••• •••• •••• ${latestApp.bankDetails.accountNumber.slice(-4)}`
+          : '•••• •••• •••• 5821',
+        status: mapStatus(latestApp.status),
+        rejectionReason: latestApp.rejectionReason || DEFAULT_DEMO_APPLICATION.rejectionReason
+      }
+    : DEFAULT_DEMO_APPLICATION;
+
+  const [appData, setAppData] = useState<DemoApplicationData>(initialAppData);
+
+  useEffect(() => {
+    if (latestApp) {
+      setCurrentStatus(mapStatus(latestApp.status));
+      setAppData({
+        referenceId: latestApp.applicationRef || latestApp.id,
+        restaurantName: latestApp.restaurantName,
+        restaurantType: latestApp.restaurantType || 'Dine-In & Delivery (Restaurant)',
+        businessName: latestApp.legalBusinessName || latestApp.restaurantName,
+        submissionDate: latestApp.submittedAt || new Date().toLocaleDateString('en-IN', { dateStyle: 'medium' }),
+        contactEmail: latestApp.email || 'partner@tomattto.com',
+        contactPhone: latestApp.phone,
+        outletLocation: `${latestApp.address || ''}, ${latestApp.city || 'Bengaluru'}, ${latestApp.state || 'Karnataka'} - ${latestApp.pincode || ''}`,
+        fssaiNumber: latestApp.fssaiNumber || 'Under Verification',
+        accountNumberMasked: latestApp.bankDetails?.accountNumber
+          ? `•••• •••• •••• ${latestApp.bankDetails.accountNumber.slice(-4)}`
+          : '•••• •••• •••• 5821',
+        status: mapStatus(latestApp.status),
+        rejectionReason: latestApp.rejectionReason || DEFAULT_DEMO_APPLICATION.rejectionReason
+      });
+    }
+  }, [latestApp]);
 
   const timelineSteps: { id: ApplicationStatusType; title: string; desc: string }[] = [
     { id: 'Draft', title: 'Draft', desc: 'Application initiated' },
@@ -77,9 +132,9 @@ export const PartnerApplicationStatus: React.FC<PartnerApplicationStatusProps> =
 
   // Helper to determine step position
   const getStepState = (stepId: ApplicationStatusType) => {
-    if (currentStatus === 'Rejected') {
+    if (currentStatus === 'Rejected' || currentStatus === 'Action Required') {
       if (stepId === 'Draft' || stepId === 'Submitted') return 'completed';
-      if (stepId === 'Under Review') return 'rejected';
+      if (stepId === 'Under Review') return currentStatus === 'Action Required' ? 'active' : 'rejected';
       return 'upcoming';
     }
 
@@ -121,6 +176,13 @@ export const PartnerApplicationStatus: React.FC<PartnerApplicationStatusProps> =
           color: '#047857',
           border: '#6EE7B7',
           icon: <CheckCircle2 size={14} />
+        };
+      case 'Action Required':
+        return {
+          bg: '#FFFBEB',
+          color: '#B45309',
+          border: '#FDE68A',
+          icon: <AlertCircle size={14} />
         };
       case 'Rejected':
         return {
@@ -466,6 +528,7 @@ export const PartnerApplicationStatus: React.FC<PartnerApplicationStatusProps> =
               {currentStatus === 'Submitted' && <FileText size={22} />}
               {currentStatus === 'Under Review' && <RefreshCw size={22} className="animate-spin" />}
               {currentStatus === 'Approved' && <ShieldCheck size={22} />}
+              {currentStatus === 'Action Required' && <AlertCircle size={22} />}
               {currentStatus === 'Rejected' && <AlertTriangle size={22} />}
             </div>
 
@@ -476,6 +539,7 @@ export const PartnerApplicationStatus: React.FC<PartnerApplicationStatusProps> =
                   {currentStatus === 'Submitted' && 'Application Submitted & Queued'}
                   {currentStatus === 'Under Review' && 'Application Under Compliance Review'}
                   {currentStatus === 'Approved' && 'Application Approved — Welcome to Tomattto!'}
+                  {currentStatus === 'Action Required' && 'Action Required — Updates Requested'}
                   {currentStatus === 'Rejected' && 'Application Requires Changes'}
                 </h3>
               </div>
@@ -490,6 +554,8 @@ export const PartnerApplicationStatus: React.FC<PartnerApplicationStatusProps> =
                   'Our team is currently reviewing your application.'}
                 {currentStatus === 'Approved' &&
                   'Your application has been approved. Further onboarding instructions will follow.'}
+                {currentStatus === 'Action Required' &&
+                  'Our compliance reviewer requested updates or re-upload of specific regulatory documents.'}
                 {currentStatus === 'Rejected' &&
                   'Your application requires changes. Please review the feedback provided.'}
               </p>
@@ -526,6 +592,47 @@ export const PartnerApplicationStatus: React.FC<PartnerApplicationStatusProps> =
                   }}
                 >
                   <b>Next Steps:</b> Your digital Merchant Partner Agreement has been dispatched to your email. Your kitchen order receiving terminal has been provisioned. Please complete your initial menu dish setup to begin accepting live orders.
+                </div>
+              )}
+
+              {/* If status is Action Required, display reviewer resubmission request */}
+              {currentStatus === 'Action Required' && (
+                <div
+                  style={{
+                    backgroundColor: '#FFFBEB',
+                    border: '1.5px solid #FCD34D',
+                    borderRadius: '10px',
+                    padding: '14px 16px',
+                    marginTop: '14px'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                    <AlertCircle size={16} color="#D97706" />
+                    <span style={{ fontSize: '13px', fontWeight: 800, color: '#92400E' }}>
+                      Action Required — Document Resubmission Requested:
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '13px', color: '#B45309', margin: 0, lineHeight: 1.45 }}>
+                    "{appData.rejectionReason || 'Please review and re-upload clear regulatory or banking documents.'}"
+                  </p>
+                  <div style={{ marginTop: '12px' }}>
+                    <button
+                      type="button"
+                      onClick={onOpenWizard}
+                      style={{
+                        padding: '8px 16px',
+                        borderRadius: '8px',
+                        backgroundColor: '#D97706',
+                        color: '#FFFFFF',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        border: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Resubmit Documents & Update Application
+                    </button>
+                  </div>
                 </div>
               )}
 

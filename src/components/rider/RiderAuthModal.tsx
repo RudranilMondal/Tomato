@@ -78,7 +78,7 @@ export const RiderAuthModal: React.FC<RiderAuthModalProps> = ({
   const cleanPhone = phoneNumber.replace(/\D/g, '');
   const formattedPhone = `+91${cleanPhone.length === 10 ? cleanPhone : cleanPhone.slice(-10)}`;
 
-  // Handle Send OTP (supports simulated Demo OTP 123456 as well as real Supabase OTP)
+  // Handle Send OTP (Real Supabase Phone Auth)
   const handleSendOtp = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setErrorMsg('');
@@ -91,28 +91,6 @@ export const RiderAuthModal: React.FC<RiderAuthModalProps> = ({
 
     setIsLoading(true);
 
-    // 1. Development Demo OTP Mode
-    if (authMode === 'demo') {
-      try {
-        const res = await requestDemoOtp(phoneNumber);
-        if (!res.success) {
-          setErrorMsg(res.message || 'Failed to request demo verification code');
-          return;
-        }
-        setStep('otp');
-        setOtp(['', '', '', '', '', '']);
-        setTimer(30);
-        setInfoMsg(`Simulated SMS dispatched to ${formattedPhone}. Use fixed demo OTP: ${DEMO_OTP_CODE}`);
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'An error occurred requesting demo OTP';
-        setErrorMsg(message);
-      } finally {
-        setIsLoading(false);
-      }
-      return;
-    }
-
-    // 2. Production Supabase SMS Provider Mode (preserved for future SMS gateway integration)
     if (!supabase) {
       setErrorMsg('Supabase client is not initialized. Please verify environment credentials.');
       setIsLoading(false);
@@ -125,7 +103,9 @@ export const RiderAuthModal: React.FC<RiderAuthModalProps> = ({
       });
 
       if (error) {
-        setErrorMsg(error.message || 'Failed to send OTP. Please check the phone number.');
+        setErrorMsg(
+          `SMS Provider Error: ${error.message}. In local development, use test phone number 98765 43210 with test OTP 123456, or use '⚡ Quick Demo Login (Dev Only)' below.`
+        );
         setIsLoading(false);
         return;
       }
@@ -191,41 +171,14 @@ export const RiderAuthModal: React.FC<RiderAuthModalProps> = ({
 
     setIsLoading(true);
 
-    // 1. Development Demo OTP Verification Mode
-    if (authMode === 'demo') {
-      try {
-        const res = await verifyDemoOtp(formattedPhone, token, fullName);
-        if (!res.success || !res.user) {
-          setErrorMsg(res.error || `Invalid verification code. For this development demo, use OTP: ${DEMO_OTP_CODE}`);
-          setIsLoading(false);
-          return;
-        }
-
-        setDemoRiderUser(res.user);
-        try {
-          confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
-        } catch {
-          // ignore
-        }
-
-        onSuccess();
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'An error occurred during demo verification';
-        setErrorMsg(message);
-      } finally {
-        setIsLoading(false);
-      }
-      return;
-    }
-
-    // 2. Production Supabase SMS OTP Verification (preserved for future SMS gateway integration)
-    if (!supabase) {
-      setErrorMsg('Supabase client is not initialized');
-      setIsLoading(false);
-      return;
-    }
-
     try {
+      // Real Supabase SMS OTP Verification exclusively
+      if (!supabase) {
+        setErrorMsg('Supabase client is not initialized');
+        setIsLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase.auth.verifyOtp({
         phone: formattedPhone,
         token,
@@ -239,7 +192,6 @@ export const RiderAuthModal: React.FC<RiderAuthModalProps> = ({
       }
 
       if (data?.user) {
-        // Initialize or verify profile row safely
         const profileOk = await initializeRiderProfile(
           data.user.id,
           data.user.phone || formattedPhone,
@@ -256,9 +208,7 @@ export const RiderAuthModal: React.FC<RiderAuthModalProps> = ({
 
         try {
           confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
-        } catch {
-          // ignore
-        }
+        } catch {}
 
         onSuccess();
       } else {
@@ -270,6 +220,21 @@ export const RiderAuthModal: React.FC<RiderAuthModalProps> = ({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleExplicitDevLogin = () => {
+    setDemoRiderUser({
+      id: 'demo-rider-dev-01',
+      phone: '+919876543210',
+      fullName: 'Rahul Kumar (Fleet Partner)',
+      role: 'rider',
+      isDemo: true,
+      createdAt: new Date().toISOString()
+    });
+    try {
+      confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
+    } catch {}
+    onSuccess();
   };
 
   return (
@@ -569,6 +534,58 @@ export const RiderAuthModal: React.FC<RiderAuthModalProps> = ({
                 )}
               </button>
 
+              {/* Explicit Dev-Only Instant Login */}
+              {demoActive && (
+                <div
+                  style={{
+                    marginTop: '14px',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    backgroundColor: 'rgba(255, 75, 58, 0.08)',
+                    border: '1.5px dashed var(--color-primary, #FF4B3A)',
+                    textAlign: 'center'
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '5px',
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      color: 'var(--color-primary, #FF4B3A)',
+                      marginBottom: '6px'
+                    }}
+                  >
+                    <Sparkles size={13} />
+                    <span>⚡ Quick Demo Login (Dev Only)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleExplicitDevLogin}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                      color: '#FFFFFF',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <span>Instant Login as Demo Rider (Rahul Kumar)</span>
+                    <ArrowRight size={13} />
+                  </button>
+                </div>
+              )}
+
               {/* Development Sandbox Preview Option */}
               {onDevPreview && (
                 <div
@@ -662,35 +679,6 @@ export const RiderAuthModal: React.FC<RiderAuthModalProps> = ({
                   </button>
                 </div>
               </div>
-
-              {/* Demo Auto-fill Helper Button */}
-              {authMode === 'demo' && (
-                <div style={{ textAlign: 'center', marginBottom: '16px' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOtp(['1', '2', '3', '4', '5', '6']);
-                      setErrorMsg('');
-                    }}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '6px 14px',
-                      borderRadius: 'var(--radius-full)',
-                      backgroundColor: 'rgba(243, 156, 18, 0.15)',
-                      color: '#F39C12',
-                      border: '1px solid rgba(243, 156, 18, 0.35)',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <Sparkles size={12} />
-                    <span>⚡ Fill Demo OTP (123456)</span>
-                  </button>
-                </div>
-              )}
 
               {/* 6 Digit Input Boxes */}
               <div

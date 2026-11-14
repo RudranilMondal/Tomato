@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTomattto } from '../../context/TomatttoContext';
 import {
   Store,
   MapPin,
@@ -144,6 +145,12 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
   const [fssaiDoc, setFssaiDoc] = useState<UploadedDoc | null>(null);
   const [gstDoc, setGstDoc] = useState<UploadedDoc | null>(null);
 
+  // Feature 3: Mandatory Personal KYC Documents (Front & Back)
+  const [aadhaarFrontDoc, setAadhaarFrontDoc] = useState<UploadedDoc | null>(null);
+  const [aadhaarBackDoc, setAadhaarBackDoc] = useState<UploadedDoc | null>(null);
+  const [personalPanFrontDoc, setPersonalPanFrontDoc] = useState<UploadedDoc | null>(null);
+  const [personalPanBackDoc, setPersonalPanBackDoc] = useState<UploadedDoc | null>(null);
+
   const [step2Errors, setStep2Errors] = useState<Record<string, string>>({});
   const [isStep2Complete, setIsStep2Complete] = useState(false);
 
@@ -170,8 +177,12 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
   // ==========================================
   // STEP 4 STATE: Review & Submit
   // ==========================================
+  const { submitRestaurantApplication } = useTomattto();
   const [isConsentChecked, setIsConsentChecked] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [applicationRef, setApplicationRef] = useState<string>('');
   const [submissionTimestamp, setSubmissionTimestamp] = useState<string | null>(null);
 
   // ==========================================
@@ -330,7 +341,7 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
   // STEP 2 HANDLERS
   // ==========================================
   const handleDocUpload = (
-    field: 'pan' | 'fssai' | 'gst' | 'cheque',
+    field: 'pan' | 'fssai' | 'gst' | 'cheque' | 'aadhaarFront' | 'aadhaarBack' | 'personalPanFront' | 'personalPanBack',
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
     const file = e.target.files?.[0];
@@ -377,6 +388,10 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
     else if (field === 'fssai') setFssaiDoc(docData);
     else if (field === 'gst') setGstDoc(docData);
     else if (field === 'cheque') setChequeDoc(docData);
+    else if (field === 'aadhaarFront') setAadhaarFrontDoc(docData);
+    else if (field === 'aadhaarBack') setAadhaarBackDoc(docData);
+    else if (field === 'personalPanFront') setPersonalPanFrontDoc(docData);
+    else if (field === 'personalPanBack') setPersonalPanBackDoc(docData);
 
     if (field === 'cheque') {
       setStep3Errors((prev) => {
@@ -393,11 +408,15 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
     }
   };
 
-  const removeDoc = (field: 'pan' | 'fssai' | 'gst' | 'cheque') => {
+  const removeDoc = (field: 'pan' | 'fssai' | 'gst' | 'cheque' | 'aadhaarFront' | 'aadhaarBack' | 'personalPanFront' | 'personalPanBack') => {
     if (field === 'pan') setPanDoc(null);
     else if (field === 'fssai') setFssaiDoc(null);
     else if (field === 'gst') setGstDoc(null);
     else if (field === 'cheque') setChequeDoc(null);
+    else if (field === 'aadhaarFront') setAadhaarFrontDoc(null);
+    else if (field === 'aadhaarBack') setAadhaarBackDoc(null);
+    else if (field === 'personalPanFront') setPersonalPanFrontDoc(null);
+    else if (field === 'personalPanBack') setPersonalPanBackDoc(null);
   };
 
   const validateStep2 = () => {
@@ -434,13 +453,27 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
     }
 
     if (!panDoc) {
-      newErrors.pan = 'PAN card document is required';
+      newErrors.pan = 'Business PAN card document is required';
     }
     if (!fssaiDoc) {
       newErrors.fssai = 'FSSAI License certificate document is required';
     }
     if (gstRegistered === 'yes' && !gstDoc) {
       newErrors.gst = 'GST Registration Certificate is required';
+    }
+
+    // Feature 3: Mandatory Personal KYC Documents Validation
+    if (!aadhaarFrontDoc) {
+      newErrors.aadhaarFront = 'Aadhaar Card Front photo is required';
+    }
+    if (!aadhaarBackDoc) {
+      newErrors.aadhaarBack = 'Aadhaar Card Back photo is required';
+    }
+    if (!personalPanFrontDoc) {
+      newErrors.personalPanFront = 'Personal PAN Card Front photo is required';
+    }
+    if (!personalPanBackDoc) {
+      newErrors.personalPanBack = 'Personal PAN Card Back photo is required';
     }
 
     setStep2Errors(newErrors);
@@ -529,18 +562,98 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
   // ==========================================
   // STEP 4 HANDLERS: Review & Submit
   // ==========================================
-  const handleSubmitApplication = (e: React.FormEvent) => {
+  const handleSubmitApplication = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isConsentChecked) return;
+    if (!isConsentChecked || isSubmitting) return;
 
-    setIsSubmitted(true);
-    setSubmissionTimestamp(
-      new Date().toLocaleString('en-IN', {
-        dateStyle: 'medium',
-        timeStyle: 'short'
-      })
-    );
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setIsSubmitting(true);
+    setSubmissionError(null);
+    try {
+      const res = await submitRestaurantApplication(
+        {
+          restaurantName,
+          restaurantType,
+          cuisineTypes: selectedCuisines,
+          description,
+          ownerName,
+          phone: contactNumber,
+          email: emailAddress,
+          address: fullAddress,
+          city,
+          state: stateName,
+          pincode: pinCode,
+          landmark,
+          openingTime,
+          closingTime,
+          operatingDays,
+          legalBusinessName,
+          businessType,
+          panNumber,
+          gstRegistered: gstRegistered === 'yes',
+          gstin: gstRegistered === 'yes' ? gstin : undefined,
+          fssaiNumber,
+          fssaiExpiryDate,
+          bankDetails: {
+            accountHolderName,
+            bankName,
+            accountNumber,
+            ifscCode,
+            accountType
+          },
+          payoutFrequency,
+          payoutEmail: payoutEmail || emailAddress,
+          documents: {
+            panDoc: panDoc?.previewUrl || undefined,
+            panDocName: panDoc?.name,
+            fssaiDoc: fssaiDoc?.previewUrl || undefined,
+            fssaiDocName: fssaiDoc?.name,
+            gstDoc: gstDoc?.previewUrl || undefined,
+            gstDocName: gstDoc?.name,
+            chequeDoc: chequeDoc?.previewUrl || undefined,
+            chequeDocName: chequeDoc?.name,
+            aadhaarFront: aadhaarFrontDoc?.previewUrl || undefined,
+            aadhaarFrontName: aadhaarFrontDoc?.name,
+            aadhaarBack: aadhaarBackDoc?.previewUrl || undefined,
+            aadhaarBackName: aadhaarBackDoc?.name,
+            personalPanFront: personalPanFrontDoc?.previewUrl || undefined,
+            personalPanFrontName: personalPanFrontDoc?.name,
+            personalPanBack: personalPanBackDoc?.previewUrl || undefined,
+            personalPanBackName: personalPanBackDoc?.name
+          }
+        },
+        {
+          panDocFile: panDoc?.file || undefined,
+          fssaiDocFile: fssaiDoc?.file || undefined,
+          gstDocFile: gstDoc?.file || undefined,
+          chequeDocFile: chequeDoc?.file || undefined,
+          aadhaarFrontFile: aadhaarFrontDoc?.file || undefined,
+          aadhaarBackFile: aadhaarBackDoc?.file || undefined,
+          personalPanFrontFile: personalPanFrontDoc?.file || undefined,
+          personalPanBackFile: personalPanBackDoc?.file || undefined
+        }
+      );
+
+      if (!res.success) {
+        setSubmissionError(res.error || 'Failed to submit application. Please check your credentials and try again.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      setApplicationRef(res.applicationRef || '');
+      setIsSubmitted(true);
+      setSubmissionTimestamp(
+        new Date().toLocaleString('en-IN', {
+          dateStyle: 'medium',
+          timeStyle: 'short'
+        })
+      );
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err: any) {
+      console.error('Error submitting restaurant application:', err);
+      setSubmissionError(err?.message || 'A network error occurred while submitting. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Steps indicator configuration
@@ -2506,6 +2619,240 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
                     )}
                   </div>
                 )}
+
+                {/* Feature 3: Mandatory Personal KYC Verification Section */}
+                <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '2px solid #E5E7EB' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+                    <div
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '8px',
+                        backgroundColor: 'rgba(255, 75, 58, 0.1)',
+                        color: 'var(--color-primary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      <ShieldCheck size={18} />
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#111827', margin: 0 }}>
+                        Personal KYC & Identity Verification <span style={{ color: '#EF4444' }}>*</span>
+                      </h3>
+                      <p style={{ fontSize: '12px', color: '#6B7280', margin: '2px 0 0' }}>
+                        Statutory compliance requires both Front and Back photos for Aadhaar and Personal PAN verification.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginTop: '16px' }}>
+                    {/* 1. Aadhaar Card Front */}
+                    <div id="field-step2-aadhaarFront">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <label style={{ fontSize: '13px', fontWeight: 700, color: '#374151' }}>
+                          Aadhaar Card — Front Side <span style={{ color: '#EF4444' }}>*</span>
+                        </label>
+                        <span
+                          style={{
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            backgroundColor: aadhaarFrontDoc ? 'rgba(46, 204, 113, 0.15)' : 'rgba(243, 156, 18, 0.15)',
+                            color: aadhaarFrontDoc ? 'var(--color-veg)' : '#D97706'
+                          }}
+                        >
+                          {aadhaarFrontDoc ? '✓ Uploaded' : 'Missing'}
+                        </span>
+                      </div>
+                      {aadhaarFrontDoc ? (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '10px', backgroundColor: '#F9FAFB', border: '1px solid #D1D5DB' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                            <div style={{ width: '36px', height: '36px', borderRadius: '6px', overflow: 'hidden', backgroundColor: '#EFF6FF', flexShrink: 0 }}>
+                              {aadhaarFrontDoc.previewUrl ? (
+                                <img src={aadhaarFrontDoc.previewUrl} alt="Aadhaar Front" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              ) : (
+                                <FileCheck size={18} />
+                              )}
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                              <p style={{ fontSize: '12px', fontWeight: 700, color: '#111827', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{aadhaarFrontDoc.name}</p>
+                              <p style={{ fontSize: '10px', color: '#6B7280', margin: '2px 0 0' }}>{aadhaarFrontDoc.size}</p>
+                            </div>
+                          </div>
+                          <button type="button" onClick={() => removeDoc('aadhaarFront')} style={{ padding: '4px 8px', borderRadius: '4px', backgroundColor: '#FEE2E2', color: '#DC2626', border: 'none', cursor: 'pointer' }}>
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      ) : (
+                        <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '18px 12px', borderRadius: '10px', border: step2Errors.aadhaarFront ? '1.5px dashed #EF4444' : '2px dashed #D1D5DB', backgroundColor: '#FAFAFA', cursor: 'pointer' }}>
+                          <Upload size={20} color="#6B7280" style={{ marginBottom: '6px' }} />
+                          <span style={{ fontSize: '12px', fontWeight: 700, color: '#374151' }}>Upload Aadhaar Front</span>
+                          <span style={{ fontSize: '10px', color: '#9CA3AF' }}>Photo with portrait & number (Max 5MB)</span>
+                          <input type="file" accept=".pdf,image/png,image/jpeg,image/jpg" onChange={(e) => handleDocUpload('aadhaarFront', e)} style={{ display: 'none' }} />
+                        </label>
+                      )}
+                      {step2Errors.aadhaarFront && (
+                        <p style={{ fontSize: '11px', color: '#EF4444', margin: '4px 0 0' }}>{step2Errors.aadhaarFront}</p>
+                      )}
+                    </div>
+
+                    {/* 2. Aadhaar Card Back */}
+                    <div id="field-step2-aadhaarBack">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <label style={{ fontSize: '13px', fontWeight: 700, color: '#374151' }}>
+                          Aadhaar Card — Back Side <span style={{ color: '#EF4444' }}>*</span>
+                        </label>
+                        <span
+                          style={{
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            backgroundColor: aadhaarBackDoc ? 'rgba(46, 204, 113, 0.15)' : 'rgba(243, 156, 18, 0.15)',
+                            color: aadhaarBackDoc ? 'var(--color-veg)' : '#D97706'
+                          }}
+                        >
+                          {aadhaarBackDoc ? '✓ Uploaded' : 'Missing'}
+                        </span>
+                      </div>
+                      {aadhaarBackDoc ? (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '10px', backgroundColor: '#F9FAFB', border: '1px solid #D1D5DB' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                            <div style={{ width: '36px', height: '36px', borderRadius: '6px', overflow: 'hidden', backgroundColor: '#EFF6FF', flexShrink: 0 }}>
+                              {aadhaarBackDoc.previewUrl ? (
+                                <img src={aadhaarBackDoc.previewUrl} alt="Aadhaar Back" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              ) : (
+                                <FileCheck size={18} />
+                              )}
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                              <p style={{ fontSize: '12px', fontWeight: 700, color: '#111827', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{aadhaarBackDoc.name}</p>
+                              <p style={{ fontSize: '10px', color: '#6B7280', margin: '2px 0 0' }}>{aadhaarBackDoc.size}</p>
+                            </div>
+                          </div>
+                          <button type="button" onClick={() => removeDoc('aadhaarBack')} style={{ padding: '4px 8px', borderRadius: '4px', backgroundColor: '#FEE2E2', color: '#DC2626', border: 'none', cursor: 'pointer' }}>
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      ) : (
+                        <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '18px 12px', borderRadius: '10px', border: step2Errors.aadhaarBack ? '1.5px dashed #EF4444' : '2px dashed #D1D5DB', backgroundColor: '#FAFAFA', cursor: 'pointer' }}>
+                          <Upload size={20} color="#6B7280" style={{ marginBottom: '6px' }} />
+                          <span style={{ fontSize: '12px', fontWeight: 700, color: '#374151' }}>Upload Aadhaar Back</span>
+                          <span style={{ fontSize: '10px', color: '#9CA3AF' }}>Address & QR code side (Max 5MB)</span>
+                          <input type="file" accept=".pdf,image/png,image/jpeg,image/jpg" onChange={(e) => handleDocUpload('aadhaarBack', e)} style={{ display: 'none' }} />
+                        </label>
+                      )}
+                      {step2Errors.aadhaarBack && (
+                        <p style={{ fontSize: '11px', color: '#EF4444', margin: '4px 0 0' }}>{step2Errors.aadhaarBack}</p>
+                      )}
+                    </div>
+
+                    {/* 3. Personal PAN Front */}
+                    <div id="field-step2-personalPanFront">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <label style={{ fontSize: '13px', fontWeight: 700, color: '#374151' }}>
+                          Personal PAN Card — Front Side <span style={{ color: '#EF4444' }}>*</span>
+                        </label>
+                        <span
+                          style={{
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            backgroundColor: personalPanFrontDoc ? 'rgba(46, 204, 113, 0.15)' : 'rgba(243, 156, 18, 0.15)',
+                            color: personalPanFrontDoc ? 'var(--color-veg)' : '#D97706'
+                          }}
+                        >
+                          {personalPanFrontDoc ? '✓ Uploaded' : 'Missing'}
+                        </span>
+                      </div>
+                      {personalPanFrontDoc ? (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '10px', backgroundColor: '#F9FAFB', border: '1px solid #D1D5DB' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                            <div style={{ width: '36px', height: '36px', borderRadius: '6px', overflow: 'hidden', backgroundColor: '#EFF6FF', flexShrink: 0 }}>
+                              {personalPanFrontDoc.previewUrl ? (
+                                <img src={personalPanFrontDoc.previewUrl} alt="PAN Front" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              ) : (
+                                <FileCheck size={18} />
+                              )}
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                              <p style={{ fontSize: '12px', fontWeight: 700, color: '#111827', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{personalPanFrontDoc.name}</p>
+                              <p style={{ fontSize: '10px', color: '#6B7280', margin: '2px 0 0' }}>{personalPanFrontDoc.size}</p>
+                            </div>
+                          </div>
+                          <button type="button" onClick={() => removeDoc('personalPanFront')} style={{ padding: '4px 8px', borderRadius: '4px', backgroundColor: '#FEE2E2', color: '#DC2626', border: 'none', cursor: 'pointer' }}>
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      ) : (
+                        <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '18px 12px', borderRadius: '10px', border: step2Errors.personalPanFront ? '1.5px dashed #EF4444' : '2px dashed #D1D5DB', backgroundColor: '#FAFAFA', cursor: 'pointer' }}>
+                          <Upload size={20} color="#6B7280" style={{ marginBottom: '6px' }} />
+                          <span style={{ fontSize: '12px', fontWeight: 700, color: '#374151' }}>Upload Personal PAN Front</span>
+                          <span style={{ fontSize: '10px', color: '#9CA3AF' }}>Photo, Name & Signature side (Max 5MB)</span>
+                          <input type="file" accept=".pdf,image/png,image/jpeg,image/jpg" onChange={(e) => handleDocUpload('personalPanFront', e)} style={{ display: 'none' }} />
+                        </label>
+                      )}
+                      {step2Errors.personalPanFront && (
+                        <p style={{ fontSize: '11px', color: '#EF4444', margin: '4px 0 0' }}>{step2Errors.personalPanFront}</p>
+                      )}
+                    </div>
+
+                    {/* 4. Personal PAN Back */}
+                    <div id="field-step2-personalPanBack">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <label style={{ fontSize: '13px', fontWeight: 700, color: '#374151' }}>
+                          Personal PAN Card — Back Side <span style={{ color: '#EF4444' }}>*</span>
+                        </label>
+                        <span
+                          style={{
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            backgroundColor: personalPanBackDoc ? 'rgba(46, 204, 113, 0.15)' : 'rgba(243, 156, 18, 0.15)',
+                            color: personalPanBackDoc ? 'var(--color-veg)' : '#D97706'
+                          }}
+                        >
+                          {personalPanBackDoc ? '✓ Uploaded' : 'Missing'}
+                        </span>
+                      </div>
+                      {personalPanBackDoc ? (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '10px', backgroundColor: '#F9FAFB', border: '1px solid #D1D5DB' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                            <div style={{ width: '36px', height: '36px', borderRadius: '6px', overflow: 'hidden', backgroundColor: '#EFF6FF', flexShrink: 0 }}>
+                              {personalPanBackDoc.previewUrl ? (
+                                <img src={personalPanBackDoc.previewUrl} alt="PAN Back" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              ) : (
+                                <FileCheck size={18} />
+                              )}
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                              <p style={{ fontSize: '12px', fontWeight: 700, color: '#111827', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{personalPanBackDoc.name}</p>
+                              <p style={{ fontSize: '10px', color: '#6B7280', margin: '2px 0 0' }}>{personalPanBackDoc.size}</p>
+                            </div>
+                          </div>
+                          <button type="button" onClick={() => removeDoc('personalPanBack')} style={{ padding: '4px 8px', borderRadius: '4px', backgroundColor: '#FEE2E2', color: '#DC2626', border: 'none', cursor: 'pointer' }}>
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      ) : (
+                        <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '18px 12px', borderRadius: '10px', border: step2Errors.personalPanBack ? '1.5px dashed #EF4444' : '2px dashed #D1D5DB', backgroundColor: '#FAFAFA', cursor: 'pointer' }}>
+                          <Upload size={20} color="#6B7280" style={{ marginBottom: '6px' }} />
+                          <span style={{ fontSize: '12px', fontWeight: 700, color: '#374151' }}>Upload Personal PAN Back</span>
+                          <span style={{ fontSize: '10px', color: '#9CA3AF' }}>Back or QR verification side (Max 5MB)</span>
+                          <input type="file" accept=".pdf,image/png,image/jpeg,image/jpg" onChange={(e) => handleDocUpload('personalPanBack', e)} style={{ display: 'none' }} />
+                        </label>
+                      )}
+                      {step2Errors.personalPanBack && (
+                        <p style={{ fontSize: '11px', color: '#EF4444', margin: '4px 0 0' }}>{step2Errors.personalPanBack}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -3907,6 +4254,112 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
                   </div>
                 </div>
 
+                {/* 2B. MANDATORY PERSONAL IDENTITY (KYC) SUMMARY CARD */}
+                <div
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: '16px',
+                    border: '1px solid #E5E7EB',
+                    padding: '24px',
+                    marginBottom: '24px',
+                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: '18px',
+                      paddingBottom: '14px',
+                      borderBottom: '1px solid #F3F4F6'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div
+                        style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '10px',
+                          backgroundColor: '#EFF6FF',
+                          color: '#2563EB',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        <FileCheck size={20} />
+                      </div>
+                      <div>
+                        <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#111827', margin: 0 }}>
+                          2B. Owner Identity Verification (Aadhaar & PAN)
+                        </h3>
+                        <p style={{ fontSize: '12px', color: '#6B7280', margin: 0 }}>
+                          4 mandatory personal KYC document sides (Government ID verification)
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentStep(2);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '6px 14px',
+                        borderRadius: '8px',
+                        backgroundColor: '#EFF6FF',
+                        color: '#2563EB',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        border: '1px solid #BFDBFE',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <Edit2 size={13} />
+                      <span>Edit KYC Docs</span>
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+                    <div style={{ padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', backgroundColor: aadhaarFrontDoc ? '#F0FDF4' : '#FEF2F2' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#6B7280', textTransform: 'uppercase' }}>Aadhaar Card (Front Side) *</span>
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: aadhaarFrontDoc ? '#059669' : '#DC2626', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <FileCheck size={14} />
+                        <span>{aadhaarFrontDoc ? `${aadhaarFrontDoc.name} (${aadhaarFrontDoc.size})` : 'Missing — Required'}</span>
+                      </p>
+                    </div>
+
+                    <div style={{ padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', backgroundColor: aadhaarBackDoc ? '#F0FDF4' : '#FEF2F2' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#6B7280', textTransform: 'uppercase' }}>Aadhaar Card (Back Side) *</span>
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: aadhaarBackDoc ? '#059669' : '#DC2626', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <FileCheck size={14} />
+                        <span>{aadhaarBackDoc ? `${aadhaarBackDoc.name} (${aadhaarBackDoc.size})` : 'Missing — Required'}</span>
+                      </p>
+                    </div>
+
+                    <div style={{ padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', backgroundColor: personalPanFrontDoc ? '#F0FDF4' : '#FEF2F2' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#6B7280', textTransform: 'uppercase' }}>Personal PAN (Front Side) *</span>
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: personalPanFrontDoc ? '#059669' : '#DC2626', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <FileCheck size={14} />
+                        <span>{personalPanFrontDoc ? `${personalPanFrontDoc.name} (${personalPanFrontDoc.size})` : 'Missing — Required'}</span>
+                      </p>
+                    </div>
+
+                    <div style={{ padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', backgroundColor: personalPanBackDoc ? '#F0FDF4' : '#FEF2F2' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#6B7280', textTransform: 'uppercase' }}>Personal PAN (Back Side) *</span>
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: personalPanBackDoc ? '#059669' : '#DC2626', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <FileCheck size={14} />
+                        <span>{personalPanBackDoc ? `${personalPanBackDoc.name} (${personalPanBackDoc.size})` : 'Missing — Required'}</span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 {/* 3. BANK & PAYOUTS SUMMARY CARD */}
                 <div
                   style={{
@@ -4145,6 +4598,13 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
                   </button>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    {submissionError && (
+                      <span style={{ fontSize: '12px', color: '#DC2626', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <AlertCircle size={14} />
+                        {submissionError}
+                      </span>
+                    )}
+
                     <button
                       type="button"
                       onClick={onBack}
@@ -4164,26 +4624,26 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
 
                     <button
                       type="submit"
-                      disabled={!isConsentChecked}
+                      disabled={!isConsentChecked || isSubmitting}
                       style={{
                         padding: '12px 30px',
                         borderRadius: '10px',
-                        background: isConsentChecked
+                        background: isConsentChecked && !isSubmitting
                           ? 'linear-gradient(135deg, var(--color-primary) 0%, #D82618 100%)'
                           : '#E5E7EB',
-                        color: isConsentChecked ? '#FFFFFF' : '#9CA3AF',
+                        color: isConsentChecked && !isSubmitting ? '#FFFFFF' : '#9CA3AF',
                         fontSize: '14px',
                         fontWeight: 800,
                         border: 'none',
-                        cursor: isConsentChecked ? 'pointer' : 'not-allowed',
-                        boxShadow: isConsentChecked ? '0 4px 14px var(--color-primary-glow)' : 'none',
+                        cursor: isConsentChecked && !isSubmitting ? 'pointer' : 'not-allowed',
+                        boxShadow: isConsentChecked && !isSubmitting ? '0 4px 14px var(--color-primary-glow)' : 'none',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '8px',
                         transition: 'all 0.15s ease'
                       }}
                     >
-                      <span>Submit Application</span>
+                      <span>{isSubmitting ? 'Submitting Application...' : 'Submit Application'}</span>
                       <ArrowRight size={16} />
                     </button>
                   </div>
@@ -4255,6 +4715,15 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
                   }}
                 >
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                    <div>
+                      <span style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase', fontWeight: 700 }}>
+                        Application Reference
+                      </span>
+                      <p style={{ fontSize: '14px', fontWeight: 900, color: 'var(--color-primary, #FF4B3A)', fontFamily: 'monospace', margin: '2px 0 0' }}>
+                        {applicationRef || 'TOM-BLR-PENDING'}
+                      </p>
+                    </div>
+
                     <div>
                       <span style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase', fontWeight: 700 }}>
                         Restaurant

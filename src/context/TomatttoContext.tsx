@@ -20,12 +20,18 @@ import {
   RiderKycDocuments,
   RiderBankDetails,
   RiderDeliveryStep,
-  CompletedTrip
+  CompletedTrip,
+  RestaurantPartnerApplication,
+  RiderTier,
+  TierConfiguration,
+  RiderSelfieVerification,
+  RestaurantPartnerSession
 } from '../types';
 import { RESTAURANTS, COUPONS, INITIAL_USER, SAMPLE_RIDER, INITIAL_PARTNER_ORDERS, INITIAL_RIDER_TRIPS } from '../data/mockData';
 import { supabase } from '../lib/supabase';
 import { Session, User } from '@supabase/supabase-js';
 import { DemoRiderUser, DEMO_OTP_CODE } from '../lib/demoAuth';
+import { DEFAULT_TIER_CONFIGURATIONS, calculateRiderTier, calculateTierPayout } from '../lib/tierSystem';
 
 export type CustomerScreen =
   | 'splash'
@@ -145,7 +151,13 @@ interface TomatttoContextType {
   orderError: string | null;
   placeOrder: (paymentMethod: 'upi' | 'card' | 'cod') => Promise<boolean>;
 
-  // Partner State
+  // Partner State & Authentication
+  partnerSession: RestaurantPartnerSession | null;
+  selectedPartnerRestaurant: Restaurant | null;
+  partnerRestaurants: Restaurant[];
+  loginPartner: (session: RestaurantPartnerSession) => void;
+  logoutPartner: () => void;
+  switchPartnerRestaurant: (restaurantId: string) => void;
   incomingOrder: Order | null;
   partnerOrders: Order[];
   partnerAcceptOrder: (orderId: string, prepMins?: number) => { success: boolean; error?: string };
@@ -175,9 +187,21 @@ interface TomatttoContextType {
   updateRestaurantDetails: (restaurantId: string, updates: Partial<Restaurant>) => void;
   deleteMenuItem: (restaurantId: string, categoryId: string, itemId: string) => void;
 
-  // Rider State
+  // Rider State & Tier System
   isRiderOnline: boolean;
   setIsRiderOnline: (val: boolean) => void;
+  riderTier: RiderTier;
+  riderWorkingHours: number;
+  riderCompletedOrdersCount: number;
+  tierConfigurations: Record<RiderTier, TierConfiguration>;
+  updateTierConfig: (tier: RiderTier, config: Partial<TierConfiguration>) => void;
+  recalculateRiderTier: () => RiderTier;
+  calculateOrderPayoutForTier: (distanceKm: number, isSurge: boolean, tip: number, tier?: RiderTier) => any;
+  activeSelfiePrompt: { id: string; triggerReason: 'duty_start' | 'duty_end' | 'periodic' | 'random' | 'order_assignment'; orderId?: string; expiresAt: string } | null;
+  selfieVerifications: RiderSelfieVerification[];
+  promptSelfieVerification: (triggerReason: 'duty_start' | 'duty_end' | 'periodic' | 'random' | 'order_assignment', orderId?: string) => void;
+  submitSelfieVerification: (selfieUrl: string, orderId?: string, notes?: string) => Promise<{ success: boolean; error?: string }>;
+  dismissSelfieVerification: () => void;
   riderDeliveryRequest: Order | null;
   activeRiderOrder: Order | null;
   availableRiderOrders: Order[];
@@ -199,12 +223,46 @@ interface TomatttoContextType {
   persistedRiderApp: any | null;
   fetchUserRiderApplication: (userId?: string) => Promise<any>;
   allRiderApplications: RiderOnboardingApplication[];
-  submitRiderOnboarding: (app: Omit<RiderOnboardingApplication, 'id' | 'status' | 'submittedAt'> & { id?: string }) => void;
-  approveRiderKyc: (appId: string) => void;
+  submitRiderOnboarding: (
+    app: Omit<RiderOnboardingApplication, 'id' | 'status' | 'submittedAt'> & { id?: string },
+    files?: any
+  ) => Promise<{ success: boolean; error?: string }>;
+  approveRiderKyc: (appId: string) => { success: boolean; error?: string };
   rejectRiderKyc: (appId: string, reason: string) => void;
   requestResubmissionRiderKyc: (appId: string, reason: string) => void;
+  verifyRiderDocument: (appId: string, docKey: keyof RiderKycDocuments, status: 'verified' | 'rejected', reason?: string) => Promise<{ success: boolean; error?: string }>;
   loginDemoRider: () => void;
   resetRiderOnboarding: () => void;
+  verifyRiderQualification: (appId: string, status: 'verified' | 'rejected', reason?: string) => Promise<{ success: boolean; error?: string }>;
+
+  // Restaurant Partner Applications & KYC Review
+  allRestaurantApplications: RestaurantPartnerApplication[];
+  isAppsLoading: boolean;
+  appsError: string | null;
+  fetchAdminRestaurantApplications: () => Promise<RestaurantPartnerApplication[]>;
+  submitRestaurantApplication: (
+    data: any,
+    files?: {
+      panDocFile?: File;
+      fssaiDocFile?: File;
+      gstDocFile?: File;
+      chequeDocFile?: File;
+      aadhaarFrontFile?: File;
+      aadhaarBackFile?: File;
+      personalPanFrontFile?: File;
+      personalPanBackFile?: File;
+    }
+  ) => Promise<{ success: boolean; applicationRef?: string; error?: string }>;
+  approveRestaurantApplication: (appId: string) => Promise<{ success: boolean; error?: string }>;
+  rejectRestaurantApplication: (appId: string, reason: string) => Promise<{ success: boolean; error?: string }>;
+  requestResubmissionRestaurantApplication: (appId: string, reason: string) => Promise<{ success: boolean; error?: string }>;
+  verifyRestaurantDocument: (
+    appId: string,
+    docKey: 'fssaiDoc' | 'panDoc' | 'gstDoc' | 'chequeDoc' | 'aadhaarFront' | 'aadhaarBack' | 'personalPanFront' | 'personalPanBack',
+    status: 'verified' | 'rejected',
+    reason?: string
+  ) => Promise<{ success: boolean; error?: string }>;
+  refreshAllApplications: () => Promise<void>;
 
   // Simulation Helpers
   triggerSimulatedCustomerOrder: () => void;
@@ -266,11 +324,24 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // and fires INITIAL_SESSION/SIGNED_IN/SIGNED_OUT reliably without racing with getSession().
     const {
       data: { subscription }
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (!isMounted) return;
       setSupabaseSession(session);
       setSupabaseUser(session?.user ?? null);
       setIsSupabaseLoading(false);
+
+      if (session?.user && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
+        const metadata = session.user.user_metadata || {};
+        setUser((prev) => ({
+          ...prev,
+          name: metadata.full_name || metadata.name || session.user?.email?.split('@')[0] || prev.name || 'Valued Customer',
+          email: session.user.email || prev.email,
+          phone: session.user.phone || prev.phone
+        }));
+        setIsLoggedIn(true);
+      } else if (event === 'SIGNED_OUT') {
+        setIsLoggedIn(false);
+      }
     });
 
     return () => {
@@ -668,13 +739,354 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
   const [allOrders, setAllOrders] = useState<Order[]>([]);
 
+  // Partner Session & Multi-Outlet Management
+  const [partnerSession, setPartnerSession] = useState<RestaurantPartnerSession | null>(() => {
+    try {
+      const saved = localStorage.getItem('tomattto_partner_session');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return null;
+  });
+
+  const [partnerRestaurants, setPartnerRestaurants] = useState<Restaurant[]>([]);
+  const [selectedPartnerRestaurant, setSelectedPartnerRestaurant] = useState<Restaurant | null>(null);
+
+  useEffect(() => {
+    if (partnerSession?.status === 'approved') {
+      const matched = partnerSession.restaurants && partnerSession.restaurants.length > 0
+        ? partnerSession.restaurants
+        : partnerSession.restaurant
+        ? [partnerSession.restaurant]
+        : restaurants.slice(0, 2);
+      setPartnerRestaurants(matched);
+      if (!selectedPartnerRestaurant && matched.length > 0) {
+        setSelectedPartnerRestaurant(matched[0]);
+      }
+    } else {
+      setPartnerRestaurants([]);
+      setSelectedPartnerRestaurant(null);
+    }
+  }, [partnerSession, restaurants]);
+
+  const loginPartner = (session: RestaurantPartnerSession) => {
+    setPartnerSession(session);
+    try {
+      localStorage.setItem('tomattto_partner_session', JSON.stringify(session));
+    } catch {}
+  };
+
+  const logoutPartner = () => {
+    setPartnerSession(null);
+    setPartnerRestaurants([]);
+    setSelectedPartnerRestaurant(null);
+    try {
+      localStorage.removeItem('tomattto_partner_session');
+    } catch {}
+  };
+
+  const switchPartnerRestaurant = (restaurantId: string) => {
+    const target = partnerRestaurants.find((r) => r.id === restaurantId);
+    if (target) {
+      setSelectedPartnerRestaurant(target);
+    }
+  };
+
+  // Rider Tier & Duty State
+  const [tierConfigurations, setTierConfigurations] = useState<Record<RiderTier, TierConfiguration>>(() => {
+    try {
+      const saved = localStorage.getItem('tomattto_tier_configs');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return DEFAULT_TIER_CONFIGURATIONS;
+  });
+
+  const [riderWorkingHours, setRiderWorkingHours] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('tomattto_rider_working_hours');
+      if (saved) return parseFloat(saved);
+    } catch {}
+    return 14.5;
+  });
+
+  const [riderCompletedOrdersCount, setRiderCompletedOrdersCount] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('tomattto_rider_completed_orders');
+      if (saved) return parseInt(saved, 10);
+    } catch {}
+    return 24;
+  });
+
+  const [riderTier, setRiderTier] = useState<RiderTier>(() => {
+    try {
+      const saved = localStorage.getItem('tomattto_rider_tier') as RiderTier;
+      if (saved && (saved === 'bronze' || saved === 'silver' || saved === 'gold')) return saved;
+    } catch {}
+    return 'bronze';
+  });
+
+  const [isRiderOnline, setIsRiderOnlineState] = useState<boolean>(true);
+  const [dutyStartTime, setDutyStartTime] = useState<number | null>(() => Date.now());
+
+  const [activeSelfiePrompt, setActiveSelfiePrompt] = useState<{
+    id: string;
+    triggerReason: 'duty_start' | 'duty_end' | 'periodic' | 'random' | 'order_assignment';
+    orderId?: string;
+    expiresAt: string;
+  } | null>(null);
+
+  const [selfieVerifications, setSelfieVerifications] = useState<RiderSelfieVerification[]>(() => {
+    try {
+      const saved = localStorage.getItem('tomattto_rider_selfies');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [
+      {
+        id: 'slf-init-1',
+        riderId: 'APP-RDR-8921',
+        riderName: 'Vikram Singh',
+        tier: 'bronze',
+        verificationType: 'duty_start',
+        status: 'verified',
+        selfieUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80',
+        capturedAt: new Date(Date.now() - 3600000 * 4).toISOString(),
+        verifiedAt: new Date(Date.now() - 3600000 * 4 + 60000).toISOString()
+      }
+    ];
+  });
+
+  const recalculateRiderTier = () => {
+    const tier = calculateRiderTier(4.85, riderWorkingHours, riderCompletedOrdersCount, tierConfigurations);
+    setRiderTier(tier);
+    try {
+      localStorage.setItem('tomattto_rider_tier', tier);
+    } catch {}
+    return tier;
+  };
+
+  const updateTierConfig = (tier: RiderTier, config: Partial<TierConfiguration>) => {
+    setTierConfigurations((prev) => {
+      const updated = {
+        ...prev,
+        [tier]: { ...prev[tier], ...config }
+      };
+      try {
+        localStorage.setItem('tomattto_tier_configs', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const getActiveRiderId = async (): Promise<string | null> => {
+    if (!supabase) return null;
+    const uid = supabaseUser?.id;
+    if (!uid) return null;
+    try {
+      const { data: r } = await supabase.from('riders').select('id').eq('profile_id', uid).maybeSingle();
+      return r?.id || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const promptSelfieVerification = (
+    triggerReason: 'duty_start' | 'duty_end' | 'periodic' | 'random' | 'order_assignment',
+    orderId?: string,
+    verificationId?: string,
+    expiresAtOverride?: string
+  ) => {
+    const cfg = tierConfigurations[riderTier] || DEFAULT_TIER_CONFIGURATIONS[riderTier];
+    const windowMins = cfg.selfieWindowMinutes || 10;
+    const expiresAt = expiresAtOverride || new Date(Date.now() + windowMins * 60 * 1000).toISOString();
+    setActiveSelfiePrompt({
+      id: verificationId || `slf-p-${Date.now()}`,
+      triggerReason,
+      orderId,
+      expiresAt
+    });
+  };
+
+  const submitSelfieVerification = async (
+    selfieUrl: string,
+    orderId?: string,
+    notes?: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    const newVerification: RiderSelfieVerification = {
+      id: `slf-${Date.now()}`,
+      riderId: persistedRiderApp?.id || 'APP-RDR-8921',
+      riderName: persistedRiderApp?.full_name || 'Vikram Singh',
+      tier: riderTier,
+      verificationType: activeSelfiePrompt?.triggerReason === 'duty_start'
+        ? 'duty_start'
+        : activeSelfiePrompt?.triggerReason === 'duty_end'
+        ? 'duty_end'
+        : orderId
+        ? 'order_linked'
+        : 'random_duty',
+      orderId: orderId || activeSelfiePrompt?.orderId,
+      selfieUrl,
+      capturedAt: new Date().toISOString(),
+      status: 'verified',
+      verifiedAt: new Date().toISOString(),
+      verifiedBy: 'system',
+      reviewerNotes: notes || 'Verified automatically'
+    };
+
+    setSelfieVerifications((prev) => {
+      const updated = [newVerification, ...prev];
+      try {
+        localStorage.setItem('tomattto_rider_selfies', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    // Call Supabase RPC for backend audit record & next prompt scheduling
+    if (supabase) {
+      try {
+        const riderId = await getActiveRiderId();
+        if (riderId) {
+          await supabase.rpc('submit_rider_selfie', {
+            p_rider_id: riderId,
+            p_order_id: orderId || null,
+            p_verification_type: newVerification.verificationType,
+            p_storage_path: selfieUrl,
+            p_notes: notes || 'Verified by rider'
+          });
+        }
+      } catch (rpcErr) {
+        console.warn('submit_rider_selfie RPC notice:', rpcErr);
+      }
+    }
+
+    setActiveSelfiePrompt(null);
+    return { success: true };
+  };
+
+  const dismissSelfieVerification = () => {
+    setActiveSelfiePrompt(null);
+  };
+
+  const setIsRiderOnline = async (val: boolean) => {
+    if (val && !isRiderOnline) {
+      setDutyStartTime(Date.now());
+      setIsRiderOnlineState(true);
+
+      if (supabase) {
+        try {
+          const riderId = await getActiveRiderId();
+          if (riderId) {
+            const { data } = await supabase.rpc('rider_start_duty', { p_rider_id: riderId });
+            if (data?.selfie_required) {
+              promptSelfieVerification('duty_start', undefined, data.verification_id, data.expires_at);
+              return;
+            }
+          }
+        } catch (startErr) {
+          console.warn('rider_start_duty RPC notice:', startErr);
+        }
+      }
+
+      if (riderTier === 'gold') {
+        promptSelfieVerification('duty_start');
+      }
+    } else if (!val && isRiderOnline) {
+      if (dutyStartTime) {
+        const elapsedHrs = (Date.now() - dutyStartTime) / (1000 * 3600);
+        const updatedHrs = Number((riderWorkingHours + Math.max(0.1, elapsedHrs)).toFixed(1));
+        setRiderWorkingHours(updatedHrs);
+        try {
+          localStorage.setItem('tomattto_rider_working_hours', updatedHrs.toString());
+        } catch {}
+      }
+
+      if (supabase) {
+        try {
+          const riderId = await getActiveRiderId();
+          if (riderId) {
+            const { data } = await supabase.rpc('rider_end_duty', { p_rider_id: riderId });
+            if (data?.selfie_required) {
+              promptSelfieVerification('duty_end', undefined, data.verification_id, data.expires_at);
+            }
+          }
+        } catch (endErr) {
+          console.warn('rider_end_duty RPC notice:', endErr);
+        }
+      }
+
+      setDutyStartTime(null);
+      setIsRiderOnlineState(false);
+      if (riderTier === 'gold') {
+        promptSelfieVerification('duty_end');
+      }
+      recalculateRiderTier();
+    } else {
+      setIsRiderOnlineState(val);
+    }
+  };
+
+  // Periodic check for backend scheduled selfie checks
+  useEffect(() => {
+    if (!isRiderOnline) return;
+    const checkScheduledSelfie = async () => {
+      if (!supabase) return;
+      try {
+        const riderId = await getActiveRiderId();
+        if (!riderId) return;
+        const { data } = await supabase.rpc('check_rider_selfie_due', { p_rider_id: riderId });
+        if (data?.is_due && !activeSelfiePrompt) {
+          promptSelfieVerification(
+            data.verification_type || 'random_duty',
+            undefined,
+            data.verification_id,
+            data.expires_at
+          );
+        }
+      } catch (checkErr) {
+        console.warn('check_rider_selfie_due notice:', checkErr);
+      }
+    };
+
+    checkScheduledSelfie();
+    const interval = setInterval(checkScheduledSelfie, 30000);
+    return () => clearInterval(interval);
+  }, [isRiderOnline, activeSelfiePrompt]);
+
+  const calculateOrderPayoutForTier = (
+    distanceKm: number,
+    isSurge: boolean,
+    tip: number,
+    tier: RiderTier = riderTier
+  ) => {
+    return calculateTierPayout(tier, distanceKm, isSurge, tip, tierConfigurations);
+  };
+
+  const verifyRiderDocument = async (
+    appId: string,
+    docKey: keyof RiderKycDocuments,
+    status: 'verified' | 'rejected',
+    reason?: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    setAllRiderApplications((prev) =>
+      prev.map((a) => {
+        if (a.id !== appId) return a;
+        return {
+          ...a,
+          documentStatuses: {
+            ...(a.documentStatuses || {}),
+            [docKey]: status
+          },
+          rejectionReason: status === 'rejected' ? reason || a.rejectionReason : a.rejectionReason
+        };
+      })
+    );
+    return { success: true };
+  };
+
   // Partner
   const [incomingOrder, setIncomingOrder] = useState<Order | null>(null);
   const [partnerOrders, setPartnerOrders] = useState<Order[]>(INITIAL_PARTNER_ORDERS);
   const [menuStockMap, setMenuStockMap] = useState<Record<string, boolean>>({});
 
   // Rider
-  const [isRiderOnline, setIsRiderOnline] = useState<boolean>(true);
   const [riderDeliveryRequest, setRiderDeliveryRequest] = useState<Order | null>(null);
   const [activeRiderOrder, setActiveRiderOrder] = useState<Order | null>(null);
   const [riderStep, setRiderStep] = useState<RiderDeliveryStep>('heading_to_restaurant');
@@ -827,6 +1239,23 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       submittedAt: 'Today, 9:30 AM'
     }
   ]);
+
+  // Restaurant Partner Applications
+  const [allRestaurantApplications, setAllRestaurantApplications] = useState<RestaurantPartnerApplication[]>(() => {
+    try {
+      const saved = localStorage.getItem('tomattto_restaurant_applications');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
+  const [isAppsLoading, setIsAppsLoading] = useState<boolean>(false);
+  const [appsError, setAppsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('tomattto_restaurant_applications', JSON.stringify(allRestaurantApplications));
+    } catch {}
+  }, [allRestaurantApplications]);
 
   // Demo Walkthrough
   const [demoStep, setDemoStep] = useState<number>(0);
@@ -1647,9 +2076,17 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       status: 'delivered'
     };
 
-    const payout = 45 + (activeRiderOrder.tipAmount || 30) + 15; // base fare + tip + surge
+    const tierPayout = calculateOrderPayoutForTier(3.2, true, activeRiderOrder.tipAmount || 30, riderTier);
+    const payout = tierPayout.totalPay;
     setRiderEarningsToday((prev) => prev + payout);
     setRiderTripsToday((prev) => prev + 1);
+    setRiderCompletedOrdersCount((prev) => {
+      const updated = prev + 1;
+      try {
+        localStorage.setItem('tomattto_rider_completed_orders', updated.toString());
+      } catch {}
+      return updated;
+    });
 
     const completedTrip: CompletedTrip = {
       id: `TRIP-${Date.now().toString().slice(-4)}`,
@@ -1660,9 +2097,9 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       customerArea: activeRiderOrder.deliveryAddress.addressLine,
       distanceKm: 3.2,
       durationMins: 18,
-      deliveryFee: 45,
+      deliveryFee: tierPayout.basePay + tierPayout.distancePay,
       customerTip: activeRiderOrder.tipAmount || 30,
-      surgeBonus: 15,
+      surgeBonus: tierPayout.surgePay + tierPayout.tierIncentive,
       totalPayout: payout,
       completedAt: 'Just now',
       status: 'Completed'
@@ -1682,14 +2119,38 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setCurrentOrder(updated);
     }
 
+    // Authoritative Backend Payout Snapshot
+    if (supabase) {
+      (async () => {
+        try {
+          const riderId = await getActiveRiderId();
+          if (riderId && activeRiderOrder.id) {
+            await supabase.rpc('record_rider_order_payout', {
+              p_order_id: activeRiderOrder.id,
+              p_rider_id: riderId,
+              p_distance_km: 3.2,
+              p_surge_amount: tierPayout.surgePay,
+              p_tip_amount: activeRiderOrder.tipAmount || 30
+            });
+          }
+        } catch (rpcErr) {
+          console.warn('record_rider_order_payout RPC notice:', rpcErr);
+        }
+      })();
+    }
+
     try {
       confetti({ particleCount: 75, spread: 60, origin: { y: 0.6 } });
     } catch {}
 
+    recalculateRiderTier();
     return { success: true };
   };
 
-  const submitRiderOnboarding = (appData: Omit<RiderOnboardingApplication, 'id' | 'status' | 'submittedAt'> & { id?: string }) => {
+  const submitRiderOnboarding = async (
+    appData: Omit<RiderOnboardingApplication, 'id' | 'status' | 'submittedAt'> & { id?: string },
+    _files?: any
+  ): Promise<{ success: boolean; error?: string }> => {
     const existing = allRiderApplications.find(
       (a) => a.phone === appData.phone || (appData.applicationRef && a.applicationRef === appData.applicationRef)
     );
@@ -1779,9 +2240,40 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } catch {
       // ignore
     }
+    return { success: true };
   };
 
-  const approveRiderKyc = (appId: string) => {
+  const approveRiderKyc = (appId: string): { success: boolean; error?: string } => {
+    const target = allRiderApplications.find((a) => a.id === appId);
+    if (target) {
+      const docs = target.documents || {};
+      const statuses = target.documentStatuses || {};
+      const missing: string[] = [];
+      if (!docs.aadhaarFront) missing.push('Aadhaar Front');
+      if (!docs.aadhaarBack) missing.push('Aadhaar Back');
+      if (!docs.panFront) missing.push('Personal PAN Front');
+      if (!docs.panBack) missing.push('Personal PAN Back');
+
+      if (missing.length > 0) {
+        return {
+          success: false,
+          error: `Cannot approve rider: Mandatory personal documents missing (${missing.join(', ')}).`
+        };
+      }
+
+      if (
+        statuses.aadhaarFront !== 'verified' ||
+        statuses.aadhaarBack !== 'verified' ||
+        statuses.panFront !== 'verified' ||
+        statuses.panBack !== 'verified'
+      ) {
+        return {
+          success: false,
+          error: 'Cannot approve rider: All 4 mandatory personal documents (Aadhaar Front & Back, PAN Front & Back) must be individually verified first.'
+        };
+      }
+    }
+
     setAllRiderApplications((prev) =>
       prev.map((a) =>
         a.id === appId
@@ -1803,6 +2295,7 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } catch {
       // ignore
     }
+    return { success: true };
   };
 
   const rejectRiderKyc = (appId: string, reason: string) => {
@@ -1860,6 +2353,664 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const resetRiderOnboarding = () => {
     setRiderOnboardingStatus('not_started');
   };
+
+  const verifyRiderQualification = async (
+    appId: string,
+    status: 'verified' | 'rejected',
+    reason?: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.rpc('admin_review_rider_qualification', {
+          p_application_id: appId,
+          p_status: status,
+          p_rejection_reason: reason || null
+        });
+        if (error) {
+          console.warn('admin_review_rider_qualification RPC notice:', error.message);
+        }
+      } catch (e: any) {
+        console.warn('Error invoking admin_review_rider_qualification RPC:', e);
+      }
+    }
+
+    setAllRiderApplications((prev) =>
+      prev.map((a) => {
+        if (a.id !== appId) return a;
+        return {
+          ...a,
+          education: {
+            highestQualification: a.education?.highestQualification || 'High School / 10th Standard',
+            ...(a.education || {}),
+            qualificationStatus: status,
+            qualificationRejectionReason: reason
+          }
+        };
+      })
+    );
+
+    return { success: true };
+  };
+
+  const fetchAdminRestaurantApplications = async (): Promise<RestaurantPartnerApplication[]> => {
+    setIsAppsLoading(true);
+    setAppsError(null);
+    if (!supabase) {
+      setIsAppsLoading(false);
+      return allRestaurantApplications;
+    }
+    try {
+      const { data, error } = await supabase
+        .from('restaurant_partner_applications')
+        .select(`
+          *,
+          restaurant_partner_financials (*),
+          restaurant_partner_documents (*)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.warn('Error fetching restaurant applications:', error.message);
+        setAppsError(error.message);
+        setIsAppsLoading(false);
+        return allRestaurantApplications;
+      }
+
+      if (Array.isArray(data)) {
+        const mappedList: RestaurantPartnerApplication[] = data.map((row: any) => {
+          const fin = Array.isArray(row.restaurant_partner_financials) && row.restaurant_partner_financials.length > 0
+            ? row.restaurant_partner_financials[0]
+            : null;
+          const docs = Array.isArray(row.restaurant_partner_documents) ? row.restaurant_partner_documents : [];
+
+          const fssaiRow = docs.find((d: any) => d.doc_type === 'fssai_cert');
+          const panRow = docs.find((d: any) => d.doc_type === 'pan_card');
+          const gstRow = docs.find((d: any) => d.doc_type === 'gst_cert');
+          const chequeRow = docs.find((d: any) => d.doc_type === 'bank_proof');
+          const aadhaarFrontRow = docs.find((d: any) => d.doc_type === 'aadhaar_front');
+          const aadhaarBackRow = docs.find((d: any) => d.doc_type === 'aadhaar_back');
+          const personalPanFrontRow = docs.find((d: any) => d.doc_type === 'pan_front');
+          const personalPanBackRow = docs.find((d: any) => d.doc_type === 'pan_back');
+
+          return {
+            id: row.id,
+            applicationRef: row.application_ref,
+            userId: row.user_id,
+            status: row.status,
+            restaurantName: row.restaurant_name,
+            restaurantType: row.restaurant_type || 'Dine-In & Delivery',
+            cuisines: row.cuisines || [],
+            cuisineTypes: row.cuisines || [],
+            description: row.description,
+            phone: row.phone,
+            email: row.email,
+            ownerName: row.manager_name || 'Restaurant Owner',
+            managerName: row.manager_name,
+            managerPhone: row.manager_phone,
+            address: row.address_line1 + (row.address_line2 ? `, ${row.address_line2}` : ''),
+            addressLine1: row.address_line1,
+            landmark: row.landmark,
+            city: row.city,
+            pincode: row.postal_code,
+            postalCode: row.postal_code,
+            openingTime: row.operating_hours?.opening || '10:00 AM',
+            closingTime: row.operating_hours?.closing || '11:00 PM',
+            operatingDays: row.operating_hours?.days || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+            legalBusinessName: fin?.legal_entity_name || row.restaurant_name,
+            legalEntityName: fin?.legal_entity_name || row.restaurant_name,
+            businessType: fin?.business_type || 'Sole Proprietorship',
+            panNumber: fin?.pan_number_masked,
+            panNumberMasked: fin?.pan_number_masked,
+            hasGst: fin?.has_gst ?? false,
+            gstRegistered: fin?.has_gst ?? false,
+            gstin: fin?.gstin,
+            fssaiNumber: fin?.fssai_license_number,
+            fssaiLicenseNumber: fin?.fssai_license_number,
+            fssaiExpiryDate: fin?.fssai_expiry_date,
+            bankName: fin?.bank_name,
+            bankAccountHolder: fin?.bank_account_holder,
+            bankAccountNumberMasked: fin?.bank_account_number_masked,
+            bankIfscCode: fin?.bank_ifsc,
+            bankAccountType: fin?.bank_account_type,
+            bankDetails: {
+              accountHolderName: fin?.bank_account_holder,
+              bankName: fin?.bank_name,
+              accountNumber: fin?.bank_account_number_masked,
+              ifscCode: fin?.bank_ifsc,
+              accountType: fin?.bank_account_type
+            },
+            payoutFrequency: fin?.payout_schedule || 'weekly',
+            documents: {
+              fssaiDoc: fssaiRow?.storage_path,
+              fssaiDocName: fssaiRow?.file_name,
+              panDoc: panRow?.storage_path,
+              panDocName: panRow?.file_name,
+              gstDoc: gstRow?.storage_path,
+              gstDocName: gstRow?.file_name,
+              chequeDoc: chequeRow?.storage_path,
+              chequeDocName: chequeRow?.file_name,
+              aadhaarFront: aadhaarFrontRow?.storage_path,
+              aadhaarFrontName: aadhaarFrontRow?.file_name,
+              aadhaarBack: aadhaarBackRow?.storage_path,
+              aadhaarBackName: aadhaarBackRow?.file_name,
+              personalPanFront: personalPanFrontRow?.storage_path,
+              personalPanFrontName: personalPanFrontRow?.file_name,
+              personalPanBack: personalPanBackRow?.storage_path,
+              personalPanBackName: personalPanBackRow?.file_name
+            },
+            documentStatuses: {
+              fssaiDoc: fssaiRow?.status || (fssaiRow ? 'pending' : undefined),
+              panDoc: panRow?.status || (panRow ? 'pending' : undefined),
+              gstDoc: gstRow?.status || (gstRow ? 'pending' : undefined),
+              chequeDoc: chequeRow?.status || (chequeRow ? 'pending' : undefined),
+              aadhaarFront: aadhaarFrontRow?.status || (aadhaarFrontRow ? 'pending' : undefined),
+              aadhaarBack: aadhaarBackRow?.status || (aadhaarBackRow ? 'pending' : undefined),
+              personalPanFront: personalPanFrontRow?.status || (personalPanFrontRow ? 'pending' : undefined),
+              personalPanBack: personalPanBackRow?.status || (personalPanBackRow ? 'pending' : undefined)
+            },
+            rejectionReason: row.rejection_reason,
+            reviewerNotes: row.reviewer_notes,
+            submittedAt: row.submitted_at || row.created_at,
+            reviewedAt: row.reviewed_at,
+            reviewedBy: row.reviewed_by,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at
+          };
+        });
+
+        setAllRestaurantApplications(mappedList);
+        setIsAppsLoading(false);
+        return mappedList;
+      }
+    } catch (e: any) {
+      console.error('Error fetching admin restaurant applications:', e);
+      setAppsError(e?.message || 'Failed to fetch restaurant applications');
+    } finally {
+      setIsAppsLoading(false);
+    }
+    return allRestaurantApplications;
+  };
+
+  const submitRestaurantApplication = async (
+    data: any,
+    files?: {
+      panDocFile?: File;
+      fssaiDocFile?: File;
+      gstDocFile?: File;
+      chequeDocFile?: File;
+      aadhaarFrontFile?: File;
+      aadhaarBackFile?: File;
+      personalPanFrontFile?: File;
+      personalPanBackFile?: File;
+    }
+  ): Promise<{ success: boolean; applicationRef?: string; error?: string }> => {
+    const appRef = `TOM-REST-${Date.now().toString(36).toUpperCase()}`;
+    let createdAppId = crypto.randomUUID ? crypto.randomUUID() : `app-${Date.now()}`;
+
+    if (supabase) {
+      try {
+        const { data: authUser } = await supabase.auth.getUser();
+        const userId = authUser?.user?.id || null;
+
+        // 1. Insert application record
+        const { data: appRow, error: appError } = await supabase
+          .from('restaurant_partner_applications')
+          .insert({
+            application_ref: appRef,
+            user_id: userId,
+            restaurant_name: data.restaurantName,
+            restaurant_type: data.restaurantType || 'Dine-In & Delivery',
+            cuisines: data.cuisineTypes || data.cuisines || [],
+            description: data.description || '',
+            phone: data.phone,
+            email: data.email || null,
+            manager_name: data.ownerName || null,
+            manager_phone: data.phone,
+            address_line1: data.address || '',
+            landmark: data.landmark || null,
+            city: data.city || 'Bengaluru',
+            postal_code: data.pincode || '560001',
+            ownership_token_hash: `token_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+            status: 'submitted',
+            operating_hours: {
+              opening: data.openingTime || '10:00',
+              closing: data.closingTime || '23:00',
+              days: data.operatingDays || []
+            },
+            submitted_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (appError) {
+          console.warn('Supabase restaurant_partner_applications insert warning:', appError.message);
+        } else if (appRow?.id) {
+          createdAppId = appRow.id;
+        }
+
+        // 2. Insert financial record
+        const { error: finError } = await supabase
+          .from('restaurant_partner_financials')
+          .insert({
+            application_id: createdAppId,
+            legal_entity_name: data.legalBusinessName || data.legalEntityName || data.restaurantName,
+            business_type: data.businessType || 'Sole Proprietorship',
+            pan_number_masked: data.panNumber ? `${data.panNumber.slice(0, 2)}••••••${data.panNumber.slice(-2)}` : '••••••••••',
+            has_gst: Boolean(data.gstRegistered ?? data.hasGst),
+            gstin: data.gstin || null,
+            fssai_license_number: data.fssaiNumber || data.fssaiLicenseNumber || 'PENDING',
+            fssai_expiry_date: data.fssaiExpiryDate || new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString().split('T')[0],
+            bank_name: data.bankDetails?.bankName || data.bankName || 'HDFC Bank',
+            bank_account_holder: data.bankDetails?.accountHolderName || data.bankAccountHolder || data.ownerName || data.restaurantName,
+            bank_account_number_masked: data.bankDetails?.accountNumber ? `••••${data.bankDetails.accountNumber.slice(-4)}` : '••••5821',
+            bank_ifsc: data.bankDetails?.ifscCode || data.bankIfscCode || 'HDFC0001234',
+            bank_account_type: data.bankDetails?.accountType || data.bankAccountType || 'current',
+            payout_schedule: data.payoutFrequency === 'daily' ? 'daily' : 'weekly'
+          });
+
+        if (finError) {
+          console.warn('Supabase restaurant_partner_financials insert warning:', finError.message);
+        }
+
+        // 3. Upload & Insert documents
+        const docEntries: { type: 'fssai_cert' | 'pan_card' | 'gst_cert' | 'bank_proof' | 'aadhaar_front' | 'aadhaar_back' | 'pan_front' | 'pan_back'; file?: File; previewUrl?: string; name?: string }[] = [
+          { type: 'fssai_cert', file: files?.fssaiDocFile, previewUrl: data.documents?.fssaiDoc, name: data.documents?.fssaiDocName || 'fssai_license.pdf' },
+          { type: 'pan_card', file: files?.panDocFile, previewUrl: data.documents?.panDoc, name: data.documents?.panDocName || 'pan_card.pdf' },
+          { type: 'gst_cert', file: files?.gstDocFile, previewUrl: data.documents?.gstDoc, name: data.documents?.gstDocName || 'gst_certificate.pdf' },
+          { type: 'bank_proof', file: files?.chequeDocFile, previewUrl: data.documents?.chequeDoc, name: data.documents?.chequeDocName || 'bank_cheque.pdf' },
+          { type: 'aadhaar_front', file: files?.aadhaarFrontFile, previewUrl: data.documents?.aadhaarFront, name: data.documents?.aadhaarFrontName || 'aadhaar_front.jpg' },
+          { type: 'aadhaar_back', file: files?.aadhaarBackFile, previewUrl: data.documents?.aadhaarBack, name: data.documents?.aadhaarBackName || 'aadhaar_back.jpg' },
+          { type: 'pan_front', file: files?.personalPanFrontFile, previewUrl: data.documents?.personalPanFront, name: data.documents?.personalPanFrontName || 'pan_front.jpg' },
+          { type: 'pan_back', file: files?.personalPanBackFile, previewUrl: data.documents?.personalPanBack, name: data.documents?.personalPanBackName || 'pan_back.jpg' }
+        ];
+
+        for (const doc of docEntries) {
+          let storagePath = doc.previewUrl || '';
+          let fileName = doc.name || `${doc.type}.pdf`;
+
+          if (doc.file) {
+            const fileExt = doc.file.name.split('.').pop() || 'pdf';
+            const cleanFileName = `${createdAppId}/${doc.type}_${Date.now()}.${fileExt}`;
+            const { data: uploadData, error: uploadError } = await supabase.storage
+              .from('partner-kyc-documents')
+              .upload(cleanFileName, doc.file, { upsert: true });
+
+            if (!uploadError && uploadData?.path) {
+              storagePath = uploadData.path;
+              fileName = doc.file.name;
+            }
+          }
+
+          if (storagePath) {
+            await supabase.from('restaurant_partner_documents').insert({
+              application_id: createdAppId,
+              doc_type: doc.type,
+              storage_bucket: 'partner-kyc-documents',
+              storage_path: storagePath,
+              file_name: fileName,
+              status: 'pending'
+            });
+          }
+        }
+      } catch (e: any) {
+        console.warn('Error saving restaurant application in Supabase:', e);
+      }
+    }
+
+    // Local state sync
+    const newApp: RestaurantPartnerApplication = {
+      id: createdAppId,
+      applicationRef: appRef,
+      status: 'submitted',
+      restaurantName: data.restaurantName,
+      restaurantType: data.restaurantType || 'Dine-In & Delivery',
+      cuisines: data.cuisineTypes || data.cuisines || [],
+      cuisineTypes: data.cuisineTypes || data.cuisines || [],
+      description: data.description,
+      phone: data.phone,
+      email: data.email,
+      ownerName: data.ownerName || 'Restaurant Owner',
+      address: data.address,
+      city: data.city || 'Bengaluru',
+      state: data.state || 'Karnataka',
+      pincode: data.pincode || '560001',
+      legalBusinessName: data.legalBusinessName || data.restaurantName,
+      businessType: data.businessType || 'Sole Proprietorship',
+      panNumber: data.panNumber,
+      panNumberMasked: data.panNumber ? `${data.panNumber.slice(0, 2)}••••••${data.panNumber.slice(-2)}` : '••••••••••',
+      hasGst: Boolean(data.gstRegistered ?? data.hasGst),
+      gstRegistered: Boolean(data.gstRegistered ?? data.hasGst),
+      gstin: data.gstin,
+      fssaiNumber: data.fssaiNumber,
+      fssaiLicenseNumber: data.fssaiNumber,
+      fssaiExpiryDate: data.fssaiExpiryDate,
+      bankName: data.bankDetails?.bankName,
+      bankAccountHolder: data.bankDetails?.accountHolderName,
+      bankAccountNumberMasked: data.bankDetails?.accountNumber ? `••••${data.bankDetails.accountNumber.slice(-4)}` : '••••5821',
+      bankIfscCode: data.bankDetails?.ifscCode,
+      bankAccountType: data.bankDetails?.accountType,
+      bankDetails: data.bankDetails,
+      payoutFrequency: data.payoutFrequency || 'weekly',
+      documents: data.documents,
+      documentStatuses: {
+        fssaiDoc: data.documents?.fssaiDoc ? 'pending' : undefined,
+        panDoc: data.documents?.panDoc ? 'pending' : undefined,
+        gstDoc: data.documents?.gstDoc ? 'pending' : undefined,
+        chequeDoc: data.documents?.chequeDoc ? 'pending' : undefined,
+        aadhaarFront: data.documents?.aadhaarFront ? 'pending' : undefined,
+        aadhaarBack: data.documents?.aadhaarBack ? 'pending' : undefined,
+        personalPanFront: data.documents?.personalPanFront ? 'pending' : undefined,
+        personalPanBack: data.documents?.personalPanBack ? 'pending' : undefined
+      },
+      submittedAt: new Date().toISOString()
+    };
+
+    setAllRestaurantApplications((prev) => [newApp, ...prev.filter((a) => a.id !== newApp.id)]);
+
+    try {
+      confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+    } catch {}
+
+    return { success: true, applicationRef: appRef };
+  };
+
+  const verifyRestaurantDocument = async (
+    appId: string,
+    docKey: 'fssaiDoc' | 'panDoc' | 'gstDoc' | 'chequeDoc' | 'aadhaarFront' | 'aadhaarBack' | 'personalPanFront' | 'personalPanBack',
+    status: 'verified' | 'rejected',
+    reason?: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    const docTypeMap: Record<string, string> = {
+      fssaiDoc: 'fssai_cert',
+      panDoc: 'pan_card',
+      gstDoc: 'gst_cert',
+      chequeDoc: 'bank_proof',
+      aadhaarFront: 'aadhaar_front',
+      aadhaarBack: 'aadhaar_back',
+      personalPanFront: 'pan_front',
+      personalPanBack: 'pan_back'
+    };
+    const docType = docTypeMap[docKey];
+
+    if (supabase) {
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+        const currentUserId = authData?.user?.id || null;
+        const { error } = await supabase
+          .from('restaurant_partner_documents')
+          .update({
+            status,
+            verified_at: new Date().toISOString(),
+            verified_by: currentUserId,
+            rejection_reason: status === 'rejected' ? reason || null : null
+          })
+          .match({ application_id: appId, doc_type: docType });
+
+        if (error) {
+          console.warn('Supabase document verification update notice:', error.message);
+        }
+      } catch (e: any) {
+        console.warn('Error updating document verification in Supabase:', e);
+      }
+    }
+
+    setAllRestaurantApplications((prev) =>
+      prev.map((app) => {
+        if (app.id !== appId) return app;
+        return {
+          ...app,
+          documentStatuses: {
+            ...(app.documentStatuses || {}),
+            [docKey]: status
+          },
+          rejectionReason: status === 'rejected' ? reason || app.rejectionReason : app.rejectionReason
+        };
+      })
+    );
+
+    return { success: true };
+  };
+
+  const approveRestaurantApplication = async (appId: string): Promise<{ success: boolean; error?: string }> => {
+    const app = allRestaurantApplications.find((a) => a.id === appId);
+    if (app) {
+      if (app.fssaiExpiryDate) {
+        const expiry = new Date(app.fssaiExpiryDate);
+        if (!isNaN(expiry.getTime()) && expiry < new Date()) {
+          return { success: false, error: 'Cannot approve application: FSSAI License is expired.' };
+        }
+      }
+
+      const docs = app.documents || {};
+      const statuses = app.documentStatuses || {};
+      const missing: string[] = [];
+      if (!docs.aadhaarFront) missing.push('Aadhaar Front');
+      if (!docs.aadhaarBack) missing.push('Aadhaar Back');
+      if (!docs.personalPanFront) missing.push('Personal PAN Front');
+      if (!docs.personalPanBack) missing.push('Personal PAN Back');
+      if (!docs.fssaiDoc) missing.push('FSSAI License');
+      if (!docs.panDoc) missing.push('Business PAN');
+      if (!docs.chequeDoc) missing.push('Bank Proof / Cancelled Cheque');
+
+      if (missing.length > 0) {
+        return {
+          success: false,
+          error: `Cannot approve application: Mandatory compliance documents missing (${missing.join(', ')}).`
+        };
+      }
+
+      const rejectedDocs = Object.entries(statuses)
+        .filter(([_, st]) => st === 'rejected')
+        .map(([k]) => k);
+      if (rejectedDocs.length > 0) {
+        return {
+          success: false,
+          error: `Cannot approve application: Documents marked as rejected (${rejectedDocs.join(', ')}).`
+        };
+      }
+
+      const mandatory4 = ['aadhaarFront', 'aadhaarBack', 'personalPanFront', 'personalPanBack'];
+      const unverifiedMandatory = mandatory4.filter((key) => (statuses as Record<string, string | undefined>)[key] !== 'verified');
+      if (unverifiedMandatory.length > 0) {
+        return {
+          success: false,
+          error: `Cannot approve application: All 4 mandatory personal documents (Aadhaar Front & Back, PAN Front & Back) must be individually verified first (${unverifiedMandatory.join(', ')} pending).`
+        };
+      }
+    }
+
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.rpc('admin_review_restaurant_application', {
+          p_application_id: appId,
+          p_action: 'approve',
+          p_rejection_reason: null,
+          p_reviewer_notes: 'Approved via Admin Panel'
+        });
+
+        if (error) {
+          console.warn('admin_review_restaurant_application RPC notice:', error.message);
+        } else if (data && !data.success) {
+          return { success: false, error: data.message || 'RPC rejection' };
+        }
+      } catch (err: any) {
+        console.warn('Error invoking admin_review_restaurant_application RPC:', err);
+      }
+    }
+
+    setAllRestaurantApplications((prev) =>
+      prev.map((a) =>
+        a.id === appId
+          ? {
+              ...a,
+              status: 'approved',
+              reviewedAt: new Date().toISOString()
+            }
+          : a
+      )
+    );
+
+    if (app) {
+      setRestaurants((prev) => {
+        const exists = prev.some((r) => r.name.toLowerCase() === app.restaurantName.toLowerCase());
+        if (exists) return prev;
+        const newRest: Restaurant = {
+          id: `rest-${app.id.slice(0, 8)}`,
+          name: app.restaurantName,
+          slug: app.restaurantName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+          tagline: 'Freshly prepared delicacies',
+          description: app.description || 'Authentic regional and specialty dishes',
+          rating: 4.8,
+          ratingCount: 1,
+          prepTimeMinutes: 25,
+          costForTwo: app.estimatedCostForTwo || 500,
+          isPureVeg: Boolean(app.pureVeg),
+          isOpen: true,
+          distanceKm: 2.5,
+          cuisines: app.cuisines && app.cuisines.length > 0 ? app.cuisines : ['North Indian', 'Biryani'],
+          address: app.address || `${app.city}, ${app.state || ''}`,
+          coverImage: app.coverImageUrl || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&auto=format&fit=crop&q=80',
+          categories: [
+            {
+              id: 'cat-1',
+              restaurantId: `rest-${app.id.slice(0, 8)}`,
+              name: 'Recommended',
+              sortOrder: 1,
+              items: [
+                {
+                  id: `dish-${Date.now()}-1`,
+                  restaurantId: `rest-${app.id.slice(0, 8)}`,
+                  categoryId: 'cat-1',
+                  name: 'Signature Platter',
+                  description: 'Authentic chef special delicacy made with fresh ingredients',
+                  price: 299,
+                  dietary: app.pureVeg ? 'veg' : 'non_veg',
+                  isBestseller: true,
+                  isInStock: true,
+                  imageUrl: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=500&auto=format&fit=crop&q=80'
+                }
+              ]
+            }
+          ],
+          commissionRate: 18,
+          status: 'active'
+        };
+        return [...prev, newRest];
+      });
+    }
+
+    try {
+      confetti({ particleCount: 100, spread: 80, origin: { y: 0.5 } });
+    } catch {}
+
+    return { success: true };
+  };
+
+  const rejectRestaurantApplication = async (appId: string, reason: string): Promise<{ success: boolean; error?: string }> => {
+    if (!reason || reason.trim().length === 0) {
+      return { success: false, error: 'Rejection reason is required.' };
+    }
+
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.rpc('admin_review_restaurant_application', {
+          p_application_id: appId,
+          p_action: 'reject',
+          p_rejection_reason: reason.trim(),
+          p_reviewer_notes: 'Rejected via Admin Panel'
+        });
+        if (error) {
+          console.warn('admin_review_restaurant_application reject RPC notice:', error.message);
+        } else if (data && !data.success) {
+          return { success: false, error: data.message || 'RPC rejection' };
+        }
+      } catch (err: any) {
+        console.warn('Error invoking admin_review_restaurant_application RPC:', err);
+      }
+    }
+
+    setAllRestaurantApplications((prev) =>
+      prev.map((a) =>
+        a.id === appId
+          ? {
+              ...a,
+              status: 'rejected',
+              rejectionReason: reason.trim(),
+              reviewedAt: new Date().toISOString()
+            }
+          : a
+      )
+    );
+
+    return { success: true };
+  };
+
+  const requestResubmissionRestaurantApplication = async (appId: string, reason: string): Promise<{ success: boolean; error?: string }> => {
+    if (!reason || reason.trim().length === 0) {
+      return { success: false, error: 'Resubmission reason is required.' };
+    }
+
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.rpc('admin_review_restaurant_application', {
+          p_application_id: appId,
+          p_action: 'action_required',
+          p_rejection_reason: reason.trim(),
+          p_reviewer_notes: 'Action required requested via Admin Panel'
+        });
+        if (error) {
+          console.warn('admin_review_restaurant_application resubmit RPC notice:', error.message);
+        } else if (data && !data.success) {
+          return { success: false, error: data.message || 'RPC rejection' };
+        }
+      } catch (err: any) {
+        console.warn('Error invoking admin_review_restaurant_application RPC:', err);
+      }
+    }
+
+    setAllRestaurantApplications((prev) =>
+      prev.map((a) =>
+        a.id === appId
+          ? {
+              ...a,
+              status: 'action_required',
+              rejectionReason: reason.trim(),
+              reviewedAt: new Date().toISOString()
+            }
+          : a
+      )
+    );
+
+    return { success: true };
+  };
+
+  const refreshAllApplications = async (): Promise<void> => {
+    await Promise.all([
+      fetchAdminRestaurantApplications(),
+      supabaseUser ? fetchUserRiderApplication(supabaseUser.id) : Promise.resolve(null)
+    ]);
+  };
+
+  useEffect(() => {
+    fetchAdminRestaurantApplications();
+  }, []);
+
+  useEffect(() => {
+    if (!supabase) return;
+    const channel = supabase
+      .channel('admin_restaurant_apps_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'restaurant_partner_applications' }, () => {
+        fetchAdminRestaurantApplications();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'restaurant_partner_documents' }, () => {
+        fetchAdminRestaurantApplications();
+      })
+      .subscribe();
+
+    return () => {
+      supabase?.removeChannel(channel);
+    };
+  }, []);
 
   const triggerSimulatedCustomerOrder = () => {
     const dish = restaurants[0].categories[0].items[0];
@@ -2118,6 +3269,12 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         orderError,
         incomingOrder,
         partnerOrders,
+        partnerSession,
+        selectedPartnerRestaurant,
+        partnerRestaurants,
+        loginPartner,
+        logoutPartner,
+        switchPartnerRestaurant,
         partnerAcceptOrder,
         partnerStartPreparing,
         partnerMarkReady,
@@ -2135,6 +3292,18 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         deleteMenuItem,
         isRiderOnline,
         setIsRiderOnline,
+        riderTier,
+        riderWorkingHours,
+        riderCompletedOrdersCount,
+        tierConfigurations,
+        updateTierConfig,
+        recalculateRiderTier,
+        calculateOrderPayoutForTier,
+        activeSelfiePrompt,
+        selfieVerifications,
+        promptSelfieVerification,
+        submitSelfieVerification,
+        dismissSelfieVerification,
         riderDeliveryRequest,
         activeRiderOrder,
         availableRiderOrders,
@@ -2158,8 +3327,20 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         approveRiderKyc,
         rejectRiderKyc,
         requestResubmissionRiderKyc,
+        verifyRiderDocument,
         loginDemoRider,
         resetRiderOnboarding,
+        verifyRiderQualification,
+        allRestaurantApplications,
+        isAppsLoading,
+        appsError,
+        fetchAdminRestaurantApplications,
+        submitRestaurantApplication,
+        approveRestaurantApplication,
+        rejectRestaurantApplication,
+        requestResubmissionRestaurantApplication,
+        verifyRestaurantDocument,
+        refreshAllApplications,
         triggerSimulatedCustomerOrder,
         triggerSimulatedDeliveryRequest,
         demoStep,
