@@ -156,7 +156,7 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
       });
 
       if (error) {
-        // Real Supabase error display (e.g., Twilio not configured, rate limited, invalid number)
+        // Real Supabase error display (e.g., SMS provider not configured, rate limited, invalid number)
         setErrorMsg(
           `SMS Provider Error: ${error.message}. In local development, use test phone number 98765 43210 with test OTP 123456, or use '⚡ Quick Demo Login (Dev Only)' below.`
         );

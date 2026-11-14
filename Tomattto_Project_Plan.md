@@ -231,7 +231,7 @@
 | Geo | PostGIS (nearby restaurants, zones, rider matching) |
 | Payments | Razorpay (UPI, cards, wallets) |
 | Push | Expo Notifications / FCM / APNs |
-| SMS/OTP | Supabase Auth phone provider (Twilio / MSG91) |
+| SMS/OTP | Supabase Auth phone provider (SMS Provider - on hold) |
 | Admin web | Next.js + Tailwind + shadcn/ui + Supabase |
 | Analytics | PostHog / Firebase Analytics, Sentry for crashes |
 | CI/CD | EAS Build and Update, GitHub Actions |
@@ -411,7 +411,7 @@ tomattto/
 - Supabase project (Pro plan for production)
 - Google Maps / Places or Mapbox key
 - Razorpay account (business KYC)
-- SMS/OTP provider (MSG91 / Twilio)
+- SMS/OTP provider (on hold)
 - Firebase (FCM) and Apple APNs
 - Apple Developer ($99/yr) and Google Play Developer ($25 once)
 - Sentry and PostHog
