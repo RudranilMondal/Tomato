@@ -766,7 +766,7 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const refundNotif: NotificationItem = {
       id: `notif-${Date.now()}`,
       title: `💰 ₹${amount} Refund Credited`,
-      message: `Your refund for "${reason}" has been instantly credited to your Tomattto Wallet.`,
+      message: `Your refund for "${reason}" has been instantly credited to your G1Bites Wallet.`,
       time: 'Just now',
       read: false,
       type: 'order'
@@ -785,7 +785,7 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     {
       id: 'notif-1',
       title: '⚡ 50% Flash Offer Active!',
-      message: 'Use code TOMATTTO50 on biryanis, burgers, and gourmet feasts today.',
+      message: 'Use code G1BITES50 on biryanis, burgers, and gourmet feasts today.',
       time: '10 mins ago',
       read: false,
       type: 'offer'
@@ -800,7 +800,7 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     },
     {
       id: 'notif-3',
-      title: '🎉 ₹150 Tomattto Cash in your wallet',
+      title: '🎉 ₹150 G1Bites Cash in your wallet',
       message: 'Enjoy seamless 1-click checkout with zero payment failures.',
       time: '1 day ago',
       read: true,
@@ -886,7 +886,7 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     {
       id: 's-1',
       sender: 'support',
-      text: 'Hello Souvik! Welcome to Tomattto 24x7 priority support. How can I assist you today?',
+      text: 'Hello Souvik! Welcome to G1Bites 24x7 priority support. How can I assist you today?',
       time: 'Just now'
     }
   ]);
@@ -905,9 +905,9 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (lower.includes('order') || lower.includes('track') || lower.includes('where')) {
         reply = 'Your active order is in progress with live GPS tracking enabled. Vikram Singh is delivering at top speed!';
       } else if (lower.includes('refund') || lower.includes('cancel')) {
-        reply = 'Orders can be cancelled before kitchen confirmation for an instant 100% refund to your Tomattto Wallet.';
+        reply = 'Orders can be cancelled before kitchen confirmation for an instant 100% refund to your G1Bites Wallet.';
       } else if (lower.includes('coupon') || lower.includes('discount')) {
-        reply = 'You can apply code TOMATTTO50 at checkout for 50% discount up to ₹100 on all top restaurants!';
+        reply = 'You can apply code G1BITES50 at checkout for 50% discount up to ₹100 on all top restaurants!';
       } else {
         reply = 'Thanks for reaching out! Our concierge team has noted your query and will resolve it promptly.';
       }

@@ -240,7 +240,7 @@ export const AdminApp: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Tomattto_Orders_Report_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `G1Bites_Orders_Report_${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -266,7 +266,7 @@ export const AdminApp: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Tomattto_Settlements_Export_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `G1Bites_Settlements_Export_${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -302,13 +302,14 @@ export const AdminApp: React.FC = () => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '18px'
+                fontSize: '18px',
+                overflow: 'hidden'
               }}
             >
-              🍅
+              <img src="/logo.png" alt="G1Bites" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
             <div>
-              <h2 style={{ fontSize: '18px', fontWeight: 800 }}>Tomattto HQ Operations Console</h2>
+              <h2 style={{ fontSize: '18px', fontWeight: 800 }}>G1Bites HQ Operations Console</h2>
               <span style={{ fontSize: '11px', color: '#A5A5B2' }}>Live Ops • City: Bengaluru Central</span>
             </div>
           </div>
@@ -3043,7 +3044,7 @@ export const AdminApp: React.FC = () => {
               <div>
                 <h3 style={{ fontSize: '18px', fontWeight: 800 }}>Customer Directory & Wallets</h3>
                 <p style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
-                  User profiles, loyalty membership tiers, lifetime GMV spent, and Tomattto Cash balances.
+                  User profiles, loyalty membership tiers, lifetime GMV spent, and G1Bites Cash balances.
                 </p>
               </div>
 
@@ -3082,7 +3083,7 @@ export const AdminApp: React.FC = () => {
                 <div>Membership Tier</div>
                 <div>Total Orders</div>
                 <div>Lifetime GMV</div>
-                <div>Tomattto Cash Wallet</div>
+                <div>G1Bites Cash Wallet</div>
                 <div style={{ textAlign: 'right' }}>Status</div>
               </div>
 
@@ -3093,7 +3094,7 @@ export const AdminApp: React.FC = () => {
                   email: 'rahul.sharma@example.com',
                   phone: '+91 98765 43210',
                   avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
-                  tier: 'Tomattto Gold VIP',
+                  tier: 'G1Bites Gold VIP',
                   tierColor: '#F39C12',
                   ordersCount: 28,
                   lifetimeGmv: 14290,
@@ -3106,7 +3107,7 @@ export const AdminApp: React.FC = () => {
                   email: 'ananya.sen@example.com',
                   phone: '+91 98112 34567',
                   avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&auto=format&fit=crop&q=80',
-                  tier: 'Tomattto Gold VIP',
+                  tier: 'G1Bites Gold VIP',
                   tierColor: '#F39C12',
                   ordersCount: 42,
                   lifetimeGmv: 21850,
@@ -3132,7 +3133,7 @@ export const AdminApp: React.FC = () => {
                   email: 'sneha.iyer@outlook.com',
                   phone: '+91 98450 11234',
                   avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=120&auto=format&fit=crop&q=80',
-                  tier: 'Tomattto Gold VIP',
+                  tier: 'G1Bites Gold VIP',
                   tierColor: '#F39C12',
                   ordersCount: 35,
                   lifetimeGmv: 19100,

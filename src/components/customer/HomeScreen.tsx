@@ -55,13 +55,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onOpenLocation, onOpenSe
       id: 1,
       tag: 'MEGA DEAL',
       title: '50% OFF up to ₹100',
-      subtitle: 'Use code TOMATTTO50 on your favorite meals',
+      subtitle: 'Use code G1BITES50 on your favorite meals',
       bg: 'linear-gradient(135deg, #FF4B3A 0%, #FF8A65 100%)',
       img: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=400&auto=format&fit=crop&q=80'
     },
     {
       id: 2,
-      tag: 'TOMATTTO GOLD',
+      tag: 'G1BITES GOLD',
       title: 'Free Delivery Always',
       subtitle: 'Zero delivery fee on all orders above ₹249',
       bg: 'linear-gradient(135deg, #1E1E24 0%, #3A3A48 100%)',
@@ -184,21 +184,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onOpenLocation, onOpenSe
             onClick={onOpenLocation}
             style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', maxWidth: '78%' }}
           >
-            <div
+            <img
+              src="/logo.png"
+              alt="G1Bites"
               style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
-                backgroundColor: 'var(--color-primary-light)',
-                color: 'var(--color-primary)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0
+                width: '34px',
+                height: '34px',
+                borderRadius: '9px',
+                objectFit: 'cover',
+                flexShrink: 0,
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+                border: '1px solid rgba(0, 0, 0, 0.06)'
               }}
-            >
-              <MapPin size={18} />
-            </div>
+            />
             <div style={{ minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <span style={{ fontSize: '14px', fontWeight: 800 }}>Home</span>

@@ -106,9 +106,9 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
   // Default labels and icon per portal role
   const roleConfig = {
     customer: {
-      defaultTitle: 'Sign in to Tomattto',
+      defaultTitle: 'Sign in to G1Bites',
       defaultSubtitle: 'Access saved addresses, live tracking & orders',
-      icon: <Smartphone size={22} color="var(--color-primary)" />,
+      icon: <img src="/logo.png" alt="G1Bites" style={{ width: '22px', height: '22px', borderRadius: '4px', objectFit: 'contain' }} />,
       badge: 'Customer Account',
       registerPrompt: "Don't have an account?",
       registerAction: 'Sign up now'
@@ -118,7 +118,7 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
       defaultSubtitle: 'Manage live orders, menu catalog, store hours & payouts',
       icon: <Store size={22} color="var(--color-primary)" />,
       badge: 'Merchant Partner Portal',
-      registerPrompt: 'Want to list your outlet on Tomattto?',
+      registerPrompt: 'Want to list your outlet on G1Bites?',
       registerAction: 'Become a Restaurant Partner'
     },
     rider: {
@@ -126,7 +126,7 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
       defaultSubtitle: 'Accept high-yield trips, daily earnings & tier rewards',
       icon: <Bike size={22} color="var(--color-primary)" />,
       badge: 'Rider Fleet Network',
-      registerPrompt: 'Want to earn with Tomattto delivery fleet?',
+      registerPrompt: 'Want to earn with G1Bites delivery fleet?',
       registerAction: 'Join Fleet Onboarding'
     }
   }[role];

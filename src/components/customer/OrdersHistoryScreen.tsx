@@ -35,7 +35,8 @@ export const OrdersHistoryScreen: React.FC = () => {
         >
           <ArrowLeft size={18} />
         </button>
-        <h3 style={{ fontSize: '15px', fontWeight: 800 }}>Past Orders</h3>
+        <img src="/logo.png" alt="G1Bites" style={{ width: '24px', height: '24px', borderRadius: '6px', objectFit: 'contain' }} />
+        <h3 style={{ fontSize: '15px', fontWeight: 800 }}>Your Orders</h3>
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px' }} className="no-scrollbar">

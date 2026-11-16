@@ -61,11 +61,11 @@ export const RiderWelcomeScreen: React.FC<RiderWelcomeScreenProps> = ({
               color: 'var(--color-primary, #FF4B3A)'
             }}
           >
-            <Bike size={20} />
+            <img src="/logo.png" alt="G1Bites" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
           <div>
             <div style={{ fontSize: '15px', fontWeight: 900, letterSpacing: '-0.3px' }}>
-              Tomattto Fleet
+              G1Bites Fleet
             </div>
             <div style={{ fontSize: '11px', color: '#9CA3AF' }}>
               Delivery Partner Portal
@@ -138,7 +138,7 @@ export const RiderWelcomeScreen: React.FC<RiderWelcomeScreenProps> = ({
             marginBottom: '8px'
           }}
         >
-          Deliver with Tomattto. <br />
+          Deliver with G1Bites. <br />
           <span style={{ color: 'var(--color-primary, #FF4B3A)' }}>
             Earn up to ₹35,000/mo
           </span>

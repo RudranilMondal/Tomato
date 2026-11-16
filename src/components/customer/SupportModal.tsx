@@ -31,15 +31,15 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
     },
     {
       q: 'How do I cancel an order or request a refund?',
-      a: 'Orders can be cancelled before the kitchen starts preparation. Once confirmed by the restaurant chef, cancellation may be restricted to avoid food waste. Any refunds are instantly credited to your Tomattto Wallet!'
+      a: 'Orders can be cancelled before the kitchen starts preparation. Once confirmed by the restaurant chef, cancellation may be restricted to avoid food waste. Any refunds are instantly credited to your G1Bites Wallet!'
     },
     {
-      q: 'What is Tomattto Gold & Free Delivery?',
-      a: 'Tomattto Gold members enjoy 100% free delivery on all orders above ₹249, VIP customer support, and up to 20% extra discount across participating gourmet partner restaurants.'
+      q: 'What is G1Bites Gold & Free Delivery?',
+      a: 'G1Bites Gold members enjoy 100% free delivery on all orders above ₹249, VIP customer support, and up to 20% extra discount across participating gourmet partner restaurants.'
     },
     {
       q: 'How do coupons and promo codes work?',
-      a: 'You can apply codes like TOMATTTO50, WELCOME, or FREESHIP directly on the cart screen before placing your order. Only one coupon code can be applied per order.'
+      a: 'You can apply codes like G1BITES50, WELCOME, or FREESHIP directly on the cart screen before placing your order. Only one coupon code can be applied per order.'
     },
     {
       q: 'Can I add cooking instructions for allergies?',
@@ -115,7 +115,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
             </div>
 
             <div>
-              <h3 style={{ fontSize: '16px', fontWeight: 800 }}>Tomattto 24x7 Help Center</h3>
+              <h3 style={{ fontSize: '16px', fontWeight: 800 }}>G1Bites 24x7 Help Center</h3>
               <p style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
                 Instant answers & dedicated concierge support
               </p>
@@ -314,8 +314,9 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
                     }}
                   >
                     {!isUser && (
-                      <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-primary)', marginBottom: '2px' }}>
-                        🍅 Tomattto Support Bot
+                      <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-primary)', marginBottom: '2px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <img src="/logo.png" alt="" style={{ width: '13px', height: '13px', borderRadius: '3px', objectFit: 'contain' }} />
+                        <span>G1Bites Support Bot</span>
                       </span>
                     )}
                     <div

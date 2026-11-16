@@ -15,9 +15,17 @@ export const CUISINES: Cuisine[] = [
 
 export const COUPONS: Coupon[] = [
   {
-    code: 'TOMATTTO50',
+    code: 'G1BITES50',
     title: '50% OFF',
     description: 'Get 50% discount up to ₹100 on your feast',
+    discountPercentage: 50,
+    maxDiscount: 100,
+    minOrderValue: 199
+  },
+  {
+    code: 'TOMATTTO50',
+    title: '50% OFF',
+    description: 'Legacy 50% discount up to ₹100 on your feast',
     discountPercentage: 50,
     maxDiscount: 100,
     minOrderValue: 199
@@ -41,7 +49,7 @@ export const COUPONS: Coupon[] = [
   {
     code: 'WELCOME',
     title: 'WELCOME BONUS',
-    description: 'Flat ₹75 off for all fresh Tomattto foodies',
+    description: 'Flat ₹75 off for all fresh G1Bites foodies',
     discountPercentage: 30,
     maxDiscount: 75,
     minOrderValue: 149

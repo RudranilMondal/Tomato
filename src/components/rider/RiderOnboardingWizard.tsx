@@ -941,7 +941,7 @@ export const RiderOnboardingWizard: React.FC<RiderOnboardingWizardProps> = ({
         </h2>
 
         <p style={{ fontSize: '13px', color: '#9CA3AF', maxWidth: '320px', lineHeight: 1.5, marginBottom: '20px' }}>
-          Thank you for applying to join the Tomattto Delivery Fleet. Our operations team is reviewing your KYC and vehicle documents.
+          Thank you for applying to join the G1Bites Delivery Fleet. Our operations team is reviewing your KYC and vehicle documents.
         </p>
 
         {/* Application Ref Badge */}
@@ -2661,7 +2661,7 @@ export const RiderOnboardingWizard: React.FC<RiderOnboardingWizardProps> = ({
                 style={{ marginTop: '2px', accentColor: 'var(--color-primary, #FF4B3A)' }}
               />
               <span>
-                I agree to the Tomattto Fleet Partner Code of Conduct, safety policies, and background verification terms.
+                I agree to the G1Bites Fleet Partner Code of Conduct, safety policies, and background verification terms.
               </span>
             </label>
           </div>

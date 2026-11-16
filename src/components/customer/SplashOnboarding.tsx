@@ -47,9 +47,9 @@ export const SplashOnboarding: React.FC = () => {
       {/* Top Header / Skip */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '24px' }}>🍅</span>
-          <span style={{ fontWeight: 800, fontSize: '18px', color: 'var(--color-primary)' }}>
-            Tomattto
+          <img src="/logo.png" alt="G1Bites" style={{ width: '32px', height: '32px', borderRadius: '8px', objectFit: 'contain' }} />
+          <span style={{ fontWeight: 900, fontSize: '20px', color: 'var(--color-primary)', letterSpacing: '-0.02em' }}>
+            G1Bites
           </span>
         </div>
         <button

@@ -116,7 +116,7 @@ export const RiderChatModal: React.FC<RiderChatModalProps> = ({ isOpen, onClose,
                 </span>
               </div>
               <p style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
-                {rider?.vehicleNumber || 'KA 03 EN 4592'} • Tomattto Delivery Partner
+                {rider?.vehicleNumber || 'KA 03 EN 4592'} • G1Bites Delivery Partner
               </p>
             </div>
           </div>

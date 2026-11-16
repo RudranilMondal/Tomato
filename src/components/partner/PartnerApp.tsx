@@ -235,15 +235,15 @@ export const PartnerApp: React.FC = () => {
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '32px',
+                overflow: 'hidden',
                 marginBottom: '16px',
                 boxShadow: '0 8px 24px rgba(255, 75, 58, 0.4)'
               }}
             >
-              🏪
+              <img src="/logo.png" alt="G1Bites" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
             <h1 style={{ fontSize: '30px', fontWeight: 900, margin: '0 0 10px', letterSpacing: '-0.5px' }}>
-              Tomattto Merchant Partner Portal
+              G1Bites Merchant Partner Portal
             </h1>
             <p style={{ fontSize: '15px', color: '#9CA3AF', margin: 0, maxWidth: '580px', marginInline: 'auto', lineHeight: 1.5 }}>
               Manage your live kitchen tickets, menu availability, multi-outlet analytics, and daily earnings on India’s fastest food delivery network.
@@ -311,7 +311,7 @@ export const PartnerApp: React.FC = () => {
                   Existing Restaurant Partner Login
                 </h2>
                 <p style={{ fontSize: '13px', color: '#9CA3AF', margin: '0 0 20px', lineHeight: 1.5 }}>
-                  Already registered your kitchen with Tomattto? Log in with your registered phone number, OTP, email, or Google to manage your store directly.
+                  Already registered your kitchen with G1Bites? Log in with your registered phone number, OTP, email, or Google to manage your store directly.
                 </p>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px' }}>
@@ -409,7 +409,7 @@ export const PartnerApp: React.FC = () => {
                   Become a Restaurant Partner
                 </h2>
                 <p style={{ fontSize: '13px', color: '#9CA3AF', margin: '0 0 20px', lineHeight: 1.5 }}>
-                  Expand your business reach. Partner with Tomattto to receive online orders, leverage our high-speed delivery fleet, and grow your brand.
+                  Expand your business reach. Partner with G1Bites to receive online orders, leverage our high-speed delivery fleet, and grow your brand.
                 </p>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px' }}>
@@ -571,7 +571,7 @@ export const PartnerApp: React.FC = () => {
             Application Under Review
           </h2>
           <p style={{ fontSize: '13px', color: '#9CA3AF', textAlign: 'center', margin: '0 0 24px', lineHeight: 1.5 }}>
-            Thank you for applying to partner with Tomattto. Your documents and FSSAI credentials are currently being verified by our compliance team.
+            Thank you for applying to partner with G1Bites. Your documents and FSSAI credentials are currently being verified by our compliance team.
           </p>
 
           <div style={{ backgroundColor: '#101014', borderRadius: '12px', padding: '16px', marginBottom: '24px' }}>
@@ -1045,7 +1045,7 @@ export const PartnerApp: React.FC = () => {
                 cursor: 'pointer',
                 boxShadow: '0 2px 8px var(--color-primary-glow)'
               }}
-              title="Register a new restaurant or outlet with Tomattto"
+              title="Register a new restaurant or outlet with G1Bites"
             >
               <Plus size={13} />
               <span>Become a Partner</span>
@@ -2387,7 +2387,7 @@ export const PartnerApp: React.FC = () => {
               <div style={{ padding: '16px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-surface-muted)' }}>
                 <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Pending Settlement (Today)</span>
                 <h4 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--color-veg)', marginTop: '4px' }}>₹10,234</h4>
-                <p style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '2px' }}>Net of 18% Tomattto commission</p>
+                <p style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '2px' }}>Net of 18% G1Bites commission</p>
               </div>
 
               <div style={{ padding: '16px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-surface-muted)' }}>

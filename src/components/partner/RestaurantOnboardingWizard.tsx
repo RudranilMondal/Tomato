@@ -737,9 +737,9 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
           <div style={{ height: '20px', width: '1px', backgroundColor: '#E5E7EB' }} />
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '18px' }}>🍅</span>
+            <img src="/logo.png" alt="G1Bites" style={{ width: '24px', height: '24px', borderRadius: '6px', objectFit: 'contain' }} />
             <span style={{ fontSize: '15px', fontWeight: 800, color: '#111827' }}>
-              Tomattto <span style={{ color: 'var(--color-primary)' }}>Partner Portal</span>
+              G1Bites <span style={{ color: 'var(--color-primary)' }}>Partner Portal</span>
             </span>
           </div>
         </div>
@@ -797,7 +797,7 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
             }}
           >
             <Sparkles size={13} />
-            <span>GROW WITH TOMATTTO</span>
+            <span>GROW WITH G1BITES</span>
           </div>
 
           {currentStep === 1 && (
@@ -806,7 +806,7 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
                 Become a Restaurant Partner
               </h1>
               <p style={{ fontSize: '15px', color: '#6B7280', margin: 0, maxWidth: '580px', marginInline: 'auto' }}>
-                Join Tomattto and grow your restaurant business with more customers.
+                Join G1Bites and grow your restaurant business with more customers.
               </p>
             </>
           )}
@@ -1003,7 +1003,7 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
                     Restaurant Information
                   </h2>
                   <p style={{ fontSize: '12px', color: '#6B7280', margin: '2px 0 0' }}>
-                    Brand identity and categories displayed to customers on the Tomattto app.
+                    Brand identity and categories displayed to customers on the G1Bites app.
                   </p>
                 </div>
               </div>
@@ -4551,7 +4551,7 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
                         I confirm that the information and documents provided are accurate and belong to my restaurant/business.
                       </span>
                       <p style={{ fontSize: '11px', color: '#6B7280', margin: '4px 0 0', lineHeight: 1.35 }}>
-                        By submitting this application, you agree to Tomattto's Partner Terms of Service and Merchant Code of Conduct. Submitting fraudulent licenses or false bank details will result in rejection.
+                        By submitting this application, you agree to G1Bites's Partner Terms of Service and Merchant Code of Conduct. Submitting fraudulent licenses or false bank details will result in rejection.
                       </p>
                     </div>
                   </label>
@@ -4699,7 +4699,7 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
                   Application details submitted for review.
                 </h2>
                 <p style={{ fontSize: '14px', color: '#4B5563', margin: '0 auto 24px', maxWidth: '540px', lineHeight: 1.5 }}>
-                  Thank you for applying to partner with Tomattto. Your application details and compliance documents have been logged and queued for review by the Partner Onboarding & Compliance team.
+                  Thank you for applying to partner with G1Bites. Your application details and compliance documents have been logged and queued for review by the Partner Onboarding & Compliance team.
                 </p>
 
                 {/* Application Reference Summary Box */}
@@ -4779,7 +4779,7 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
                   </h4>
                   <ul style={{ fontSize: '12px', color: '#78350F', margin: 0, paddingLeft: '18px', lineHeight: 1.5 }}>
                     <li>Our compliance team will verify your FSSAI license and regulatory documents (typically 24–48 business hours).</li>
-                    <li>You will receive an onboarding call from your dedicated Tomattto Merchant Partner Manager.</li>
+                    <li>You will receive an onboarding call from your dedicated G1Bites Merchant Partner Manager.</li>
                     <li>Digital merchant agreement and order management terminal login credentials will be emailed to you upon clearance.</li>
                   </ul>
                 </div>

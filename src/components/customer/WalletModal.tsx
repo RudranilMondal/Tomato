@@ -59,7 +59,7 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose }) => 
           }}
         >
           <div>
-            <h3 style={{ fontSize: '17px', fontWeight: 800 }}>Tomattto Credits & Wallet</h3>
+            <h3 style={{ fontSize: '17px', fontWeight: 800 }}>G1Bites Credits & Wallet</h3>
             <p style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
               1-click instant checkout with zero payment drop-offs
             </p>
@@ -95,14 +95,13 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose }) => 
             <div
               style={{
                 position: 'absolute',
-                top: '-20px',
-                right: '-20px',
-                fontSize: '90px',
-                opacity: 0.1,
+                top: '-15px',
+                right: '-15px',
+                opacity: 0.15,
                 pointerEvents: 'none'
               }}
             >
-              🍅
+              <img src="/logo.png" alt="" style={{ width: '120px', height: '120px', objectFit: 'contain' }} />
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -134,7 +133,7 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose }) => 
                 <span style={{ fontSize: '10px', opacity: 0.7, display: 'block' }}>ACCOUNT HOLDER</span>
                 <span style={{ fontSize: '13px', fontWeight: 800 }}>Souvik Mukherjee</span>
               </div>
-              <span style={{ fontSize: '11px', fontWeight: 700, opacity: 0.85 }}>TOMATTTO PAY</span>
+              <span style={{ fontSize: '11px', fontWeight: 700, opacity: 0.85 }}>G1BITES PAY</span>
             </div>
           </div>
 

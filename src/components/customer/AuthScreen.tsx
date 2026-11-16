@@ -288,10 +288,10 @@ export const AuthScreen: React.FC = () => {
           <ArrowLeft size={18} />
         </button>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontSize: '18px' }}>🍅</span>
-          <span style={{ fontSize: '16px', fontWeight: 900, color: 'var(--color-primary)', letterSpacing: '-0.02em' }}>
-            Tomattto
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <img src="/logo.png" alt="G1Bites" style={{ width: '26px', height: '26px', borderRadius: '6px', objectFit: 'contain' }} />
+          <span style={{ fontSize: '17px', fontWeight: 900, color: 'var(--color-primary)', letterSpacing: '-0.02em' }}>
+            G1Bites
           </span>
         </div>
 
@@ -322,12 +322,12 @@ export const AuthScreen: React.FC = () => {
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '34px',
+                overflow: 'hidden',
                 marginBottom: '14px',
                 boxShadow: '0 8px 24px var(--color-primary-glow)'
               }}
             >
-              🍅
+              <img src="/logo.png" alt="G1Bites" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
             <h2 style={{ fontSize: '22px', fontWeight: 900, color: 'var(--color-text-main)', lineHeight: 1.2 }}>
               {authStep === 'otp'
@@ -344,7 +344,7 @@ export const AuthScreen: React.FC = () => {
                 : authStep === 'details'
                 ? 'Welcome! Tell us your name and delivery address to start ordering'
                 : authStep === 'email'
-                ? 'Sign in or create your Tomattto account'
+                ? 'Sign in or create your G1Bites account'
                 : 'Log in or sign up to unlock exclusive offers & live tracking'}
             </p>
           </div>
@@ -1020,7 +1020,7 @@ export const AuthScreen: React.FC = () => {
         {/* Footer Disclaimer */}
         <div style={{ textAlign: 'center', marginTop: '28px', borderTop: '1px solid var(--color-border-subtle)', paddingTop: '16px' }}>
           <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', lineHeight: 1.4 }}>
-            By continuing, you agree to Tomattto's{' '}
+            By continuing, you agree to G1Bites's{' '}
             <span style={{ color: 'var(--color-text-main)', fontWeight: 700, textDecoration: 'underline' }}>
               Terms of Service
             </span>{' '}

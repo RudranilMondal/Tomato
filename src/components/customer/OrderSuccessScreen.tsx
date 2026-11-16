@@ -32,6 +32,18 @@ export const OrderSuccessScreen: React.FC = () => {
     >
       {/* Top Graphic */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <img
+          src="/logo.png"
+          alt="G1Bites"
+          style={{
+            width: '44px',
+            height: '44px',
+            borderRadius: '12px',
+            objectFit: 'cover',
+            marginBottom: '16px',
+            boxShadow: '0 4px 14px rgba(0, 0, 0, 0.1)'
+          }}
+        />
         <div
           style={{
             width: '90px',

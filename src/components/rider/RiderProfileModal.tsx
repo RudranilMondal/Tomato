@@ -456,7 +456,7 @@ export const RiderProfileModal: React.FC<RiderProfileModalProps> = ({ isOpen, on
                 </div>
                 <div>
                   <h4 style={{ fontSize: '13px', fontWeight: 800, color: 'var(--color-veg)' }}>
-                    Tomattto Shield Rider Insurance: ₹5,00,000
+                    G1Bites Shield Rider Insurance: ₹5,00,000
                   </h4>
                   <p style={{ fontSize: '11px', color: '#D1D5DB', marginTop: '2px', lineHeight: 1.5 }}>
                     Active 24/7 medical & accidental coverage while on shift. Policy #TS-99214 underwritten by ICICI Lombard.
@@ -487,7 +487,7 @@ export const RiderProfileModal: React.FC<RiderProfileModalProps> = ({ isOpen, on
                   <div style={{ fontWeight: 700, color: '#FFFFFF', marginTop: '2px' }}>Lunch (12-3 PM) & Dinner (7-11 PM)</div>
                 </div>
                 <div>
-                  <span style={{ color: '#A5A5B2' }}>Tomattto Bag & Gear:</span>
+                  <span style={{ color: '#A5A5B2' }}>G1Bites Bag & Gear:</span>
                   <div style={{ fontWeight: 700, color: 'var(--color-veg)', marginTop: '2px' }}>✓ Issued (Insulated Thermal Bag)</div>
                 </div>
                 <div>
@@ -989,7 +989,7 @@ export const RiderProfileModal: React.FC<RiderProfileModalProps> = ({ isOpen, on
           }}
         >
           <span style={{ fontSize: '11px', color: '#A5A5B2' }}>
-            Tomattto Delivery Fleet • Partner Portal v2.4
+            G1Bites Delivery Fleet • Partner Portal v2.4
           </span>
           <button
             onClick={onClose}
