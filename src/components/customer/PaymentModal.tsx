@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTomattto } from '../../context/TomatttoContext';
-import { X, ShieldCheck, Check, Smartphone, CreditCard, Banknote } from 'lucide-react';
+import { X, ShieldCheck, Check, Smartphone, CreditCard, Banknote, Sparkles, Lock } from 'lucide-react';
+import { openRazorpayCheckout } from '../../lib/razorpay';
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -8,11 +9,112 @@ interface PaymentModalProps {
 }
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose }) => {
-  const { placeOrder, isPlacingOrder, orderError, cartTotal, appliedCoupon } = useTomattto();
+  const {
+    placeOrder,
+    isPlacingOrder,
+    orderError,
+    cartTotal,
+    appliedCoupon,
+    user,
+    selectedRestaurant,
+    isLoggedIn,
+    setCustomerScreen
+  } = useTomattto();
   const [selectedMethod, setSelectedMethod] = useState<'upi' | 'card' | 'cod'>('upi');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  if (!isLoggedIn) {
+    return (
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          backdropFilter: 'blur(4px)',
+          zIndex: 100,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'flex-end',
+          animation: 'fadeIn 0.2s ease'
+        }}
+      >
+        <div
+          style={{
+            backgroundColor: 'var(--color-surface)',
+            borderTopLeftRadius: 'var(--radius-xl)',
+            borderTopRightRadius: 'var(--radius-xl)',
+            padding: '24px 20px',
+            boxShadow: 'var(--shadow-lg)',
+            textAlign: 'center'
+          }}
+        >
+          <div
+            style={{
+              width: '54px',
+              height: '54px',
+              borderRadius: '50%',
+              backgroundColor: 'var(--color-primary-light)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 12px',
+              color: 'var(--color-primary)'
+            }}
+          >
+            <Lock size={24} />
+          </div>
+          <h3 style={{ fontSize: '17px', fontWeight: 800 }}>Login Required</h3>
+          <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', margin: '8px 0 20px', lineHeight: 1.5 }}>
+            You must log in to your account before confirming payment and placing this order.
+          </p>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              onClick={onClose}
+              style={{
+                flex: 1,
+                padding: '12px',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--color-border)',
+                backgroundColor: 'var(--color-surface)',
+                color: 'var(--color-text-main)',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                onClose();
+                setCustomerScreen('auth');
+              }}
+              style={{
+                flex: 1.5,
+                backgroundColor: 'var(--color-primary)',
+                color: '#FFFFFF',
+                padding: '12px',
+                borderRadius: 'var(--radius-md)',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: 'var(--shadow-glow)',
+                border: 'none'
+              }}
+            >
+              Log In / Sign Up
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const isTestOneRupee = import.meta.env.VITE_RAZORPAY_TEST_ONE_RUPEE === 'true';
+  const hasRazorpayKey = Boolean(import.meta.env.VITE_RAZORPAY_KEY_ID);
 
   const discountAmount = appliedCoupon
     ? Math.min(appliedCoupon.maxDiscount, (cartTotal * appliedCoupon.discountPercentage) / 100)
@@ -25,11 +127,29 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose }) =
 
   const handlePay = async () => {
     if (isProcessing || isPlacingOrder) return;
+    setPaymentError(null);
     setIsProcessing(true);
-    const success = await placeOrder(selectedMethod);
-    setIsProcessing(false);
-    if (success) {
-      onClose();
+
+    try {
+      if (selectedMethod !== 'cod' && hasRazorpayKey) {
+        await openRazorpayCheckout({
+          amountInRupees: finalPayable,
+          restaurantName: selectedRestaurant?.name,
+          customerName: user?.name,
+          customerPhone: user?.phone,
+        });
+      }
+
+      const success = await placeOrder(selectedMethod);
+      if (success) {
+        onClose();
+      }
+    } catch (err: any) {
+      if (err?.message !== 'PAYMENT_CANCELLED') {
+        setPaymentError(err?.message || 'Payment processing failed. Please try again.');
+      }
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -237,23 +357,50 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose }) =
           </div>
         </div>
 
-        {/* Security badge */}
+        {/* Security badge & Test mode notice */}
         <div
           style={{
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            fontSize: '11px',
-            color: 'var(--color-text-muted)',
+            gap: '4px',
             marginBottom: '14px'
           }}
         >
-          <ShieldCheck size={14} color="#27AE60" />
-          <span>PCI-DSS 256-bit encrypted checkout</span>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              fontSize: '11px',
+              color: 'var(--color-text-muted)'
+            }}
+          >
+            <ShieldCheck size={14} color="#27AE60" />
+            <span>PCI-DSS 256-bit encrypted checkout</span>
+          </div>
+          {isTestOneRupee && selectedMethod !== 'cod' && (
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: '10px',
+                fontWeight: 700,
+                color: '#27AE60',
+                backgroundColor: 'rgba(39, 174, 96, 0.1)',
+                padding: '2px 8px',
+                borderRadius: '12px'
+              }}
+            >
+              <Sparkles size={11} />
+              <span>Razorpay Sandbox: Passes ₹1 (100p) for live test checkout</span>
+            </div>
+          )}
         </div>
 
-        {orderError && (
+        {(paymentError || orderError) && (
           <div
             style={{
               padding: '10px 14px',
@@ -267,7 +414,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose }) =
               textAlign: 'center'
             }}
           >
-            {orderError}
+            {paymentError || orderError}
           </div>
         )}
         {/* Pay Button */}

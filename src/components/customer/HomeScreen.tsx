@@ -262,11 +262,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onOpenLocation, onOpenSe
                   borderRadius: '50%',
                   overflow: 'hidden',
                   cursor: 'pointer',
-                  border: '2px solid var(--color-border)'
+                  border: '2px solid var(--color-primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: 'var(--color-surface-muted)'
                 }}
                 title="View Profile & Settings"
               >
-                <img src={user.avatarUrl} alt={user.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                {user.avatarUrl ? (
+                  <img src={user.avatarUrl} alt={user.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--color-primary)' }}>
+                    {(user.name || 'U').charAt(0).toUpperCase()}
+                  </span>
+                )}
               </div>
             ) : (
               <button
@@ -1306,57 +1316,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onOpenLocation, onOpenSe
           </div>
         </div>
       </div>
-
-      {/* Floating Cart Bar (if items in cart) */}
-      {itemCount > 0 && (
-        <div
-          onClick={() => setCustomerScreen('cart')}
-          style={{
-            position: 'absolute',
-            bottom: '12px',
-            left: '12px',
-            right: '12px',
-            backgroundColor: 'var(--color-primary)',
-            color: '#FFFFFF',
-            borderRadius: 'var(--radius-md)',
-            padding: '12px 16px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            boxShadow: 'var(--shadow-glow)',
-            cursor: 'pointer',
-            animation: 'slideUp 0.25s ease',
-            zIndex: 50
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                backgroundColor: 'rgba(255,255,255,0.25)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 800,
-                fontSize: '13px'
-              }}
-            >
-              {itemCount}
-            </div>
-            <div>
-              <div style={{ fontSize: '14px', fontWeight: 800 }}>₹{cartTotal}</div>
-              <div style={{ fontSize: '10px', opacity: 0.9 }}>Extra charges may apply</div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700 }}>
-            <span>View Cart</span>
-            <ShoppingBag size={16} />
-          </div>
-        </div>
-      )}
 
       {/* Notifications Drawer Modal */}
       <NotificationsModal

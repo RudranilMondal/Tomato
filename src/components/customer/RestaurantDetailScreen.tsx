@@ -821,57 +821,6 @@ export const RestaurantDetailScreen: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* Floating Bottom Cart Bar */}
-      {itemCount > 0 && (
-        <div
-          onClick={() => setCustomerScreen('cart')}
-          style={{
-            position: 'absolute',
-            bottom: '12px',
-            left: '12px',
-            right: '12px',
-            backgroundColor: 'var(--color-primary)',
-            color: '#FFFFFF',
-            borderRadius: 'var(--radius-md)',
-            padding: '12px 16px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            boxShadow: 'var(--shadow-glow)',
-            cursor: 'pointer',
-            animation: 'slideUp 0.25s ease',
-            zIndex: 50
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                backgroundColor: 'rgba(255,255,255,0.25)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 800,
-                fontSize: '13px'
-              }}
-            >
-              {itemCount}
-            </div>
-            <div>
-              <div style={{ fontSize: '14px', fontWeight: 800 }}>₹{cartTotal}</div>
-              <div style={{ fontSize: '10px', opacity: 0.9 }}>Plus taxes & charges</div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700 }}>
-            <span>View Cart</span>
-            <ShoppingBag size={16} />
-          </div>
-        </div>
-      )}
     </div>
   );
 };

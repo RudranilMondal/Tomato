@@ -9,6 +9,7 @@ import {
   Order,
   OrderStatus,
   UserProfile,
+  Address,
   MenuItemVariant,
   MenuItemAddon,
   WalletTransaction,
@@ -27,11 +28,13 @@ import {
   RiderSelfieVerification,
   RestaurantPartnerSession
 } from '../types';
-import { RESTAURANTS, COUPONS, INITIAL_USER, SAMPLE_RIDER, INITIAL_PARTNER_ORDERS, INITIAL_RIDER_TRIPS } from '../data/mockData';
+import { RESTAURANTS, COUPONS, INITIAL_USER, GUEST_USER, SAMPLE_RIDER, INITIAL_PARTNER_ORDERS, INITIAL_RIDER_TRIPS } from '../data/mockData';
 import { supabase } from '../lib/supabase';
 import { Session, User } from '@supabase/supabase-js';
 import { DemoRiderUser, DEMO_OTP_CODE } from '../lib/demoAuth';
 import { DEFAULT_TIER_CONFIGURATIONS, calculateRiderTier, calculateTierPayout } from '../lib/tierSystem';
+import { auth as firebaseAuth } from '../lib/firebase';
+import { onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
 
 export type CustomerScreen =
   | 'splash'
@@ -84,7 +87,7 @@ interface TomatttoContextType {
   allOrders: Order[];
   // Auth
   isLoggedIn: boolean;
-  loginUser: (details?: { name?: string; phone?: string; email?: string; address?: string }) => void;
+  loginUser: (details?: { name?: string; phone?: string; email?: string; address?: string; avatarUrl?: string }) => void;
   logoutUser: () => void;
   user: UserProfile;
   updateUserProfile: (updates: Partial<UserProfile>) => void;
@@ -295,10 +298,130 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(COUPONS[0]);
   const [isPlacingOrder, setIsPlacingOrder] = useState<boolean>(false);
   const [orderError, setOrderError] = useState<string | null>(null); // default 50% promo for excitement
-  const [user, setUser] = useState<UserProfile>(INITIAL_USER);
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(true);
-  const [userAddresses, setUserAddresses] = useState(INITIAL_USER.addresses);
-  const [selectedAddress, setSelectedAddress] = useState<string>(INITIAL_USER.addresses[0].line);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('tomattto_customer_logged_in') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [user, setUser] = useState<UserProfile>(() => {
+    try {
+      const isLogged = localStorage.getItem('tomattto_customer_logged_in') === 'true';
+      if (isLogged) {
+        const saved = localStorage.getItem('tomattto_customer_user');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && typeof parsed === 'object' && parsed.id) {
+            return parsed;
+          }
+        }
+      }
+    } catch {}
+    return GUEST_USER;
+  });
+  const [userAddresses, setUserAddresses] = useState<Address[]>(() => {
+    try {
+      const isLogged = localStorage.getItem('tomattto_customer_logged_in') === 'true';
+      if (isLogged) {
+        const saved = localStorage.getItem('tomattto_user_addresses');
+        if (saved) return JSON.parse(saved);
+        const savedUser = localStorage.getItem('tomattto_customer_user');
+        if (savedUser) {
+          const parsed = JSON.parse(savedUser);
+          if (parsed?.addresses?.length) return parsed.addresses;
+        }
+      }
+    } catch {}
+    return [];
+  });
+  const [selectedAddress, setSelectedAddressState] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('tomattto_selected_address');
+      if (saved) return saved;
+    } catch {}
+    return '100ft Road, Indiranagar, Bengaluru';
+  });
+
+  const setSelectedAddress = (addr: string) => {
+    setSelectedAddressState(addr);
+    try {
+      localStorage.setItem('tomattto_selected_address', addr);
+    } catch {}
+  };
+
+  // Firebase Auth Synchronization (for Google OAuth & persistent login)
+  useEffect(() => {
+    if (!firebaseAuth) return;
+
+    let isMounted = true;
+    const unsubscribe = onAuthStateChanged(firebaseAuth, (fbUser) => {
+      if (!isMounted) return;
+      if (fbUser) {
+        setIsLoggedIn(true);
+        setUser((prev) => {
+          const defaultAddresses: Address[] = [
+            {
+              id: 'addr-1',
+              label: 'Home',
+              line: 'Flat 402, Sunset Heights, 100ft Road, Indiranagar, Bengaluru',
+              isDefault: true
+            },
+            {
+              id: 'addr-2',
+              label: 'Work',
+              line: 'WeWork Galaxy, 43 Residency Rd, Shanthala Nagar, Bengaluru',
+              isDefault: false
+            }
+          ];
+
+          const updatedAddresses = prev.addresses && prev.addresses.length > 0 ? prev.addresses : defaultAddresses;
+
+          const updatedUser: UserProfile = {
+            id: fbUser.uid || prev.id || `usr-${Date.now()}`,
+            name: fbUser.displayName || (prev.name && prev.name !== '' ? prev.name : 'Valued Customer'),
+            phone: fbUser.phoneNumber || (prev.phone && prev.phone !== '' ? prev.phone : '+91 98765 43210'),
+            email: fbUser.email || prev.email || '',
+            avatarUrl: fbUser.photoURL || prev.avatarUrl || '',
+            addresses: updatedAddresses
+          };
+
+          try {
+            localStorage.setItem('tomattto_customer_logged_in', 'true');
+            localStorage.setItem('tomattto_customer_user', JSON.stringify(updatedUser));
+            if (!localStorage.getItem('tomattto_user_addresses')) {
+              localStorage.setItem('tomattto_user_addresses', JSON.stringify(updatedAddresses));
+            }
+          } catch (e) {
+            console.warn('Error saving Firebase user to localStorage:', e);
+          }
+
+          return updatedUser;
+        });
+
+        setUserAddresses((prev) => {
+          if (prev.length > 0) return prev;
+          try {
+            const saved = localStorage.getItem('tomattto_user_addresses');
+            if (saved) return JSON.parse(saved);
+          } catch {}
+          return [
+            {
+              id: 'addr-1',
+              label: 'Home' as const,
+              line: 'Flat 402, Sunset Heights, 100ft Road, Indiranagar, Bengaluru',
+              isDefault: true
+            }
+          ];
+        });
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []);
 
   // Supabase Auth & Session Synchronization
   const [supabaseSession, setSupabaseSession] = useState<Session | null>(null);
@@ -339,8 +462,15 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           phone: session.user.phone || prev.phone
         }));
         setIsLoggedIn(true);
+        try {
+          localStorage.setItem('tomattto_customer_logged_in', 'true');
+        } catch {}
       } else if (event === 'SIGNED_OUT') {
-        setIsLoggedIn(false);
+        // Only log out if customer was authenticated via Supabase and not Firebase/Local
+        const isCustomerLoggedIn = localStorage.getItem('tomattto_customer_logged_in') === 'true';
+        if (!isCustomerLoggedIn && !firebaseAuth?.currentUser) {
+          setIsLoggedIn(false);
+        }
       }
     });
 
@@ -442,32 +572,61 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  const loginUser = (details?: { name?: string; phone?: string; email?: string; address?: string }) => {
-    if (details) {
-      setUser((prev) => ({
-        ...prev,
-        name: details.name !== undefined ? details.name : prev.name,
-        phone: details.phone !== undefined ? details.phone : prev.phone,
-        email: details.email !== undefined ? details.email : prev.email
-      }));
+  const loginUser = (details?: { name?: string; phone?: string; email?: string; address?: string; avatarUrl?: string }) => {
+    const defaultAddresses = details?.address
+      ? [
+          {
+            id: `addr-${Date.now()}`,
+            label: 'Home' as const,
+            line: details.address,
+            isDefault: true
+          }
+        ]
+      : [
+          {
+            id: 'addr-1',
+            label: 'Home' as const,
+            line: 'Flat 402, Sunset Heights, 100ft Road, Indiranagar, Bengaluru',
+            isDefault: true
+          },
+          {
+            id: 'addr-2',
+            label: 'Work' as const,
+            line: 'WeWork Galaxy, 43 Residency Rd, Shanthala Nagar, Bengaluru',
+            isDefault: false
+          }
+        ];
 
-      if (details.address) {
-        const newAddr = {
-          id: `addr-${Date.now()}`,
-          label: 'Home' as const,
-          line: details.address,
-          isDefault: true
-        };
-        setSelectedAddress(details.address);
-        setUserAddresses((prev) => [newAddr, ...prev.map((a) => ({ ...a, isDefault: false }))]);
-        setUser((prev) => ({
-          ...prev,
-          addresses: [newAddr, ...prev.addresses.map((a) => ({ ...a, isDefault: false }))]
-        }));
-      }
-    }
+    const loggedInUser: UserProfile = {
+      id: `usr-${Date.now()}`,
+      name: details?.name?.trim() || 'Valued Customer',
+      phone: details?.phone?.trim() || '+91 98765 43210',
+      email: details?.email?.trim() || 'customer@tomattto.app',
+      avatarUrl: details?.avatarUrl || '', // User photo if supplied via Google
+      addresses: defaultAddresses
+    };
+
+    setUser(loggedInUser);
+    setUserAddresses(defaultAddresses);
+    setSelectedAddress(defaultAddresses[0].line);
     setIsLoggedIn(true);
-    setCustomerScreen('home');
+
+    try {
+      localStorage.setItem('tomattto_customer_logged_in', 'true');
+      localStorage.setItem('tomattto_customer_user', JSON.stringify(loggedInUser));
+      localStorage.setItem('tomattto_user_addresses', JSON.stringify(defaultAddresses));
+      localStorage.setItem('tomattto_selected_address', defaultAddresses[0].line);
+    } catch (e) {
+      console.warn('Failed to save customer session to localStorage', e);
+    }
+
+    // If customer already has food in their cart, take them directly back to cart to complete order
+    if (cart.length > 0) {
+      setCustomerScreen('cart');
+    } else {
+      setCustomerScreen('home');
+    }
+
     try {
       confetti({ particleCount: 60, spread: 60, origin: { y: 0.6 } });
     } catch {
@@ -477,15 +636,23 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const logoutUser = () => {
     setIsLoggedIn(false);
-    // Clear user identity so next login does not retain stale name/email
-    setUser((prev) => ({
-      ...prev,
-      id: `usr-${Date.now()}`,
-      name: '',
-      phone: '',
-      email: ''
-    }));
-    setCustomerScreen('auth');
+    setUser(GUEST_USER);
+    setUserAddresses([]);
+    setSelectedAddress('100ft Road, Indiranagar, Bengaluru');
+    setCustomerScreen('home');
+
+    try {
+      localStorage.removeItem('tomattto_customer_logged_in');
+      localStorage.removeItem('tomattto_customer_user');
+      localStorage.removeItem('tomattto_user_addresses');
+      localStorage.removeItem('tomattto_selected_address');
+    } catch (e) {
+      console.warn('Failed to remove customer session from localStorage', e);
+    }
+
+    if (firebaseAuth) {
+      firebaseSignOut(firebaseAuth).catch(() => {});
+    }
     if (supabase) {
       supabase.auth.signOut().catch(() => {});
     }
@@ -496,7 +663,13 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const updateUserProfile = (updates: Partial<UserProfile>) => {
-    setUser((prev) => ({ ...prev, ...updates }));
+    setUser((prev) => {
+      const updated = { ...prev, ...updates };
+      try {
+        localStorage.setItem('tomattto_customer_user', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
   };
 
   const addCoupon = (newCoupon: Coupon) => {
@@ -516,14 +689,32 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       line,
       isDefault: userAddresses.length === 0
     };
-    setUserAddresses((prev) => [newAddr, ...prev]);
+    setUserAddresses((prev) => {
+      const updated = [newAddr, ...prev];
+      try {
+        localStorage.setItem('tomattto_user_addresses', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
     setSelectedAddress(line);
   };
   const deleteAddress = (id: string) => {
-    setUserAddresses((prev) => prev.filter((a) => a.id !== id));
+    setUserAddresses((prev) => {
+      const updated = prev.filter((a) => a.id !== id);
+      try {
+        localStorage.setItem('tomattto_user_addresses', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
   };
   const setDefaultAddress = (id: string) => {
-    setUserAddresses((prev) => prev.map((a) => ({ ...a, isDefault: a.id === id })));
+    setUserAddresses((prev) => {
+      const updated = prev.map((a) => ({ ...a, isDefault: a.id === id }));
+      try {
+        localStorage.setItem('tomattto_user_addresses', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
     const found = userAddresses.find((a) => a.id === id);
     if (found) setSelectedAddress(found.line);
   };
@@ -1345,6 +1536,12 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Place Order
   const placeOrder = async (paymentMethod: 'upi' | 'card' | 'cod'): Promise<boolean> => {
     if (!selectedRestaurant || cart.length === 0 || isPlacingOrder) return false;
+
+    if (!isLoggedIn) {
+      setOrderError('Please log in or sign up before confirming your order.');
+      setCustomerScreen('auth');
+      return false;
+    }
 
     setIsPlacingOrder(true);
     setOrderError(null);

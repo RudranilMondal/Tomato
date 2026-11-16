@@ -9,8 +9,11 @@ import {
   Trash2,
   Home,
   Briefcase,
-  Compass
+  Compass,
+  Loader2,
+  Sparkles
 } from 'lucide-react';
+import { detectAddressFromGps } from '../../lib/maps';
 
 interface LocationModalProps {
   isOpen: boolean;
@@ -24,7 +27,9 @@ export const LocationModal: React.FC<LocationModalProps> = ({ isOpen, onClose })
     setSelectedAddress,
     addAddress,
     deleteAddress,
-    setDefaultAddress
+    setDefaultAddress,
+    isLoggedIn,
+    setCustomerScreen
   } = useTomattto();
 
   const [isAddingNew, setIsAddingNew] = useState(false);
@@ -32,6 +37,9 @@ export const LocationModal: React.FC<LocationModalProps> = ({ isOpen, onClose })
   const [flatNumber, setFlatNumber] = useState('');
   const [areaStreet, setAreaStreet] = useState('');
   const [landmark, setLandmark] = useState('');
+  const [isDetectingGps, setIsDetectingGps] = useState(false);
+  const [gpsError, setGpsError] = useState<string | null>(null);
+  const [gpsSuccess, setGpsSuccess] = useState<string | null>(null);
 
   // Interactive mock map pin coordinates
   const mockHotspots = [
@@ -43,6 +51,43 @@ export const LocationModal: React.FC<LocationModalProps> = ({ isOpen, onClose })
 
   if (!isOpen) return null;
 
+  const handleDetectGpsAddress = async () => {
+    setIsDetectingGps(true);
+    setGpsError(null);
+    setGpsSuccess(null);
+    try {
+      const result = await detectAddressFromGps();
+      if (result.flatBuilding) {
+        setFlatNumber(result.flatBuilding);
+      }
+      if (result.areaStreet) {
+        setAreaStreet(result.areaStreet);
+      }
+      if (result.landmark) {
+        setLandmark(result.landmark);
+      }
+      setGpsSuccess(`GPS location detected: ${result.formattedAddress}`);
+    } catch (err: any) {
+      setGpsError(err?.message || 'Could not detect exact GPS location. Please allow browser location access.');
+    } finally {
+      setIsDetectingGps(false);
+    }
+  };
+
+  const handleUseCurrentLocation = async () => {
+    setIsDetectingGps(true);
+    setGpsError(null);
+    try {
+      const result = await detectAddressFromGps();
+      setSelectedAddress(result.formattedAddress);
+      onClose();
+    } catch (err: any) {
+      setGpsError(err?.message || 'Could not retrieve GPS location. Please allow browser location access.');
+    } finally {
+      setIsDetectingGps(false);
+    }
+  };
+
   const handleSaveAddress = (e: React.FormEvent) => {
     e.preventDefault();
     if (!flatNumber.trim() || !areaStreet.trim()) return;
@@ -52,6 +97,8 @@ export const LocationModal: React.FC<LocationModalProps> = ({ isOpen, onClose })
     setFlatNumber('');
     setAreaStreet('');
     setLandmark('');
+    setGpsSuccess(null);
+    setGpsError(null);
     setIsAddingNew(false);
     onClose();
   };
@@ -215,17 +262,25 @@ export const LocationModal: React.FC<LocationModalProps> = ({ isOpen, onClose })
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
-                  Saved Addresses ({userAddresses.length})
+                  Saved Addresses {isLoggedIn ? `(${userAddresses.length})` : ''}
                 </span>
                 <button
-                  onClick={() => setIsAddingNew(true)}
+                  onClick={() => {
+                    if (!isLoggedIn) {
+                      onClose();
+                      setCustomerScreen('auth');
+                      return;
+                    }
+                    setIsAddingNew(true);
+                  }}
                   style={{
                     fontSize: '12px',
                     fontWeight: 700,
                     color: 'var(--color-primary)',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '4px'
+                    gap: '4px',
+                    cursor: 'pointer'
                   }}
                 >
                   <Plus size={14} />
@@ -233,7 +288,44 @@ export const LocationModal: React.FC<LocationModalProps> = ({ isOpen, onClose })
                 </button>
               </div>
 
-              {userAddresses.map((addr) => {
+              {!isLoggedIn ? (
+                <div
+                  style={{
+                    padding: '14px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px dashed var(--color-border)',
+                    backgroundColor: 'var(--color-surface-muted)',
+                    textAlign: 'center'
+                  }}
+                >
+                  <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '8px' }}>
+                    Log in to save and manage your delivery addresses
+                  </p>
+                  <button
+                    onClick={() => {
+                      onClose();
+                      setCustomerScreen('auth');
+                    }}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: 'var(--radius-sm)',
+                      backgroundColor: 'var(--color-primary)',
+                      color: '#FFFFFF',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      border: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Log In / Sign Up
+                  </button>
+                </div>
+              ) : userAddresses.length === 0 ? (
+                <div style={{ padding: '12px', textAlign: 'center', fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                  No saved addresses. Click "Add New" to add one.
+                </div>
+              ) : (
+                userAddresses.map((addr) => {
                 const isSelected = selectedAddress === addr.line;
                 return (
                   <div
@@ -332,15 +424,13 @@ export const LocationModal: React.FC<LocationModalProps> = ({ isOpen, onClose })
                     </div>
                   </div>
                 );
-              })}
+              }))}
             </div>
 
             {/* Current Location GPS Button */}
             <button
-              onClick={() => {
-                setSelectedAddress('100ft Road, Indiranagar, Bengaluru (Current GPS)');
-                onClose();
-              }}
+              onClick={handleUseCurrentLocation}
+              disabled={isDetectingGps}
               style={{
                 marginTop: '16px',
                 padding: '12px',
@@ -353,16 +443,115 @@ export const LocationModal: React.FC<LocationModalProps> = ({ isOpen, onClose })
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '8px',
-                border: '1px dashed var(--color-primary)'
+                border: '1px dashed var(--color-primary)',
+                cursor: isDetectingGps ? 'not-allowed' : 'pointer'
               }}
             >
-              <Navigation size={15} />
-              <span>Use Current GPS Location</span>
+              {isDetectingGps ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  <span>Locating via GPS & Google Maps...</span>
+                </>
+              ) : (
+                <>
+                  <Navigation size={15} />
+                  <span>Use Current GPS Location</span>
+                </>
+              )}
             </button>
+
+            {gpsError && (
+              <div
+                style={{
+                  marginTop: '10px',
+                  padding: '10px 14px',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                  border: '1px solid rgba(231, 76, 60, 0.25)',
+                  color: '#C0392B',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  lineHeight: 1.4
+                }}
+              >
+                <div style={{ fontWeight: 800, marginBottom: '2px' }}>📍 Location Permission Notice</div>
+                {gpsError}
+              </div>
+            )}
           </>
         ) : (
           /* Add New Address Form */
           <form onSubmit={handleSaveAddress} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            {/* 1-Tap GPS Detection via Google Maps */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <button
+                type="button"
+                onClick={handleDetectGpsAddress}
+                disabled={isDetectingGps}
+                style={{
+                  width: '100%',
+                  padding: '11px',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: 'var(--color-primary-light)',
+                  color: 'var(--color-primary)',
+                  fontWeight: 700,
+                  fontSize: '13px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  border: '1.5px dashed var(--color-primary)',
+                  cursor: isDetectingGps ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {isDetectingGps ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Detecting exact address via Google Maps...</span>
+                  </>
+                ) : (
+                  <>
+                    <Navigation size={16} />
+                    <span>Use Current GPS to Auto-Fill Exact Address</span>
+                  </>
+                )}
+              </button>
+
+              {gpsSuccess && (
+                <div
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-sm)',
+                    backgroundColor: 'rgba(39, 174, 96, 0.1)',
+                    border: '1px solid rgba(39, 174, 96, 0.25)',
+                    color: '#27AE60',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    lineHeight: 1.4
+                  }}
+                >
+                  ✓ {gpsSuccess}
+                </div>
+              )}
+
+              {gpsError && (
+                <div
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-sm)',
+                    backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                    border: '1px solid rgba(231, 76, 60, 0.25)',
+                    color: '#C0392B',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    lineHeight: 1.4
+                  }}
+                >
+                  ⚠ {gpsError}
+                </div>
+              )}
+            </div>
             <div>
               <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
                 Save As

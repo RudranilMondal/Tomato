@@ -39,16 +39,15 @@ test('PHASE 2.1: Real Authentication & Isolated Demo Fallbacks', async (t) => {
   });
 
   await t.test('UnifiedAuthModal implements real Email and Google OAuth flows', () => {
-    assert.ok(unifiedContent.includes('signInWithOAuth'), 'Must implement real signInWithOAuth');
+    assert.ok(unifiedContent.includes('signInWithGoogleFirebase') || unifiedContent.includes('signInWithOAuth'), 'Must implement real Google OAuth');
     assert.ok(unifiedContent.includes('54324'), 'Must direct local developers to Mailpit for magic link preview');
-    assert.ok(unifiedContent.includes('Google OAuth Provider Setup Notice') || unifiedContent.includes('Google OAuth Provider Notice'), 'Must document Supabase dashboard instructions');
   });
 
   await t.test('RiderAuthModal and AuthScreen isolate dev demo access', () => {
     assert.ok(riderAuthContent.includes('⚡ Quick Demo Login (Dev Only)'), 'Rider modal must label dev demo');
     assert.ok(riderAuthContent.includes('supabase.auth.signInWithOtp'), 'Rider modal must use real Supabase OTP on input');
     assert.ok(customerAuthContent.includes('⚡ Quick Demo Customer Login'), 'Customer screen must label dev demo');
-    assert.ok(customerAuthContent.includes('signInWithOAuth'), 'Customer screen must use real Google OAuth');
+    assert.ok(customerAuthContent.includes('signInWithGoogleFirebase') || customerAuthContent.includes('signInWithOAuth'), 'Customer screen must use real Google OAuth');
   });
 });
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTomattto } from '../../context/TomatttoContext';
 import { supabase } from '../../lib/supabase';
+import { signInWithGoogleFirebase } from '../../lib/firebase';
 import {
   ArrowLeft,
   Smartphone,
@@ -206,29 +207,25 @@ export const AuthScreen: React.FC = () => {
       return;
     }
 
-    if (!supabase) {
-      setErrorMsg('Supabase client unavailable.');
-      return;
-    }
-
     setIsLoading(true);
     setErrorMsg('');
 
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin
-        }
-      });
+      const credential = await signInWithGoogleFirebase();
+      const fbUser = credential.user;
 
-      if (error) {
-        setErrorMsg(
-          `Google OAuth Setup Notice: ${error.message}. In local Supabase: 1) Open Dashboard -> Auth -> Providers -> Google, 2) Add Client ID & Secret, 3) Set Redirect: ${window.location.origin}`
-        );
-      }
+      loginUser({
+        name: fbUser.displayName || 'Google User',
+        email: fbUser.email || '',
+        phone: fbUser.phoneNumber || '+91 98765 43210',
+        avatarUrl: fbUser.photoURL || ''
+      });
     } catch (err: any) {
-      setErrorMsg(`OAuth initiation error: ${err?.message || 'Failed to connect to Google provider.'}`);
+      if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') {
+        // User closed the popup, silently ignore
+      } else {
+        setErrorMsg(err?.message || 'Failed to sign in with Google via Firebase.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -970,7 +967,7 @@ export const AuthScreen: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    loginUser({ name: 'Guest User', phone: '+91 99999 88888' });
+                    setCustomerScreen('home');
                   }}
                   style={{
                     width: '100%',

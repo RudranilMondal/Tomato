@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTomattto } from '../../context/TomatttoContext';
-import { X, MapPin, Plus, Trash2, Home, Briefcase, Compass, Check } from 'lucide-react';
+import { X, MapPin, Plus, Trash2, Home, Briefcase, Compass, Check, Navigation, Loader2 } from 'lucide-react';
+import { detectAddressFromGps } from '../../lib/maps';
 
 interface SavedAddressesModalProps {
   isOpen: boolean;
@@ -22,8 +23,34 @@ export const SavedAddressesModal: React.FC<SavedAddressesModalProps> = ({ isOpen
   const [flatNumber, setFlatNumber] = useState('');
   const [areaStreet, setAreaStreet] = useState('');
   const [landmark, setLandmark] = useState('');
+  const [isDetectingGps, setIsDetectingGps] = useState(false);
+  const [gpsError, setGpsError] = useState<string | null>(null);
+  const [gpsSuccess, setGpsSuccess] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  const handleDetectGpsAddress = async () => {
+    setIsDetectingGps(true);
+    setGpsError(null);
+    setGpsSuccess(null);
+    try {
+      const result = await detectAddressFromGps();
+      if (result.flatBuilding) {
+        setFlatNumber(result.flatBuilding);
+      }
+      if (result.areaStreet) {
+        setAreaStreet(result.areaStreet);
+      }
+      if (result.landmark) {
+        setLandmark(result.landmark);
+      }
+      setGpsSuccess(`GPS location detected: ${result.formattedAddress}`);
+    } catch (err: any) {
+      setGpsError(err?.message || 'Could not detect exact GPS location. Please allow browser location access.');
+    } finally {
+      setIsDetectingGps(false);
+    }
+  };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,6 +60,8 @@ export const SavedAddressesModal: React.FC<SavedAddressesModalProps> = ({ isOpen
     setFlatNumber('');
     setAreaStreet('');
     setLandmark('');
+    setGpsSuccess(null);
+    setGpsError(null);
     setIsAddingNew(false);
   };
 
@@ -227,6 +256,76 @@ export const SavedAddressesModal: React.FC<SavedAddressesModalProps> = ({ isOpen
             </>
           ) : (
             <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {/* 1-Tap GPS Detection via Google Maps */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <button
+                  type="button"
+                  onClick={handleDetectGpsAddress}
+                  disabled={isDetectingGps}
+                  style={{
+                    width: '100%',
+                    padding: '11px',
+                    borderRadius: 'var(--radius-md)',
+                    backgroundColor: 'var(--color-primary-light)',
+                    color: 'var(--color-primary)',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    border: '1.5px dashed var(--color-primary)',
+                    cursor: isDetectingGps ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  {isDetectingGps ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      <span>Detecting exact address via Google Maps...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Navigation size={16} />
+                      <span>Auto-Detect Exact Address via GPS (Google Maps)</span>
+                    </>
+                  )}
+                </button>
+
+                {gpsSuccess && (
+                  <div
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius-sm)',
+                      backgroundColor: 'rgba(39, 174, 96, 0.1)',
+                      border: '1px solid rgba(39, 174, 96, 0.25)',
+                      color: '#27AE60',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      lineHeight: 1.4
+                    }}
+                  >
+                    ✓ {gpsSuccess}
+                  </div>
+                )}
+
+                {gpsError && (
+                  <div
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius-sm)',
+                      backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                      border: '1px solid rgba(231, 76, 60, 0.25)',
+                      color: '#C0392B',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      lineHeight: 1.4
+                    }}
+                  >
+                    ⚠ {gpsError}
+                  </div>
+                )}
+              </div>
               <div>
                 <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
                   Tag Location

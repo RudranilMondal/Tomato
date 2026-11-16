@@ -48,7 +48,7 @@ test('FEATURE 2 — Unified Login System Audit', async (t) => {
   await t.test('UnifiedAuthModal supports Phone OTP, Email and Google OAuth across all 3 roles', () => {
     assert.ok(unifiedModalContent.includes('phone'), 'Must support Phone authentication');
     assert.ok(unifiedModalContent.includes('email'), 'Must support Email authentication');
-    assert.ok(unifiedModalContent.includes('google'), 'Must support Google OAuth authentication');
+    assert.ok(unifiedModalContent.toLowerCase().includes('google'), 'Must support Google OAuth authentication');
     assert.ok(unifiedModalContent.includes('+91'), 'Must have Indian +91 phone prefix');
     assert.ok(unifiedModalContent.includes('DEMO_OTP_CODE'), 'Must integrate demo OTP fallback');
   });

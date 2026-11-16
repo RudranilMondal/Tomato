@@ -8,6 +8,7 @@ import {
   Bell,
   HelpCircle,
   LogOut,
+  LogIn,
   ChevronRight,
   ShieldCheck,
   Moon,
@@ -52,8 +53,10 @@ export const ProfileScreen: React.FC = () => {
     {
       icon: <MapPin size={18} color="var(--color-primary)" />,
       title: 'Saved Addresses',
-      subtitle: `${userAddresses.length} saved addresses (${userAddresses.map((a) => a.label).join(', ')})`,
-      action: () => setIsSavedAddressesOpen(true)
+      subtitle: isLoggedIn
+        ? `${userAddresses.length} saved addresses (${userAddresses.map((a) => a.label).join(', ') || 'None'})`
+        : 'Log in to view and manage saved addresses',
+      action: () => (isLoggedIn ? setIsSavedAddressesOpen(true) : setCustomerScreen('auth'))
     },
     {
       icon: <Tag size={18} color="#FF4B3A" />,
@@ -64,20 +67,26 @@ export const ProfileScreen: React.FC = () => {
     {
       icon: <Gift size={18} color="#E67E22" />,
       title: 'Refer & Earn',
-      subtitle: 'Invite friends & get ₹100 instant wallet credits',
-      action: () => setIsReferEarnOpen(true)
+      subtitle: isLoggedIn
+        ? 'Invite friends & get ₹100 instant wallet credits'
+        : 'Log in to share invite code & get credits',
+      action: () => (isLoggedIn ? setIsReferEarnOpen(true) : setCustomerScreen('auth'))
     },
     {
       icon: <CreditCard size={18} color="#27AE60" />,
       title: 'Tomattto Credits & Wallet',
-      subtitle: `₹${walletBalance} available balance • Top-up & passbook`,
-      action: () => setIsWalletOpen(true)
+      subtitle: isLoggedIn
+        ? `₹${walletBalance} available balance • Top-up & passbook`
+        : 'Log in to access credits & wallet passbook',
+      action: () => (isLoggedIn ? setIsWalletOpen(true) : setCustomerScreen('auth'))
     },
     {
       icon: <Heart size={18} color="#E74C3C" />,
       title: 'Favorite Restaurants',
-      subtitle: `${favorites.length} curated favorite food spots`,
-      action: () => setCustomerScreen('home')
+      subtitle: isLoggedIn
+        ? `${favorites.length} curated favorite food spots`
+        : 'Log in to view and save favorite spots',
+      action: () => (isLoggedIn ? setCustomerScreen('home') : setCustomerScreen('auth'))
     },
     {
       icon: <Moon size={18} color="#9B59B6" />,
@@ -88,8 +97,10 @@ export const ProfileScreen: React.FC = () => {
     {
       icon: <Bell size={18} color="#E67E22" />,
       title: 'Notification Center',
-      subtitle: 'Flash deals, order updates & alerts',
-      action: () => setIsNotificationsOpen(true)
+      subtitle: isLoggedIn
+        ? 'Flash deals, order updates & alerts'
+        : 'Log in to view order updates & alerts',
+      action: () => (isLoggedIn ? setIsNotificationsOpen(true) : setCustomerScreen('auth'))
     },
     {
       icon: <HelpCircle size={18} color="#3498DB" />,
@@ -103,113 +114,26 @@ export const ProfileScreen: React.FC = () => {
       subtitle: 'Earn up to ₹35,000/month with flexible shifts & insurance',
       action: () => setAppMode('rider')
     },
-    {
-      icon: <LogOut size={18} color="var(--color-primary)" />,
-      title: 'Log Out',
-      subtitle: 'Sign out of your Tomattto account',
-      action: () => setIsLogoutModalOpen(true),
-      isDanger: true
-    }
+    ...(isLoggedIn
+      ? [
+          {
+            icon: <LogOut size={18} color="var(--color-primary)" />,
+            title: 'Log Out',
+            subtitle: 'Sign out of your Tomattto account',
+            action: () => setIsLogoutModalOpen(true),
+            isDanger: true
+          }
+        ]
+      : [
+          {
+            icon: <LogIn size={18} color="var(--color-primary)" />,
+            title: 'Log In / Create Account',
+            subtitle: 'Sign in to access your orders, addresses & rewards',
+            action: () => setCustomerScreen('auth'),
+            isDanger: false
+          }
+        ])
   ];
-
-  if (!isLoggedIn) {
-    return (
-      <div style={{ flex: 1, backgroundColor: 'var(--color-bg)', display: 'flex', flexDirection: 'column' }}>
-        {/* Header */}
-        <div
-          style={{
-            padding: '12px 16px',
-            backgroundColor: 'var(--color-surface)',
-            borderBottom: '1px solid var(--color-border)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px'
-          }}
-        >
-          <button
-            onClick={() => setCustomerScreen('home')}
-            style={{
-              padding: '6px',
-              borderRadius: '50%',
-              backgroundColor: 'var(--color-surface-muted)',
-              display: 'flex',
-              color: 'var(--color-text-main)'
-            }}
-          >
-            <ArrowLeft size={18} />
-          </button>
-          <h3 style={{ fontSize: '15px', fontWeight: 800 }}>Account</h3>
-        </div>
-
-        <div
-          style={{
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '32px 24px',
-            textAlign: 'center'
-          }}
-        >
-          <div
-            style={{
-              width: '80px',
-              height: '80px',
-              borderRadius: '50%',
-              backgroundColor: 'var(--color-primary-light)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '36px',
-              marginBottom: '18px',
-              boxShadow: '0 8px 24px var(--color-primary-glow)'
-            }}
-          >
-            🔒
-          </div>
-          <h3 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--color-text-main)' }}>
-            Log in to view account
-          </h3>
-          <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '8px', maxWidth: '260px', lineHeight: 1.5 }}>
-            Access saved addresses, track live orders, unlock Tomattto Gold benefits and coupons!
-          </p>
-
-          <button
-            onClick={() => setCustomerScreen('auth')}
-            style={{
-              marginTop: '24px',
-              backgroundColor: 'var(--color-primary)',
-              color: '#FFFFFF',
-              padding: '14px 32px',
-              borderRadius: 'var(--radius-md)',
-              fontWeight: 800,
-              fontSize: '15px',
-              boxShadow: 'var(--shadow-glow)',
-              width: '100%',
-              maxWidth: '260px',
-              cursor: 'pointer'
-            }}
-          >
-            Log In / Sign Up
-          </button>
-
-          <button
-            onClick={() => setCustomerScreen('home')}
-            style={{
-              marginTop: '14px',
-              fontSize: '13px',
-              fontWeight: 700,
-              color: 'var(--color-text-muted)',
-              cursor: 'pointer'
-            }}
-          >
-            Explore Restaurants as Guest
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div style={{ flex: 1, backgroundColor: 'var(--color-bg)', display: 'flex', flexDirection: 'column' }}>
@@ -254,57 +178,115 @@ export const ProfileScreen: React.FC = () => {
             marginBottom: '16px'
           }}
         >
-          <div
-            style={{
-              width: '54px',
-              height: '54px',
-              borderRadius: '50%',
-              overflow: 'hidden',
-              border: '2px solid var(--color-primary)'
-            }}
-          >
-            <img src={user.avatarUrl} alt={user.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          </div>
+          {isLoggedIn ? (
+            <>
+              <div
+                style={{
+                  width: '54px',
+                  height: '54px',
+                  borderRadius: '50%',
+                  overflow: 'hidden',
+                  border: '2px solid var(--color-primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: 'var(--color-surface-muted)'
+                }}
+              >
+                {user.avatarUrl ? (
+                  <img src={user.avatarUrl} alt={user.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <User size={24} color="var(--color-primary)" />
+                )}
+              </div>
 
-          <div style={{ flex: 1 }}>
-            <h4 style={{ fontSize: '15px', fontWeight: 800 }}>{user.name}</h4>
-            <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>{user.phone}</p>
-            <span
-              style={{
-                display: 'inline-block',
-                marginTop: '4px',
-                fontSize: '10px',
-                fontWeight: 800,
-                color: 'var(--color-primary)',
-                backgroundColor: 'var(--color-primary-light)',
-                padding: '2px 8px',
-                borderRadius: 'var(--radius-full)'
-              }}
-            >
-              🍅 Tomattto Gold Member
-            </span>
-          </div>
+              <div style={{ flex: 1 }}>
+                <h4 style={{ fontSize: '15px', fontWeight: 800 }}>{user.name || 'Valued Customer'}</h4>
+                <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>{user.phone || user.email}</p>
+                <span
+                  style={{
+                    display: 'inline-block',
+                    marginTop: '4px',
+                    fontSize: '10px',
+                    fontWeight: 800,
+                    color: 'var(--color-primary)',
+                    backgroundColor: 'var(--color-primary-light)',
+                    padding: '2px 8px',
+                    borderRadius: 'var(--radius-full)'
+                  }}
+                >
+                  🍅 Tomattto Gold Member
+                </span>
+              </div>
 
-          <button
-            onClick={() => setIsEditProfileOpen(true)}
-            style={{
-              padding: '6px 10px',
-              borderRadius: 'var(--radius-sm)',
-              backgroundColor: 'var(--color-surface-muted)',
-              color: 'var(--color-text-main)',
-              fontSize: '11px',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              border: '1px solid var(--color-border)',
-              cursor: 'pointer'
-            }}
-            title="Edit Profile Info"
-          >
-            <Edit3 size={13} color="var(--color-primary)" />
-            <span>Edit</span>
-          </button>
+              <button
+                onClick={() => setIsEditProfileOpen(true)}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: 'var(--radius-sm)',
+                  backgroundColor: 'var(--color-surface-muted)',
+                  color: 'var(--color-text-main)',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  border: '1px solid var(--color-border)',
+                  cursor: 'pointer'
+                }}
+                title="Edit Profile Info"
+              >
+                <Edit3 size={13} color="var(--color-primary)" />
+                <span>Edit</span>
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Logged-out Guest State: No profile picture, No personal details, No Gold badge */}
+              <div
+                style={{
+                  width: '54px',
+                  height: '54px',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--color-surface-muted)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: '1.5px dashed var(--color-border)'
+                }}
+              >
+                <User size={26} color="var(--color-text-muted)" />
+              </div>
+
+              <div style={{ flex: 1 }}>
+                <h4 style={{ fontSize: '15px', fontWeight: 800 }}>Welcome, Foodie!</h4>
+                <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+                  Log in or sign up to manage your account
+                </p>
+              </div>
+
+              <button
+                onClick={() => setCustomerScreen('auth')}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: 'var(--color-primary)',
+                  color: '#FFFFFF',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  boxShadow: 'var(--shadow-glow)'
+                }}
+              >
+                <LogIn size={13} />
+                <span>Log In</span>
+              </button>
+            </>
+          )}
         </div>
 
         {/* Menu list */}

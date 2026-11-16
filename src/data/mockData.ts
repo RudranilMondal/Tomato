@@ -48,6 +48,15 @@ export const COUPONS: Coupon[] = [
   }
 ];
 
+export const GUEST_USER: UserProfile = {
+  id: '',
+  name: '',
+  phone: '',
+  email: '',
+  avatarUrl: '',
+  addresses: []
+};
+
 export const INITIAL_USER: UserProfile = {
   id: 'usr-001',
   name: 'Souvik Mukherjee',

@@ -9,11 +9,14 @@ interface DeviceFrameProps {
 export const DeviceFrame: React.FC<DeviceFrameProps> = ({ children }) => {
   const { isPhoneFrame } = useTomattto();
   const [time, setTime] = useState('9:41');
-  const [isMobileScreen, setIsMobileScreen] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 540);
+  const [isMobileScreen, setIsMobileScreen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= 768;
+  });
 
   useEffect(() => {
     const handleResize = () => {
-      setIsMobileScreen(window.innerWidth <= 540);
+      setIsMobileScreen(window.innerWidth <= 768);
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
@@ -29,17 +32,20 @@ export const DeviceFrame: React.FC<DeviceFrameProps> = ({ children }) => {
     return () => clearInterval(timer);
   }, []);
 
-  if (!isPhoneFrame || isMobileScreen) {
+  // 1. True Mobile Screens (Pure 100% Edge-to-Edge Native Mobile View)
+  if (isMobileScreen) {
     return (
       <div
+        className="mobile-app-root"
         style={{
           width: '100%',
-          maxWidth: isMobileScreen ? '100%' : '480px',
-          margin: '0 auto',
-          minHeight: 'calc(100vh - 65px)',
-          backgroundColor: 'var(--color-surface)',
-          boxShadow: isMobileScreen ? 'none' : 'var(--shadow-md)',
-          position: 'relative'
+          minHeight: '100dvh',
+          height: '100dvh',
+          backgroundColor: 'var(--color-bg)',
+          position: 'relative',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden'
         }}
       >
         {children}
@@ -47,14 +53,52 @@ export const DeviceFrame: React.FC<DeviceFrameProps> = ({ children }) => {
     );
   }
 
+  // 2. Desktop Without Phone Frame (Sleek Modern Centered Mobile Card)
+  if (!isPhoneFrame) {
+    return (
+      <div
+        style={{
+          width: '100%',
+          minHeight: '100vh',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: 'var(--color-bg)',
+          padding: '24px 16px'
+        }}
+      >
+        <div
+          style={{
+            width: '100%',
+            maxWidth: '430px',
+            height: 'calc(100vh - 48px)',
+            maxHeight: '896px',
+            backgroundColor: 'var(--color-surface)',
+            borderRadius: '28px',
+            boxShadow: 'var(--shadow-lg)',
+            border: '1px solid var(--color-border)',
+            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden'
+          }}
+        >
+          {children}
+        </div>
+      </div>
+    );
+  }
+
+  // 3. Desktop With Realistic iPhone Frame & Dynamic Island
   return (
     <div
       style={{
         display: 'flex',
         justifyContent: 'center',
-        padding: '28px 16px 40px',
+        alignItems: 'center',
+        padding: '24px 16px',
         backgroundColor: 'var(--color-bg)',
-        minHeight: 'calc(100vh - 65px)'
+        minHeight: '100vh'
       }}
     >
       {/* Outer Titanium Frame */}

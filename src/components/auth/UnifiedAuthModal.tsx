@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTomattto } from '../../context/TomatttoContext';
 import { supabase } from '../../lib/supabase';
+import { signInWithGoogleFirebase } from '../../lib/firebase';
 import {
   isDemoAuthEnabled,
   requestDemoOtp,
@@ -349,36 +350,46 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
     }
   };
 
-  // Real Google OAuth Authentication via Supabase
+  // Real Google OAuth Authentication via Firebase
   const handleGoogleSignIn = async () => {
     setErrorMsg('');
     setInfoMsg('');
     setOauthNotice(null);
     setIsLoading(true);
 
-    if (!supabase) {
-      setErrorMsg('Supabase client unavailable.');
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin
-        }
-      });
+      const credential = await signInWithGoogleFirebase();
+      const fbUser = credential.user;
 
-      if (error) {
-        // Document required setup if provider is disabled in Supabase console
-        setOauthNotice(
-          `Google OAuth Provider Setup Notice: ${error.message}. To enable Google sign-in: 1) Open Supabase Dashboard -> Authentication -> Providers -> Google, 2) Enter Client ID & Secret, 3) Set Redirect URI: ${window.location.origin}`
-        );
-        setIsLoading(false);
+      if (role === 'restaurant_owner') {
+        loginPartner({
+          user: {
+            id: fbUser.uid,
+            phone: fbUser.phoneNumber || '+919876543210',
+            fullName: fbUser.displayName || 'Restaurant Partner'
+          },
+          status: 'approved',
+          restaurant: restaurants[0],
+          restaurants: [restaurants[0]]
+        });
+      } else if (role === 'rider') {
+        loginDemoRider();
+      } else {
+        loginUser({
+          name: fbUser.displayName || 'Google User',
+          phone: fbUser.phoneNumber || '+919876543210',
+          email: fbUser.email || '',
+          avatarUrl: fbUser.photoURL || ''
+        });
       }
+      onClose();
     } catch (err: any) {
-      setOauthNotice(`OAuth initiation error: ${err?.message || 'Failed to connect to Google provider.'}`);
+      if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') {
+        // user closed popup
+      } else {
+        setErrorMsg(err?.message || 'Failed to sign in with Google via Firebase.');
+      }
+    } finally {
       setIsLoading(false);
     }
   };

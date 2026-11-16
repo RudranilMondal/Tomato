@@ -170,18 +170,20 @@ export interface Order {
   cancellationReason?: string;
 }
 
+export interface Address {
+  id: string;
+  label: 'Home' | 'Work' | 'Other';
+  line: string;
+  isDefault: boolean;
+}
+
 export interface UserProfile {
   id: string;
   name: string;
   phone: string;
   email: string;
   avatarUrl: string;
-  addresses: {
-    id: string;
-    label: 'Home' | 'Work' | 'Other';
-    line: string;
-    isDefault: boolean;
-  }[];
+  addresses: Address[];
 }
 
 export interface WalletTransaction {

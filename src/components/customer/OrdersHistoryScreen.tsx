@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useTomattto } from '../../context/TomatttoContext';
-import { ShoppingBag, ArrowLeft, RotateCcw, ChevronRight, Star, FileText } from 'lucide-react';
+import { ShoppingBag, ArrowLeft, RotateCcw, ChevronRight, Star, FileText, Lock } from 'lucide-react';
 import { OrderReviewModal } from './OrderReviewModal';
 import { InvoiceModal } from './InvoiceModal';
 import { Order } from '../../types';
 
 export const OrdersHistoryScreen: React.FC = () => {
-  const { allOrders, setCustomerScreen, setCurrentOrder } = useTomattto();
+  const { allOrders, setCustomerScreen, setCurrentOrder, isLoggedIn } = useTomattto();
   const [reviewOrderId, setReviewOrderId] = useState<string | null>(null);
   const [invoiceOrder, setInvoiceOrder] = useState<Order | null>(null);
 
@@ -39,7 +39,48 @@ export const OrdersHistoryScreen: React.FC = () => {
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px' }} className="no-scrollbar">
-        {allOrders.length === 0 ? (
+        {!isLoggedIn ? (
+          <div style={{ textAlign: 'center', padding: '60px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div
+              style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '50%',
+                backgroundColor: 'var(--color-primary-light)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '16px',
+                color: 'var(--color-primary)'
+              }}
+            >
+              <Lock size={28} />
+            </div>
+            <h4 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--color-text-main)' }}>
+              Log in to view past orders
+            </h4>
+            <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '6px', maxWidth: '260px', lineHeight: 1.5 }}>
+              Track live food deliveries, view receipts, and reorder from your favorite kitchens.
+            </p>
+            <button
+              onClick={() => setCustomerScreen('auth')}
+              style={{
+                marginTop: '20px',
+                backgroundColor: 'var(--color-primary)',
+                color: '#FFFFFF',
+                padding: '12px 28px',
+                borderRadius: 'var(--radius-md)',
+                fontWeight: 700,
+                fontSize: '14px',
+                border: 'none',
+                cursor: 'pointer',
+                boxShadow: 'var(--shadow-glow)'
+              }}
+            >
+              Log In / Sign Up
+            </button>
+          </div>
+        ) : allOrders.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--color-text-muted)' }}>
             <ShoppingBag size={48} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
             <p style={{ fontSize: '14px', fontWeight: 600 }}>No orders placed yet</p>

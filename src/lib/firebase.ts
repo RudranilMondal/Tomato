@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth, Auth } from 'firebase/auth';
+import { getAuth, Auth, GoogleAuthProvider, signInWithPopup, UserCredential } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
@@ -26,5 +26,15 @@ export const app: FirebaseApp | null = isFirebaseConfigured
 // Initialize Firebase Authentication instance
 export const auth: Auth | null = app ? getAuth(app) : null;
 
-export { firebaseConfig };
+// Google Auth Provider configured for Firebase
+export const googleAuthProvider = new GoogleAuthProvider();
+googleAuthProvider.setCustomParameters({ prompt: 'select_account' });
 
+export async function signInWithGoogleFirebase(): Promise<UserCredential> {
+  if (!auth) {
+    throw new Error('Firebase Authentication is not configured. Please check your Firebase credentials in .env');
+  }
+  return await signInWithPopup(auth, googleAuthProvider);
+}
+
+export { firebaseConfig };

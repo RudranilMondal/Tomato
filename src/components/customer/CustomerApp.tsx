@@ -14,10 +14,17 @@ import { LocationModal } from './LocationModal';
 import { DishCustomizerModal } from './DishCustomizerModal';
 import { PaymentModal } from './PaymentModal';
 
-import { Home, Search, ShoppingBag, Clock, User } from 'lucide-react';
+import {
+  UtensilsCrossed,
+  Search,
+  ShoppingBag,
+  Clock,
+  User,
+  ArrowRight
+} from 'lucide-react';
 
 export const CustomerApp: React.FC = () => {
-  const { customerScreen, setCustomerScreen, itemCount } = useTomattto();
+  const { customerScreen, setCustomerScreen, itemCount, cartTotal, selectedRestaurant } = useTomattto();
 
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -65,11 +72,32 @@ export const CustomerApp: React.FC = () => {
   };
 
   const navTabs = [
-    { id: 'home', label: 'Delivery', icon: <Home size={19} /> },
-    { id: 'search', label: 'Search', icon: <Search size={19} /> },
-    { id: 'cart', label: 'Cart', icon: <ShoppingBag size={19} />, badge: itemCount },
-    { id: 'orders_history', label: 'Orders', icon: <Clock size={19} /> },
-    { id: 'profile', label: 'Profile', icon: <User size={19} /> }
+    {
+      id: 'home',
+      label: 'Delivery',
+      icon: (active: boolean) => <UtensilsCrossed size={19} strokeWidth={active ? 2.5 : 2} />
+    },
+    {
+      id: 'search',
+      label: 'Search',
+      icon: (active: boolean) => <Search size={19} strokeWidth={active ? 2.5 : 2} />
+    },
+    {
+      id: 'cart',
+      label: 'Cart',
+      icon: (active: boolean) => <ShoppingBag size={19} strokeWidth={active ? 2.5 : 2} />,
+      badge: itemCount
+    },
+    {
+      id: 'orders_history',
+      label: 'Orders',
+      icon: (active: boolean) => <Clock size={19} strokeWidth={active ? 2.5 : 2} />
+    },
+    {
+      id: 'profile',
+      label: 'Profile',
+      icon: (active: boolean) => <User size={19} strokeWidth={active ? 2.5 : 2} />
+    }
   ];
 
   const showBottomNav =
@@ -77,6 +105,10 @@ export const CustomerApp: React.FC = () => {
     customerScreen === 'search' ||
     customerScreen === 'orders_history' ||
     customerScreen === 'profile';
+
+  const showFloatingCart =
+    itemCount > 0 &&
+    (customerScreen === 'home' || customerScreen === 'search' || customerScreen === 'restaurant');
 
   return (
     <div
@@ -86,35 +118,128 @@ export const CustomerApp: React.FC = () => {
         flexDirection: 'column',
         position: 'relative',
         height: '100%',
-        backgroundColor: 'var(--color-bg)'
+        minHeight: '100%',
+        backgroundColor: 'var(--color-bg)',
+        overflow: 'hidden'
       }}
     >
-      {/* Screen View */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto' }} className="no-scrollbar">
+      {/* Active Screen Scrollable View */}
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          WebkitOverflowScrolling: 'touch',
+          overscrollBehaviorY: 'contain'
+        }}
+        className="no-scrollbar"
+      >
         {renderActiveScreen()}
       </div>
 
-      {/* Persistent Bottom Tab Bar */}
-      {showBottomNav && (
+      {/* Floating Mini Cart Strip (Native Zomato-style Quick Cart) */}
+      {showFloatingCart && (
         <div
+          onClick={() => setCustomerScreen('cart')}
           style={{
-            height: '60px',
+            margin: showBottomNav ? '0 12px 10px 12px' : '0 12px max(14px, env(safe-area-inset-bottom)) 12px',
+            background: 'linear-gradient(135deg, #FF4B3A 0%, #E03A2A 100%)',
+            color: '#FFFFFF',
+            borderRadius: 'var(--radius-lg)',
+            padding: '12px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            boxShadow: '0 8px 24px rgba(255, 75, 58, 0.4)',
+            cursor: 'pointer',
+            animation: 'slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+            zIndex: 42,
+            userSelect: 'none',
+            flexShrink: 0
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                backgroundColor: 'rgba(255, 255, 255, 0.22)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 800,
+                fontSize: '13px',
+                border: '1.5px solid rgba(255, 255, 255, 0.35)'
+              }}
+            >
+              {itemCount}
+            </div>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: 800, letterSpacing: '-0.01em' }}>
+                ₹{cartTotal}
+              </div>
+              <div
+                style={{
+                  fontSize: '11px',
+                  opacity: 0.9,
+                  maxWidth: '170px',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}
+              >
+                {selectedRestaurant ? selectedRestaurant.name : 'View added items'}
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '13px',
+              fontWeight: 800,
+              backgroundColor: 'rgba(255, 255, 255, 0.2)',
+              padding: '6px 14px',
+              borderRadius: 'var(--radius-full)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)'
+            }}
+          >
+            <span>View Cart</span>
+            <ArrowRight size={14} />
+          </div>
+        </div>
+      )}
+
+      {/* Redesigned Production-Ready Mobile Bottom Navigation Dock */}
+      {showBottomNav && (
+        <nav
+          aria-label="Bottom Navigation"
+          style={{
+            position: 'sticky',
+            bottom: 0,
+            left: 0,
+            right: 0,
             backgroundColor: 'var(--color-surface)',
             borderTop: '1px solid var(--color-border)',
+            boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.05)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-around',
-            padding: '0 8px',
-            zIndex: 45
+            padding: '6px 8px max(10px, env(safe-area-inset-bottom)) 8px',
+            zIndex: 45,
+            flexShrink: 0
           }}
         >
           {navTabs.map((tab) => {
-            const isActive =
-              (tab.id === 'home' && customerScreen === 'home') ||
-              (tab.id === 'search' && customerScreen === 'search') ||
-              (tab.id === 'orders_history' && customerScreen === 'orders_history') ||
-              (tab.id === 'profile' && customerScreen === 'profile') ||
-              (tab.id === 'cart' && (customerScreen as string) === 'cart');
+            const isActive = customerScreen === tab.id;
 
             return (
               <button
@@ -124,62 +249,75 @@ export const CustomerApp: React.FC = () => {
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
-                  gap: '3px',
+                  justifyContent: 'center',
+                  gap: '4px',
                   color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
                   position: 'relative',
-                  padding: '6px 12px'
+                  padding: '6px 12px',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: isActive ? 'var(--color-primary-light)' : 'transparent',
+                  transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+                  minWidth: '58px',
+                  cursor: 'pointer'
                 }}
               >
-                <div style={{ position: 'relative' }}>
-                  {tab.icon}
-                  {/* Fix #1 — Active indicator dot below icon */}
-                  {isActive && (
-                    <span
-                      style={{
-                        position: 'absolute',
-                        bottom: '-5px',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        width: '4px',
-                        height: '4px',
-                        borderRadius: '50%',
-                        backgroundColor: 'var(--color-primary)',
-                        animation: 'nav-dot-pop 0.25s ease forwards'
-                      }}
-                    />
-                  )}
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {tab.icon(isActive)}
                   {tab.badge !== undefined && tab.badge > 0 && (
                     <span
                       style={{
                         position: 'absolute',
-                        top: '-4px',
-                        right: '-8px',
+                        top: '-5px',
+                        right: '-9px',
                         backgroundColor: 'var(--color-primary)',
                         color: '#FFFFFF',
-                        fontSize: '9px',
-                        fontWeight: 800,
-                        width: '16px',
-                        height: '16px',
-                        borderRadius: '50%',
+                        fontSize: '9.5px',
+                        fontWeight: 900,
+                        minWidth: '18px',
+                        height: '18px',
+                        padding: '0 4px',
+                        borderRadius: '999px',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center'
+                        justifyContent: 'center',
+                        border: '2px solid var(--color-surface)',
+                        boxShadow: '0 2px 6px rgba(255, 75, 58, 0.4)'
                       }}
                     >
                       {tab.badge}
                     </span>
                   )}
                 </div>
-                <span style={{ fontSize: '10px', fontWeight: isActive ? 800 : 500 }}>
+                <span
+                  style={{
+                    fontSize: '10.5px',
+                    fontWeight: isActive ? 800 : 600,
+                    letterSpacing: '-0.01em',
+                    lineHeight: 1
+                  }}
+                >
                   {tab.label}
                 </span>
+                {isActive && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      bottom: '2px',
+                      width: '4px',
+                      height: '4px',
+                      borderRadius: '50%',
+                      backgroundColor: 'var(--color-primary)',
+                      animation: 'nav-dot-pop 0.25s ease forwards'
+                    }}
+                  />
+                )}
               </button>
             );
           })}
-        </div>
+        </nav>
       )}
 
-      {/* Floating Modals */}
+      {/* Floating Customer Modals */}
       <LocationModal
         isOpen={isLocationModalOpen}
         onClose={() => setIsLocationModalOpen(false)}

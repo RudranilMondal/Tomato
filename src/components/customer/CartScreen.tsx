@@ -12,7 +12,8 @@ import {
   Trash2,
   Clock,
   ArrowRight,
-  Calendar
+  Calendar,
+  Lock
 } from 'lucide-react';
 import { OffersModal } from './OffersModal';
 import { ScheduleOrderModal } from './ScheduleOrderModal';
@@ -32,7 +33,8 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onOpenPayment }) => {
     applyCoupon,
     removeCoupon,
     setCustomerScreen,
-    selectedAddress
+    selectedAddress,
+    isLoggedIn
   } = useTomattto();
 
   const [couponCodeInput, setCouponCodeInput] = useState('');
@@ -630,16 +632,63 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onOpenPayment }) => {
         </div>
       </div>
 
+      {/* Guest Login Required Banner */}
+      {!isLoggedIn && (
+        <div
+          style={{
+            margin: '0 16px 10px 16px',
+            padding: '10px 14px',
+            borderRadius: 'var(--radius-md)',
+            backgroundColor: 'rgba(226, 55, 68, 0.08)',
+            border: '1px solid rgba(226, 55, 68, 0.25)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '10px'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Lock size={15} color="var(--color-primary)" />
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-main)' }}>
+              Login required to place & confirm order
+            </span>
+          </div>
+          <button
+            onClick={() => setCustomerScreen('auth')}
+            style={{
+              padding: '5px 12px',
+              borderRadius: 'var(--radius-sm)',
+              backgroundColor: 'var(--color-primary)',
+              color: '#FFFFFF',
+              fontSize: '11px',
+              fontWeight: 700,
+              border: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            Log In
+          </button>
+        </div>
+      )}
+
       {/* Sticky Bottom Checkout Footer */}
       <div
         style={{
-          padding: '12px 16px',
+          position: 'sticky',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          padding: '12px 16px max(14px, env(safe-area-inset-bottom)) 16px',
           backgroundColor: 'var(--color-surface)',
           borderTop: '1px solid var(--color-border)',
+          boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.06)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: '12px'
+          gap: '12px',
+          zIndex: 40
         }}
       >
         <div>
@@ -652,7 +701,13 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onOpenPayment }) => {
         </div>
 
         <button
-          onClick={onOpenPayment}
+          onClick={() => {
+            if (!isLoggedIn) {
+              setCustomerScreen('auth');
+              return;
+            }
+            onOpenPayment();
+          }}
           style={{
             flex: 1,
             backgroundColor: 'var(--color-primary)',
@@ -665,11 +720,21 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onOpenPayment }) => {
             alignItems: 'center',
             justifyContent: 'center',
             gap: '8px',
-            boxShadow: 'var(--shadow-glow)'
+            boxShadow: 'var(--shadow-glow)',
+            cursor: 'pointer'
           }}
         >
-          <span>Select Payment</span>
-          <ArrowRight size={16} />
+          {!isLoggedIn ? (
+            <>
+              <Lock size={16} />
+              <span>Login to Complete Order</span>
+            </>
+          ) : (
+            <>
+              <span>Select Payment</span>
+              <ArrowRight size={16} />
+            </>
+          )}
         </button>
       </div>
 
