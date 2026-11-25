@@ -152,106 +152,125 @@ export const SavedAddressesModal: React.FC<SavedAddressesModalProps> = ({ isOpen
               </button>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {userAddresses.map((addr) => {
-                  const isSelected = selectedAddress === addr.line;
-                  return (
-                    <div
-                      key={addr.id}
-                      onClick={() => {
-                        setSelectedAddress(addr.line);
-                        setDefaultAddress(addr.id);
-                      }}
-                      style={{
-                        padding: '14px',
-                        borderRadius: 'var(--radius-md)',
-                        border: isSelected ? '1.5px solid var(--color-primary)' : '1px solid var(--color-border)',
-                        backgroundColor: isSelected ? 'var(--color-primary-light)' : 'var(--color-surface)',
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: '12px',
-                        cursor: 'pointer'
-                      }}
-                    >
+                {userAddresses.length === 0 ? (
+                  <div
+                    style={{
+                      padding: '24px 16px',
+                      textAlign: 'center',
+                      backgroundColor: 'var(--color-bg)',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px dashed var(--color-border)'
+                    }}
+                  >
+                    <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--color-text-muted)' }}>
+                      No saved addresses found.
+                    </p>
+                    <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                      Add your home or office address for faster checkout.
+                    </p>
+                  </div>
+                ) : (
+                  userAddresses.map((addr) => {
+                    const isSelected = selectedAddress === addr.line;
+                    return (
                       <div
+                        key={addr.id}
+                        onClick={() => {
+                          setSelectedAddress(addr.line);
+                          setDefaultAddress(addr.id);
+                        }}
                         style={{
-                          padding: '8px',
-                          borderRadius: 'var(--radius-sm)',
-                          backgroundColor: isSelected ? 'var(--color-primary)' : 'var(--color-surface-muted)',
-                          color: isSelected ? '#FFFFFF' : 'var(--color-primary)',
-                          display: 'flex'
+                          padding: '14px',
+                          borderRadius: 'var(--radius-md)',
+                          border: isSelected ? '1.5px solid var(--color-primary)' : '1px solid var(--color-border)',
+                          backgroundColor: isSelected ? 'var(--color-primary-light)' : 'var(--color-surface)',
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: '12px',
+                          cursor: 'pointer'
                         }}
                       >
-                        {addr.label === 'Home' ? (
-                          <Home size={18} />
-                        ) : addr.label === 'Work' ? (
-                          <Briefcase size={18} />
-                        ) : (
-                          <MapPin size={18} />
-                        )}
-                      </div>
-
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ fontSize: '14px', fontWeight: 800 }}>{addr.label}</span>
-                          {addr.isDefault && (
-                            <span
-                              style={{
-                                fontSize: '9px',
-                                fontWeight: 800,
-                                backgroundColor: 'var(--color-veg-bg)',
-                                color: 'var(--color-veg)',
-                                padding: '2px 6px',
-                                borderRadius: '4px'
-                              }}
-                            >
-                              DEFAULT
-                            </span>
+                        <div
+                          style={{
+                            padding: '8px',
+                            borderRadius: 'var(--radius-sm)',
+                            backgroundColor: isSelected ? 'var(--color-primary)' : 'var(--color-surface-muted)',
+                            color: isSelected ? '#FFFFFF' : 'var(--color-primary)',
+                            display: 'flex'
+                          }}
+                        >
+                          {addr.label === 'Home' ? (
+                            <Home size={18} />
+                          ) : addr.label === 'Work' ? (
+                            <Briefcase size={18} />
+                          ) : (
+                            <MapPin size={18} />
                           )}
                         </div>
-                        <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px', lineHeight: 1.4 }}>
-                          {addr.line}
-                        </p>
-                      </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        {userAddresses.length > 1 && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteAddress(addr.id);
-                            }}
-                            style={{
-                              padding: '6px',
-                              borderRadius: '4px',
-                              color: 'var(--color-text-muted)',
-                              display: 'flex'
-                            }}
-                            title="Delete"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-
-                        {isSelected && (
-                          <div
-                            style={{
-                              width: '22px',
-                              height: '22px',
-                              borderRadius: '50%',
-                              backgroundColor: 'var(--color-primary)',
-                              color: '#FFFFFF',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center'
-                            }}
-                          >
-                            <Check size={14} />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '14px', fontWeight: 800 }}>{addr.label}</span>
+                            {addr.isDefault && (
+                              <span
+                                style={{
+                                  fontSize: '9px',
+                                  fontWeight: 800,
+                                  backgroundColor: 'var(--color-veg-bg)',
+                                  color: 'var(--color-veg)',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px'
+                                }}
+                              >
+                                DEFAULT
+                              </span>
+                            )}
                           </div>
-                        )}
+                          <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px', lineHeight: 1.4 }}>
+                            {addr.line}
+                          </p>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {userAddresses.length > 1 && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteAddress(addr.id);
+                              }}
+                              style={{
+                                padding: '6px',
+                                borderRadius: '4px',
+                                color: 'var(--color-text-muted)',
+                                display: 'flex'
+                              }}
+                              title="Delete"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+
+                          {isSelected && (
+                            <div
+                              style={{
+                                width: '22px',
+                                height: '22px',
+                                borderRadius: '50%',
+                                backgroundColor: 'var(--color-primary)',
+                                color: '#FFFFFF',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}
+                            >
+                              <Check size={14} />
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </>
           ) : (

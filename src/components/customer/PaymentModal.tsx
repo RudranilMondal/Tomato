@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useTomattto } from '../../context/TomatttoContext';
 import { X, ShieldCheck, Check, Smartphone, CreditCard, Banknote, Sparkles, Lock } from 'lucide-react';
 import { openRazorpayCheckout } from '../../lib/razorpay';
+import { PRICING_CONFIG } from '../../config/pricing';
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -18,6 +19,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose }) =
     user,
     selectedRestaurant,
     isLoggedIn,
+    selectedTip,
     setCustomerScreen
   } = useTomattto();
   const [selectedMethod, setSelectedMethod] = useState<'upi' | 'card' | 'cod'>('upi');
@@ -119,10 +121,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose }) =
   const discountAmount = appliedCoupon
     ? Math.min(appliedCoupon.maxDiscount, (cartTotal * appliedCoupon.discountPercentage) / 100)
     : 0;
-  const deliveryFee = appliedCoupon?.code === 'FREESHIP' ? 0 : 35;
-  const platformFee = 5;
+  const deliveryFee = appliedCoupon?.code === 'FREESHIP' ? 0 : PRICING_CONFIG.CUSTOMER_DELIVERY_FEE;
+  const platformFee = PRICING_CONFIG.CUSTOMER_PLATFORM_FEE;
   const taxAmount = Math.round(cartTotal * 0.05);
-  const tipAmount = 30;
+  const tipAmount = selectedTip || 0;
   const finalPayable = cartTotal - discountAmount + deliveryFee + platformFee + taxAmount + tipAmount;
 
   const handlePay = async () => {
@@ -134,13 +136,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose }) =
       if (selectedMethod !== 'cod' && hasRazorpayKey) {
         await openRazorpayCheckout({
           amountInRupees: finalPayable,
+          intent: 'customer_order',
           restaurantName: selectedRestaurant?.name,
           customerName: user?.name,
           customerPhone: user?.phone,
         });
       }
 
-      const success = await placeOrder(selectedMethod);
+      const success = await placeOrder(selectedMethod, tipAmount);
       if (success) {
         onClose();
       }
@@ -181,7 +184,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose }) =
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <img src="/logo.png" alt="G1Bites" style={{ width: '22px', height: '22px', borderRadius: '5px', objectFit: 'contain' }} />
+              <img src="/logo.png" alt="Tomattto" style={{ width: '22px', height: '22px', borderRadius: '5px', objectFit: 'contain' }} />
               <h3 style={{ fontSize: '16px', fontWeight: 800 }}>Choose Payment Method</h3>
             </div>
             <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
@@ -357,6 +360,57 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose }) =
                 <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: 'var(--color-primary)' }} />
               )}
             </div>
+          </div>
+        </div>
+
+        {/* Transparent Bill Breakdown Summary */}
+        <div
+          style={{
+            padding: '10px 14px',
+            backgroundColor: 'var(--color-surface-muted)',
+            borderRadius: 'var(--radius-md)',
+            marginBottom: '14px',
+            fontSize: '12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '4px'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--color-text-muted)' }}>
+            <span>Item Total</span>
+            <span style={{ fontWeight: 600, color: 'var(--color-text-main)' }}>₹{cartTotal}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--color-text-muted)' }}>
+            <span>Delivery Partner Fee</span>
+            {deliveryFee === 0 ? (
+              <span style={{ color: 'var(--color-veg)', fontWeight: 700 }}>FREE</span>
+            ) : (
+              <span style={{ fontWeight: 600, color: 'var(--color-text-main)' }}>₹{deliveryFee}</span>
+            )}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--color-text-muted)' }}>
+            <span>Platform Fee</span>
+            <span style={{ fontWeight: 600, color: 'var(--color-text-main)' }}>₹{platformFee}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--color-text-muted)' }}>
+            <span>Taxes & Restaurant Charges</span>
+            <span style={{ fontWeight: 600, color: 'var(--color-text-main)' }}>₹{taxAmount}</span>
+          </div>
+          {tipAmount > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--color-text-muted)' }}>
+              <span>Delivery Partner Tip</span>
+              <span style={{ fontWeight: 600, color: 'var(--color-text-main)' }}>₹{tipAmount}</span>
+            </div>
+          )}
+          {discountAmount > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--color-veg)' }}>
+              <span>Coupon Discount</span>
+              <span style={{ fontWeight: 700 }}>-₹{discountAmount}</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, borderTop: '1px solid var(--color-border)', paddingTop: '4px', marginTop: '2px', fontSize: '13px' }}>
+            <span>TO PAY</span>
+            <span style={{ color: 'var(--color-primary)' }}>₹{finalPayable}</span>
           </div>
         </div>
 

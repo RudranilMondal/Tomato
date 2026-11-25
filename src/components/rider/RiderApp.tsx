@@ -1,6 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { useTomattto } from '../../context/TomatttoContext';
 import { DEMO_OTP_CODE } from '../../lib/demoAuth';
+import { RouteLoadingFallback } from '../common/LoadingFallback';
+
+// Lazy-loaded heavy rider modules
+const RiderOnboardingWizard = lazy(() =>
+  import('./RiderOnboardingWizard').then((m) => ({ default: m.RiderOnboardingWizard }))
+);
+const RiderSelfieModal = lazy(() =>
+  import('./RiderSelfieModal').then((m) => ({ default: m.RiderSelfieModal }))
+);
 import { RiderRouteModal } from './RiderRouteModal';
 import { RiderProofModal } from './RiderProofModal';
 import { RiderEarningsModal } from './RiderEarningsModal';
@@ -8,10 +17,8 @@ import { RiderSosModal } from './RiderSosModal';
 import { RiderTripsModal } from './RiderTripsModal';
 import { RiderKycModal } from './RiderKycModal';
 import { RiderProfileModal } from './RiderProfileModal';
-import { RiderOnboardingWizard } from './RiderOnboardingWizard';
 import { RiderAuthModal } from './RiderAuthModal';
 import { UnifiedAuthModal } from '../auth/UnifiedAuthModal';
-import { RiderSelfieModal } from './RiderSelfieModal';
 import { RiderWelcomeScreen } from './RiderWelcomeScreen';
 import { RiderApplicationStatusScreen } from './RiderApplicationStatusScreen';
 import {
@@ -87,7 +94,9 @@ export const RiderApp: React.FC = () => {
     activeSelfiePrompt,
     promptSelfieVerification,
     submitSelfieVerification,
-    dismissSelfieVerification
+    dismissSelfieVerification,
+    user,
+    persistedRiderApp
   } = useTomattto();
 
   const [isRegistering, setIsRegistering] = useState(false);
@@ -192,12 +201,14 @@ export const RiderApp: React.FC = () => {
   if (isRegistering) {
     return (
       <div style={{ flex: 1, height: '100%', overflowY: 'auto' }}>
-        <RiderOnboardingWizard
-          onBack={() => setIsRegistering(false)}
-          onSuccess={() => {
-            setIsRegistering(false);
-          }}
-        />
+        <Suspense fallback={<RouteLoadingFallback label="Loading Rider Onboarding..." />}>
+          <RiderOnboardingWizard
+            onBack={() => setIsRegistering(false)}
+            onSuccess={() => {
+              setIsRegistering(false);
+            }}
+          />
+        </Suspense>
       </div>
     );
   }
@@ -303,8 +314,8 @@ export const RiderApp: React.FC = () => {
               }}
             >
               <img
-                src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80"
-                alt="Vikram"
+                src={user?.avatarUrl || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80"}
+                alt="Rider"
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
             </div>
@@ -321,7 +332,7 @@ export const RiderApp: React.FC = () => {
                     textOverflow: 'ellipsis'
                   }}
                 >
-                  Vikram Singh
+                  {activeRiderApplicant?.fullName || persistedRiderApp?.full_name || user?.name || 'Delivery Partner'}
                 </h4>
                 <span
                   style={{
@@ -2022,18 +2033,20 @@ export const RiderApp: React.FC = () => {
 
       {/* Duty Selfie Verification Modal */}
       {activeSelfiePrompt && (
-        <RiderSelfieModal
-          prompt={activeSelfiePrompt}
-          tier={riderTier}
-          onSubmit={async (selfieUrl, orderId, notes) => {
-            const res = await submitSelfieVerification(selfieUrl, orderId, notes);
-            if (res.success) {
-              setToast({ type: 'success', message: 'Duty selfie verified! Verification recorded in compliance log.' });
-            }
-            return res;
-          }}
-          onDismiss={() => dismissSelfieVerification()}
-        />
+        <Suspense fallback={null}>
+          <RiderSelfieModal
+            prompt={activeSelfiePrompt}
+            tier={riderTier}
+            onSubmit={async (selfieUrl, orderId, notes) => {
+              const res = await submitSelfieVerification(selfieUrl, orderId, notes);
+              if (res.success) {
+                setToast({ type: 'success', message: 'Duty selfie verified! Verification recorded in compliance log.' });
+              }
+              return res;
+            }}
+            onDismiss={() => dismissSelfieVerification()}
+          />
+        </Suspense>
       )}
 
       {/* Unified Multi-Channel Auth Modal for Delivery Partners */}

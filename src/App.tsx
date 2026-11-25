@@ -1,14 +1,25 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense, lazy } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useTomattto } from './context/TomatttoContext';
 import { DeviceFrame } from './components/DeviceFrame';
 import { CustomerApp } from './components/customer/CustomerApp';
-import { PartnerApp } from './components/partner/PartnerApp';
-import { RiderApp } from './components/rider/RiderApp';
-import { AdminApp } from './components/admin/AdminApp';
-import { EcosystemQuadView } from './components/EcosystemQuadView';
 import { EcosystemDock } from './components/EcosystemDock';
 import { DemoWalkthroughBar } from './components/DemoWalkthroughBar';
+import { RouteLoadingFallback, ErrorBoundary } from './components/common/LoadingFallback';
+
+// Route-level code-splitting for dedicated non-customer application portals
+const PartnerApp = lazy(() =>
+  import('./components/partner/PartnerApp').then((m) => ({ default: m.PartnerApp }))
+);
+const RiderApp = lazy(() =>
+  import('./components/rider/RiderApp').then((m) => ({ default: m.RiderApp }))
+);
+const AdminApp = lazy(() =>
+  import('./components/admin/AdminApp').then((m) => ({ default: m.AdminApp }))
+);
+const EcosystemQuadView = lazy(() =>
+  import('./components/EcosystemQuadView').then((m) => ({ default: m.EcosystemQuadView }))
+);
 
 /**
  * RouteSync ensures the global TomatttoContext `appMode` state stays in
@@ -68,7 +79,16 @@ export const AppContent: React.FC = () => {
           <Route path="/customer" element={<Navigate to="/" replace />} />
 
           {/* Restaurant Partner Dashboard */}
-          <Route path="/partner" element={<PartnerApp />} />
+          <Route
+            path="/partner"
+            element={
+              <ErrorBoundary fallbackTitle="Unable to load Restaurant Partner Dashboard">
+                <Suspense fallback={<RouteLoadingFallback label="Loading Partner Dashboard..." />}>
+                  <PartnerApp />
+                </Suspense>
+              </ErrorBoundary>
+            }
+          />
           <Route path="/restaurant" element={<Navigate to="/partner" replace />} />
 
           {/* Delivery Rider Partner App */}
@@ -76,17 +96,39 @@ export const AppContent: React.FC = () => {
             path="/rider"
             element={
               <DeviceFrame>
-                <RiderApp />
+                <ErrorBoundary fallbackTitle="Unable to load Delivery Rider Portal">
+                  <Suspense fallback={<RouteLoadingFallback label="Loading Rider Portal..." />}>
+                    <RiderApp />
+                  </Suspense>
+                </ErrorBoundary>
               </DeviceFrame>
             }
           />
           <Route path="/delivery" element={<Navigate to="/rider" replace />} />
 
           {/* Super Admin & Operations Panel */}
-          <Route path="/admin" element={<AdminApp />} />
+          <Route
+            path="/admin"
+            element={
+              <ErrorBoundary fallbackTitle="Unable to load Admin Operations Console">
+                <Suspense fallback={<RouteLoadingFallback label="Loading Admin Console..." />}>
+                  <AdminApp />
+                </Suspense>
+              </ErrorBoundary>
+            }
+          />
 
           {/* 360° Live Ecosystem Quad View */}
-          <Route path="/ecosystem" element={<EcosystemQuadView />} />
+          <Route
+            path="/ecosystem"
+            element={
+              <ErrorBoundary fallbackTitle="Unable to load Ecosystem Quad View">
+                <Suspense fallback={<RouteLoadingFallback label="Initializing Quad-View Simulation..." />}>
+                  <EcosystemQuadView />
+                </Suspense>
+              </ErrorBoundary>
+            }
+          />
           <Route path="/quad" element={<Navigate to="/ecosystem" replace />} />
 
           {/* Fallback to Customer App */}

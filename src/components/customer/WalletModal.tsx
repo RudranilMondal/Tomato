@@ -8,7 +8,7 @@ interface WalletModalProps {
 }
 
 export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose }) => {
-  const { walletBalance, walletTransactions, topUpWallet } = useTomattto();
+  const { walletBalance, walletTransactions, topUpWallet, user } = useTomattto();
   const [customAmount, setCustomAmount] = useState('');
   const [isAddingFunds, setIsAddingFunds] = useState(false);
 
@@ -59,7 +59,7 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose }) => 
           }}
         >
           <div>
-            <h3 style={{ fontSize: '17px', fontWeight: 800 }}>G1Bites Credits & Wallet</h3>
+            <h3 style={{ fontSize: '17px', fontWeight: 800 }}>Tomattto Credits & Wallet</h3>
             <p style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
               1-click instant checkout with zero payment drop-offs
             </p>
@@ -131,9 +131,9 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose }) => 
             <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
               <div>
                 <span style={{ fontSize: '10px', opacity: 0.7, display: 'block' }}>ACCOUNT HOLDER</span>
-                <span style={{ fontSize: '13px', fontWeight: 800 }}>Souvik Mukherjee</span>
+                <span style={{ fontSize: '13px', fontWeight: 800 }}>{user.name || 'Valued Customer'}</span>
               </div>
-              <span style={{ fontSize: '11px', fontWeight: 700, opacity: 0.85 }}>G1BITES PAY</span>
+              <span style={{ fontSize: '11px', fontWeight: 700, opacity: 0.85 }}>TOMATTTO PAY</span>
             </div>
           </div>
 
@@ -242,55 +242,74 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose }) => 
             </span>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {walletTransactions.map((tx) => {
-                const isCredit = tx.type === 'credit';
-                return (
-                  <div
-                    key={tx.id}
-                    style={{
-                      padding: '12px',
-                      borderRadius: 'var(--radius-md)',
-                      backgroundColor: 'var(--color-bg)',
-                      border: '1px solid var(--color-border-subtle)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <div
-                        style={{
-                          width: '32px',
-                          height: '32px',
-                          borderRadius: '50%',
-                          backgroundColor: isCredit ? 'var(--color-veg-bg)' : 'var(--color-primary-light)',
-                          color: isCredit ? 'var(--color-veg)' : 'var(--color-primary)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}
-                      >
-                        {isCredit ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}
-                      </div>
-
-                      <div>
-                        <span style={{ fontSize: '13px', fontWeight: 700, display: 'block' }}>{tx.title}</span>
-                        <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{tx.date}</span>
-                      </div>
-                    </div>
-
-                    <span
+              {walletTransactions.length === 0 ? (
+                <div
+                  style={{
+                    padding: '24px 16px',
+                    textAlign: 'center',
+                    backgroundColor: 'var(--color-bg)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px dashed var(--color-border)'
+                  }}
+                >
+                  <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--color-text-muted)' }}>
+                    No wallet transactions yet.
+                  </p>
+                  <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                    Your top-ups, cashbacks, and order refunds will appear here.
+                  </p>
+                </div>
+              ) : (
+                walletTransactions.map((tx) => {
+                  const isCredit = tx.type === 'credit';
+                  return (
+                    <div
+                      key={tx.id}
                       style={{
-                        fontSize: '14px',
-                        fontWeight: 800,
-                        color: isCredit ? 'var(--color-veg)' : 'var(--color-text-main)'
+                        padding: '12px',
+                        borderRadius: 'var(--radius-md)',
+                        backgroundColor: 'var(--color-bg)',
+                        border: '1px solid var(--color-border-subtle)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
                       }}
                     >
-                      {isCredit ? '+' : '-'}₹{tx.amount}
-                    </span>
-                  </div>
-                );
-              })}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div
+                          style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            backgroundColor: isCredit ? 'var(--color-veg-bg)' : 'var(--color-primary-light)',
+                            color: isCredit ? 'var(--color-veg)' : 'var(--color-primary)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                        >
+                          {isCredit ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}
+                        </div>
+
+                        <div>
+                          <span style={{ fontSize: '13px', fontWeight: 700, display: 'block' }}>{tx.title}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{tx.date}</span>
+                        </div>
+                      </div>
+
+                      <span
+                        style={{
+                          fontSize: '14px',
+                          fontWeight: 800,
+                          color: isCredit ? 'var(--color-veg)' : 'var(--color-text-main)'
+                        }}
+                      >
+                        {isCredit ? '+' : '-'}₹{tx.amount}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>

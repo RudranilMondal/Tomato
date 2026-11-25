@@ -60,7 +60,7 @@ export const RestaurantManageModal: React.FC<RestaurantManageModalProps> = ({
   const [description, setDescription] = useState(restaurant?.description || '');
   const [coverImage, setCoverImage] = useState(restaurant?.coverImage || '');
   const [address, setAddress] = useState(restaurant?.address || '');
-  const [cuisines, setCuisines] = useState(restaurant?.cuisines.join(', ') || '');
+  const [cuisines, setCuisines] = useState((restaurant?.cuisines || []).join(', '));
   const [prepTime, setPrepTime] = useState(restaurant?.prepTimeMinutes || 25);
   const [costForTwo, setCostForTwo] = useState(restaurant?.costForTwo || 400);
   const [isPureVeg, setIsPureVeg] = useState(restaurant?.isPureVeg || false);
@@ -249,7 +249,7 @@ export const RestaurantManageModal: React.FC<RestaurantManageModalProps> = ({
                 </span>
               </div>
               <p style={{ fontSize: '11px', color: '#A5A5B2', margin: '3px 0 0' }}>
-                ID: {restaurant.id} • {restaurant.cuisines.join(', ')} • {restaurant.address}
+                ID: {restaurant.id} • {(restaurant.cuisines || []).join(', ')} • {restaurant.address}
               </p>
             </div>
           </div>
@@ -955,7 +955,7 @@ export const RestaurantManageModal: React.FC<RestaurantManageModalProps> = ({
           }}
         >
           <span style={{ fontSize: '11px', color: '#A5A5B2' }}>
-            Outlet Management Console • G1Bites HQ Ops
+            Outlet Management Console • Tomattto HQ Ops
           </span>
           <button
             onClick={onClose}

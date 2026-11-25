@@ -29,7 +29,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, ord
   const handleDownloadText = () => {
     const textContent = `
 ======================================================
-            G1BITES LOGISTICS PVT. LTD.
+            TOMATTTO LOGISTICS PVT. LTD.
             TAX INVOICE / CASH MEMO
 ======================================================
 Invoice No:    ${invoiceNumber}
@@ -66,8 +66,8 @@ ${order.tipAmount > 0 ? `Rider Tip:               ₹${order.tipAmount}` : ''}
 TOTAL PAID:              ₹${order.totalAmount}
 Payment Mode:            ${order.paymentMethod.toUpperCase()} (TXN-SUCCESS)
 ------------------------------------------------------
-Thank you for ordering with G1Bites!
-Support: concierge@g1bites.com | 1800-G1BITES
+Thank you for ordering with Tomattto!
+Support: concierge@tomattto.com | 1800-TOMATTTO
 ======================================================
 `;
 
@@ -205,13 +205,13 @@ Support: concierge@g1bites.com | 1800-G1BITES
           >
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                <img src="/logo.png" alt="G1Bites" style={{ width: '26px', height: '26px', borderRadius: '6px', objectFit: 'contain' }} />
+                <img src="/logo.png" alt="Tomattto" style={{ width: '26px', height: '26px', borderRadius: '6px', objectFit: 'contain' }} />
                 <span style={{ fontSize: '18px', fontWeight: 900, color: 'var(--color-primary)', letterSpacing: '-0.02em' }}>
-                  G1Bites
+                  Tomattto
                 </span>
               </div>
               <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontWeight: 600 }}>
-                G1Bites Logistics India Pvt. Ltd.
+                Tomattto Logistics India Pvt. Ltd.
               </p>
               <p style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
                 GSTIN: 29AABCT1337M1Z4 • FSSAI: 11221334000542
@@ -329,7 +329,7 @@ Support: concierge@g1bites.com | 1800-G1BITES
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--color-text-muted)', fontSize: '12px' }}>
-              <span>G1Bites Platform Fee</span>
+              <span>Tomattto Platform Fee</span>
               <span>₹{order.platformFee}</span>
             </div>
 
@@ -402,7 +402,7 @@ Support: concierge@g1bites.com | 1800-G1BITES
           <div style={{ textAlign: 'center', marginTop: '16px', color: 'var(--color-text-muted)', fontSize: '10px' }}>
             This is a computer-generated tax invoice. No signature required.
             <br />
-            Need assistance? Email concierge@g1bites.com or call 1800-G1BITES.
+            Need assistance? Email concierge@tomattto.com or call 1800-TOMATTTO.
           </div>
         </div>
       </div>

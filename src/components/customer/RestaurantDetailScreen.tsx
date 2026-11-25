@@ -34,7 +34,9 @@ export const RestaurantDetailScreen: React.FC = () => {
     cartTotal,
     itemCount,
     toggleFavorite,
-    isFavorite
+    isFavorite,
+    reviews,
+    dietaryFilter
   } = useTomattto();
 
   const [activeMainTab, setActiveMainTab] = useState<'menu' | 'reviews'>('menu');
@@ -42,7 +44,8 @@ export const RestaurantDetailScreen: React.FC = () => {
     selectedRestaurant?.categories[0]?.id || ''
   );
   const [isCategoryDrawerOpen, setIsCategoryDrawerOpen] = useState(false);
-  const [isVegOnly, setIsVegOnly] = useState(false);
+  const [isVegOnly, setIsVegOnly] = useState<boolean>(() => dietaryFilter === 'veg');
+  const [isNonVegOnly, setIsNonVegOnly] = useState<boolean>(() => dietaryFilter === 'non_veg');
 
   if (!selectedRestaurant) {
     return (
@@ -175,7 +178,7 @@ export const RestaurantDetailScreen: React.FC = () => {
             {selectedRestaurant.name}
           </h2>
           <p style={{ fontSize: '11px', opacity: 0.9, marginTop: '2px' }}>
-            {selectedRestaurant.cuisines.join(' • ')} • {selectedRestaurant.address}
+            {(selectedRestaurant.cuisines || []).join(' • ')} • {selectedRestaurant.address}
           </p>
         </div>
       </div>
@@ -250,7 +253,7 @@ export const RestaurantDetailScreen: React.FC = () => {
           }}
         >
           <Sparkles size={13} />
-          <span>{selectedRestaurant.offerText} with code G1BITES50</span>
+          <span>{selectedRestaurant.offerText} with code TOMATTTO50</span>
         </div>
       )}
 
@@ -358,7 +361,10 @@ export const RestaurantDetailScreen: React.FC = () => {
 
             {/* Veg Only Toggle Pill */}
             <button
-              onClick={() => setIsVegOnly(!isVegOnly)}
+              onClick={() => {
+                setIsVegOnly(!isVegOnly);
+                if (!isVegOnly) setIsNonVegOnly(false);
+              }}
               style={{
                 padding: '6px 12px',
                 borderRadius: 'var(--radius-full)',
@@ -379,12 +385,52 @@ export const RestaurantDetailScreen: React.FC = () => {
               <span>Veg Only</span>
             </button>
 
+            {/* Non-Veg Toggle Pill */}
+            <button
+              onClick={() => {
+                setIsNonVegOnly(!isNonVegOnly);
+                if (!isNonVegOnly) setIsVegOnly(false);
+              }}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 'var(--radius-full)',
+                backgroundColor: isNonVegOnly ? 'var(--color-nonveg)' : 'var(--color-surface-muted)',
+                color: isNonVegOnly ? '#FFFFFF' : 'var(--color-text-main)',
+                border: `1px solid ${isNonVegOnly ? 'var(--color-nonveg)' : 'var(--color-border)'}`,
+                fontSize: '12px',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+                cursor: 'pointer'
+              }}
+            >
+              <span
+                style={{
+                  width: '10px',
+                  height: '10px',
+                  borderRadius: '2px',
+                  border: `1.5px solid ${isNonVegOnly ? '#FFFFFF' : 'var(--color-nonveg)'}`,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <span style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: isNonVegOnly ? '#FFFFFF' : 'var(--color-nonveg)' }} />
+              </span>
+              <span>Non-Veg</span>
+            </button>
+
             {/* Individual Category Pills */}
             {selectedRestaurant.categories.map((cat) => {
               const isActive = activeCategory === cat.id;
-              const itemsInCat = isVegOnly
-                ? cat.items.filter((i) => i.dietary === 'veg')
-                : cat.items;
+              const itemsInCat = cat.items.filter((i) => {
+                if (isVegOnly && i.dietary !== 'veg') return false;
+                if (isNonVegOnly && i.dietary === 'veg') return false;
+                return true;
+              });
 
               return (
                 <button
@@ -417,9 +463,11 @@ export const RestaurantDetailScreen: React.FC = () => {
           {/* Menu Items List */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', paddingBottom: itemCount > 0 ? '110px' : '75px' }} className="no-scrollbar">
             {selectedRestaurant.categories.map((cat) => {
-              const visibleItems = isVegOnly
-                ? cat.items.filter((i) => i.dietary === 'veg')
-                : cat.items;
+              const visibleItems = cat.items.filter((i) => {
+                if (isVegOnly && i.dietary !== 'veg') return false;
+                if (isNonVegOnly && i.dietary === 'veg') return false;
+                return true;
+              });
 
               if (visibleItems.length === 0) return null;
 
@@ -738,85 +786,72 @@ export const RestaurantDetailScreen: React.FC = () => {
             </h4>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {[
-                {
-                  name: 'Ananya Roy',
-                  rating: 5,
-                  time: 'Yesterday',
-                  dish: 'Dum Gosht Biryani',
-                  comment: 'Heavenly aroma! The meat literally melted in my mouth, authentic dum style spices. Packaging was neat and spill-proof.'
-                },
-                {
-                  name: 'Karthik Nair',
-                  rating: 5,
-                  time: '2 days ago',
-                  dish: 'Murgh Makhani Biryani',
-                  comment: 'Fastest delivery in Indiranagar! The rider Vikram was polite and reached in 21 minutes. Food was steaming hot.'
-                },
-                {
-                  name: 'Sneha Patel',
-                  rating: 4,
-                  time: 'Last week',
-                  dish: 'Paneer Biryani & Gulab Jamun',
-                  comment: 'Very tasty paneer cubes, good portion size for two people. Loved the warm Gulab Jamun compliment!'
-                }
-              ].map((rev, idx) => (
+              {reviews.filter((r) => r.restaurantRating > 0).length === 0 ? (
                 <div
-                  key={idx}
                   style={{
+                    padding: '32px 20px',
+                    textAlign: 'center',
+                    color: 'var(--color-text-muted)',
+                    fontSize: '13px',
                     backgroundColor: 'var(--color-surface)',
                     borderRadius: 'var(--radius-md)',
-                    padding: '14px',
                     border: '1px solid var(--color-border)'
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '13px', fontWeight: 800 }}>{rev.name}</span>
-                        <CheckCircle2 size={12} color="var(--color-veg)" />
-                      </div>
-                      <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>{rev.time}</span>
-                    </div>
-
+                  <div style={{ fontSize: '24px', marginBottom: '8px' }}>📝</div>
+                  <p style={{ margin: 0, fontWeight: 600 }}>No customer reviews yet.</p>
+                  <p style={{ margin: '4px 0 0', fontSize: '11px' }}>Be the first to order and review this restaurant!</p>
+                </div>
+              ) : (
+                reviews
+                  .filter((r) => r.restaurantRating > 0)
+                  .map((rev) => (
                     <div
+                      key={rev.orderId}
                       style={{
-                        backgroundColor: '#27AE60',
-                        color: '#FFFFFF',
-                        padding: '2px 6px',
-                        borderRadius: '4px',
-                        fontSize: '11px',
-                        fontWeight: 800,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '2px'
+                        backgroundColor: 'var(--color-surface)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: '14px',
+                        border: '1px solid var(--color-border)'
                       }}
                     >
-                      <span>{rev.rating}</span>
-                      <Star size={10} fill="#FFFFFF" />
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 800 }}>Verified Customer</span>
+                            <CheckCircle2 size={12} color="var(--color-veg)" />
+                          </div>
+                          <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
+                            {new Date(rev.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+
+                        <div
+                          style={{
+                            backgroundColor: '#27AE60',
+                            color: '#FFFFFF',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            fontSize: '11px',
+                            fontWeight: 800,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '2px'
+                          }}
+                        >
+                          <span>{rev.restaurantRating}</span>
+                          <Star size={10} fill="#FFFFFF" />
+                        </div>
+                      </div>
+
+                      {rev.comment && (
+                        <p style={{ fontSize: '12px', color: 'var(--color-text-main)', lineHeight: 1.4, margin: 0 }}>
+                          "{rev.comment}"
+                        </p>
+                      )}
                     </div>
-                  </div>
-
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      fontSize: '10px',
-                      fontWeight: 700,
-                      color: 'var(--color-primary)',
-                      backgroundColor: 'var(--color-primary-light)',
-                      padding: '2px 6px',
-                      borderRadius: 'var(--radius-sm)',
-                      marginBottom: '6px'
-                    }}
-                  >
-                    Ordered: {rev.dish}
-                  </span>
-
-                  <p style={{ fontSize: '12px', color: 'var(--color-text-main)', lineHeight: 1.4, margin: 0 }}>
-                    "{rev.comment}"
-                  </p>
-                </div>
-              ))}
+                  ))
+              )}
             </div>
           </div>
         </div>

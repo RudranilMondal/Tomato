@@ -26,10 +26,12 @@ import {
   RiderTier,
   TierConfiguration,
   RiderSelfieVerification,
-  RestaurantPartnerSession
+  RestaurantPartnerSession,
+  VegFilterType
 } from '../types';
-import { RESTAURANTS, COUPONS, INITIAL_USER, GUEST_USER, SAMPLE_RIDER, INITIAL_PARTNER_ORDERS, INITIAL_RIDER_TRIPS } from '../data/mockData';
-import { supabase } from '../lib/supabase';
+import { PRICING_CONFIG } from '../config/pricing';
+import { COUPONS, GUEST_USER, INITIAL_PARTNER_ORDERS, INITIAL_RIDER_TRIPS } from '../data/mockData';
+import { supabase, getRestaurants } from '../lib/supabase';
 import { Session, User } from '@supabase/supabase-js';
 import { DemoRiderUser, DEMO_OTP_CODE } from '../lib/demoAuth';
 import { DEFAULT_TIER_CONFIGURATIONS, calculateRiderTier, calculateTierPayout } from '../lib/tierSystem';
@@ -64,6 +66,9 @@ interface TomatttoContextType {
   customerScreen: CustomerScreen;
   setCustomerScreen: (screen: CustomerScreen) => void;
   restaurants: Restaurant[];
+  isRestaurantsLoading: boolean;
+  restaurantsError: string | null;
+  refreshRestaurants: () => Promise<void>;
   selectedRestaurant: Restaurant | null;
   setSelectedRestaurant: (r: Restaurant | null) => void;
   customizingItem: MenuItem | null;
@@ -148,11 +153,17 @@ interface TomatttoContextType {
   setSelectedCuisine: (c: string | null) => void;
   vegOnlyFilter: boolean;
   setVegOnlyFilter: (v: boolean) => void;
+  dietaryFilter: VegFilterType;
+  setDietaryFilter: (f: VegFilterType) => void;
+
+  // Tip & Pricing
+  selectedTip: number;
+  setSelectedTip: (tip: number) => void;
 
   // Order Placement & Lifecycle
   isPlacingOrder: boolean;
   orderError: string | null;
-  placeOrder: (paymentMethod: 'upi' | 'card' | 'cod') => Promise<boolean>;
+  placeOrder: (paymentMethod: 'upi' | 'card' | 'cod', tipAmount?: number) => Promise<boolean>;
 
   // Partner State & Authentication
   partnerSession: RestaurantPartnerSession | null;
@@ -290,14 +301,34 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Customer
   const [customerScreen, setCustomerScreen] = useState<CustomerScreen>('home');
-  const [restaurants, setRestaurants] = useState<Restaurant[]>(RESTAURANTS);
+  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [isRestaurantsLoading, setIsRestaurantsLoading] = useState<boolean>(true);
+  const [restaurantsError, setRestaurantsError] = useState<string | null>(null);
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
   const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [coupons, setCoupons] = useState<Coupon[]>(COUPONS);
-  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(COUPONS[0]);
+  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
   const [isPlacingOrder, setIsPlacingOrder] = useState<boolean>(false);
-  const [orderError, setOrderError] = useState<string | null>(null); // default 50% promo for excitement
+  const [orderError, setOrderError] = useState<string | null>(null);
+
+  const refreshRestaurants = async () => {
+    setIsRestaurantsLoading(true);
+    setRestaurantsError(null);
+    try {
+      const data = await getRestaurants();
+      setRestaurants(data);
+    } catch (err: any) {
+      console.error('Error fetching restaurants:', err);
+      setRestaurantsError(err?.message || 'Failed to load restaurants.');
+    } finally {
+      setIsRestaurantsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    refreshRestaurants();
+  }, []);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
     try {
       return localStorage.getItem('tomattto_customer_logged_in') === 'true';
@@ -340,7 +371,7 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const saved = localStorage.getItem('tomattto_selected_address');
       if (saved) return saved;
     } catch {}
-    return '100ft Road, Indiranagar, Bengaluru';
+    return '';
   });
 
   const setSelectedAddress = (addr: string) => {
@@ -360,27 +391,12 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (fbUser) {
         setIsLoggedIn(true);
         setUser((prev) => {
-          const defaultAddresses: Address[] = [
-            {
-              id: 'addr-1',
-              label: 'Home',
-              line: 'Flat 402, Sunset Heights, 100ft Road, Indiranagar, Bengaluru',
-              isDefault: true
-            },
-            {
-              id: 'addr-2',
-              label: 'Work',
-              line: 'WeWork Galaxy, 43 Residency Rd, Shanthala Nagar, Bengaluru',
-              isDefault: false
-            }
-          ];
-
-          const updatedAddresses = prev.addresses && prev.addresses.length > 0 ? prev.addresses : defaultAddresses;
+          const updatedAddresses = prev.addresses || [];
 
           const updatedUser: UserProfile = {
             id: fbUser.uid || prev.id || `usr-${Date.now()}`,
             name: fbUser.displayName || (prev.name && prev.name !== '' ? prev.name : 'Valued Customer'),
-            phone: fbUser.phoneNumber || (prev.phone && prev.phone !== '' ? prev.phone : '+91 98765 43210'),
+            phone: fbUser.phoneNumber || (prev.phone && prev.phone !== '' ? prev.phone : ''),
             email: fbUser.email || prev.email || '',
             avatarUrl: fbUser.photoURL || prev.avatarUrl || '',
             addresses: updatedAddresses
@@ -405,14 +421,7 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             const saved = localStorage.getItem('tomattto_user_addresses');
             if (saved) return JSON.parse(saved);
           } catch {}
-          return [
-            {
-              id: 'addr-1',
-              label: 'Home' as const,
-              line: 'Flat 402, Sunset Heights, 100ft Road, Indiranagar, Bengaluru',
-              isDefault: true
-            }
-          ];
+          return [];
         });
       }
     });
@@ -582,40 +591,31 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             isDefault: true
           }
         ]
-      : [
-          {
-            id: 'addr-1',
-            label: 'Home' as const,
-            line: 'Flat 402, Sunset Heights, 100ft Road, Indiranagar, Bengaluru',
-            isDefault: true
-          },
-          {
-            id: 'addr-2',
-            label: 'Work' as const,
-            line: 'WeWork Galaxy, 43 Residency Rd, Shanthala Nagar, Bengaluru',
-            isDefault: false
-          }
-        ];
+      : [];
 
     const loggedInUser: UserProfile = {
       id: `usr-${Date.now()}`,
       name: details?.name?.trim() || 'Valued Customer',
-      phone: details?.phone?.trim() || '+91 98765 43210',
-      email: details?.email?.trim() || 'customer@tomattto.app',
+      phone: details?.phone?.trim() || '',
+      email: details?.email?.trim() || '',
       avatarUrl: details?.avatarUrl || '', // User photo if supplied via Google
       addresses: defaultAddresses
     };
 
     setUser(loggedInUser);
     setUserAddresses(defaultAddresses);
-    setSelectedAddress(defaultAddresses[0].line);
+    if (defaultAddresses.length > 0) {
+      setSelectedAddress(defaultAddresses[0].line);
+    }
     setIsLoggedIn(true);
 
     try {
       localStorage.setItem('tomattto_customer_logged_in', 'true');
       localStorage.setItem('tomattto_customer_user', JSON.stringify(loggedInUser));
       localStorage.setItem('tomattto_user_addresses', JSON.stringify(defaultAddresses));
-      localStorage.setItem('tomattto_selected_address', defaultAddresses[0].line);
+      if (defaultAddresses.length > 0) {
+        localStorage.setItem('tomattto_selected_address', defaultAddresses[0].line);
+      }
     } catch (e) {
       console.warn('Failed to save customer session to localStorage', e);
     }
@@ -638,7 +638,7 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setIsLoggedIn(false);
     setUser(GUEST_USER);
     setUserAddresses([]);
-    setSelectedAddress('100ft Road, Indiranagar, Bengaluru');
+    setSelectedAddress('');
     setCustomerScreen('home');
 
     try {
@@ -720,22 +720,47 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   // Favorites
-  const [favorites, setFavorites] = useState<string[]>(['rest-1', 'rest-3']);
+  const [favorites, setFavorites] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('tomattto_customer_favorites');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
   const toggleFavorite = (restaurantId: string) => {
-    setFavorites((prev) =>
-      prev.includes(restaurantId) ? prev.filter((id) => id !== restaurantId) : [...prev, restaurantId]
-    );
+    setFavorites((prev) => {
+      const updated = prev.includes(restaurantId) ? prev.filter((id) => id !== restaurantId) : [...prev, restaurantId];
+      try {
+        localStorage.setItem('tomattto_customer_favorites', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
   };
   const isFavorite = (restaurantId: string) => favorites.includes(restaurantId);
 
   // Wallet & Credits
-  const [walletBalance, setWalletBalance] = useState<number>(150);
-  const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>([
-    { id: 'tx-1', type: 'credit', amount: 100, title: 'Welcome Bonus Credited', date: 'Yesterday, 8:30 PM' },
-    { id: 'tx-2', type: 'credit', amount: 50, title: 'Cashback on Order #TOM-9128', date: '3 days ago' }
-  ]);
+  const [walletBalance, setWalletBalance] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('tomattto_customer_wallet_balance');
+      if (saved) return parseFloat(saved);
+    } catch {}
+    return 0;
+  });
+  const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>(() => {
+    try {
+      const saved = localStorage.getItem('tomattto_customer_wallet_txs');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
   const topUpWallet = (amount: number) => {
-    setWalletBalance((prev) => prev + amount);
+    setWalletBalance((prev) => {
+      const updated = prev + amount;
+      try {
+        localStorage.setItem('tomattto_customer_wallet_balance', updated.toString());
+      } catch {}
+      return updated;
+    });
     const newTx: WalletTransaction = {
       id: `tx-${Date.now()}`,
       type: 'credit',
@@ -743,7 +768,13 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       title: 'Wallet Top-up via UPI',
       date: 'Just now'
     };
-    setWalletTransactions((prev) => [newTx, ...prev]);
+    setWalletTransactions((prev) => {
+      const updated = [newTx, ...prev];
+      try {
+        localStorage.setItem('tomattto_customer_wallet_txs', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
     try {
       confetti({ particleCount: 50, spread: 50, origin: { y: 0.6 } });
     } catch {
@@ -752,7 +783,13 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const creditRefund = (amount: number, reason: string) => {
-    setWalletBalance((prev) => prev + amount);
+    setWalletBalance((prev) => {
+      const updated = prev + amount;
+      try {
+        localStorage.setItem('tomattto_customer_wallet_balance', updated.toString());
+      } catch {}
+      return updated;
+    });
     const newTx: WalletTransaction = {
       id: `tx-${Date.now()}`,
       type: 'credit',
@@ -760,18 +797,30 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       title: `Refund: ${reason}`,
       date: 'Just now'
     };
-    setWalletTransactions((prev) => [newTx, ...prev]);
+    setWalletTransactions((prev) => {
+      const updated = [newTx, ...prev];
+      try {
+        localStorage.setItem('tomattto_customer_wallet_txs', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
 
     // Add customer notification
     const refundNotif: NotificationItem = {
       id: `notif-${Date.now()}`,
       title: `💰 ₹${amount} Refund Credited`,
-      message: `Your refund for "${reason}" has been instantly credited to your G1Bites Wallet.`,
+      message: `Your refund for "${reason}" has been instantly credited to your Tomattto Wallet.`,
       time: 'Just now',
       read: false,
       type: 'order'
     };
-    setNotifications((prev) => [refundNotif, ...prev]);
+    setNotifications((prev) => {
+      const updated = [refundNotif, ...prev];
+      try {
+        localStorage.setItem('tomattto_customer_notifications', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
 
     try {
       confetti({ particleCount: 70, spread: 70, origin: { y: 0.5 } });
@@ -781,38 +830,31 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   // Notifications
-  const [notifications, setNotifications] = useState<NotificationItem[]>([
-    {
-      id: 'notif-1',
-      title: '⚡ 50% Flash Offer Active!',
-      message: 'Use code G1BITES50 on biryanis, burgers, and gourmet feasts today.',
-      time: '10 mins ago',
-      read: false,
-      type: 'offer'
-    },
-    {
-      id: 'notif-2',
-      title: '🛵 Vikram Singh is on the way',
-      message: 'Your royal dum biryani has been safely picked up from Behrouz Biryani.',
-      time: '45 mins ago',
-      read: false,
-      type: 'order'
-    },
-    {
-      id: 'notif-3',
-      title: '🎉 ₹150 G1Bites Cash in your wallet',
-      message: 'Enjoy seamless 1-click checkout with zero payment failures.',
-      time: '1 day ago',
-      read: true,
-      type: 'system'
-    }
-  ]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('tomattto_customer_notifications');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
   const unreadNotificationCount = notifications.filter((n) => !n.read).length;
   const markNotificationRead = (id: string) => {
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    setNotifications((prev) => {
+      const updated = prev.map((n) => (n.id === id ? { ...n, read: true } : n));
+      try {
+        localStorage.setItem('tomattto_customer_notifications', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
   };
   const markAllNotificationsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    setNotifications((prev) => {
+      const updated = prev.map((n) => ({ ...n, read: true }));
+      try {
+        localStorage.setItem('tomattto_customer_notifications', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
   };
 
   // Reviews
@@ -842,14 +884,7 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const getOrderReview = (orderId: string) => reviews.find((r) => r.orderId === orderId);
 
   // Rider Chat
-  const [riderMessages, setRiderMessages] = useState<ChatMessage[]>([
-    {
-      id: 'msg-1',
-      sender: 'rider',
-      text: 'Hi Souvik! I am on my way with your order from Behrouz Biryani. 🛵',
-      time: '17:15'
-    }
-  ]);
+  const [riderMessages, setRiderMessages] = useState<ChatMessage[]>([]);
   const sendRiderMessage = (text: string) => {
     const userMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
@@ -886,7 +921,7 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     {
       id: 's-1',
       sender: 'support',
-      text: 'Hello Souvik! Welcome to G1Bites 24x7 priority support. How can I assist you today?',
+      text: 'Hello! Welcome to Tomattto 24x7 priority support. How can I assist you today?',
       time: 'Just now'
     }
   ]);
@@ -903,11 +938,11 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       let reply = 'I am looking into this right now for you.';
       const lower = text.toLowerCase();
       if (lower.includes('order') || lower.includes('track') || lower.includes('where')) {
-        reply = 'Your active order is in progress with live GPS tracking enabled. Vikram Singh is delivering at top speed!';
+        reply = 'Your active order is in progress with live GPS tracking enabled. Our delivery partner is delivering at top speed!';
       } else if (lower.includes('refund') || lower.includes('cancel')) {
-        reply = 'Orders can be cancelled before kitchen confirmation for an instant 100% refund to your G1Bites Wallet.';
+        reply = 'Orders can be cancelled before kitchen confirmation for an instant 100% refund to your Tomattto Wallet.';
       } else if (lower.includes('coupon') || lower.includes('discount')) {
-        reply = 'You can apply code G1BITES50 at checkout for 50% discount up to ₹100 on all top restaurants!';
+        reply = 'You can apply available coupons at checkout for discounts on all top restaurants!';
       } else {
         reply = 'Thanks for reaching out! Our concierge team has noted your query and will resolve it promptly.';
       }
@@ -924,7 +959,21 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCuisine, setSelectedCuisine] = useState<string | null>(null);
-  const [vegOnlyFilter, setVegOnlyFilter] = useState(false);
+  const [dietaryFilter, setDietaryFilterState] = useState<VegFilterType>('all');
+  const [vegOnlyFilter, setVegOnlyFilterState] = useState(false);
+
+  const setDietaryFilter = (f: VegFilterType) => {
+    setDietaryFilterState(f);
+    setVegOnlyFilterState(f === 'veg');
+  };
+
+  const setVegOnlyFilter = (v: boolean) => {
+    setVegOnlyFilterState(v);
+    setDietaryFilterState(v ? 'veg' : 'all');
+  };
+
+  // Tip
+  const [selectedTip, setSelectedTip] = useState<number>(0);
 
   // Orders
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
@@ -996,7 +1045,7 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const saved = localStorage.getItem('tomattto_rider_working_hours');
       if (saved) return parseFloat(saved);
     } catch {}
-    return 14.5;
+    return 0;
   });
 
   const [riderCompletedOrdersCount, setRiderCompletedOrdersCount] = useState<number>(() => {
@@ -1004,7 +1053,7 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const saved = localStorage.getItem('tomattto_rider_completed_orders');
       if (saved) return parseInt(saved, 10);
     } catch {}
-    return 24;
+    return 0;
   });
 
   const [riderTier, setRiderTier] = useState<RiderTier>(() => {
@@ -1030,19 +1079,7 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const saved = localStorage.getItem('tomattto_rider_selfies');
       if (saved) return JSON.parse(saved);
     } catch {}
-    return [
-      {
-        id: 'slf-init-1',
-        riderId: 'APP-RDR-8921',
-        riderName: 'Vikram Singh',
-        tier: 'bronze',
-        verificationType: 'duty_start',
-        status: 'verified',
-        selfieUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80',
-        capturedAt: new Date(Date.now() - 3600000 * 4).toISOString(),
-        verifiedAt: new Date(Date.now() - 3600000 * 4 + 60000).toISOString()
-      }
-    ];
+    return [];
   });
 
   const recalculateRiderTier = () => {
@@ -1103,8 +1140,8 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   ): Promise<{ success: boolean; error?: string }> => {
     const newVerification: RiderSelfieVerification = {
       id: `slf-${Date.now()}`,
-      riderId: persistedRiderApp?.id || 'APP-RDR-8921',
-      riderName: persistedRiderApp?.full_name || 'Vikram Singh',
+      riderId: persistedRiderApp?.id || 'RDR-UNASSIGNED',
+      riderName: persistedRiderApp?.full_name || 'Delivery Partner',
       tier: riderTier,
       verificationType: activeSelfiePrompt?.triggerReason === 'duty_start'
         ? 'duty_start'
@@ -1281,8 +1318,8 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [riderDeliveryRequest, setRiderDeliveryRequest] = useState<Order | null>(null);
   const [activeRiderOrder, setActiveRiderOrder] = useState<Order | null>(null);
   const [riderStep, setRiderStep] = useState<RiderDeliveryStep>('heading_to_restaurant');
-  const [riderEarningsToday, setRiderEarningsToday] = useState<number>(390);
-  const [riderTripsToday, setRiderTripsToday] = useState<number>(6);
+  const [riderEarningsToday, setRiderEarningsToday] = useState<number>(0);
+  const [riderTripsToday, setRiderTripsToday] = useState<number>(0);
   const [dismissedDeliveryIds, setDismissedDeliveryIds] = useState<string[]>([]);
   const [completedRiderTrips, setCompletedRiderTrips] = useState<CompletedTrip[]>(INITIAL_RIDER_TRIPS);
 
@@ -1394,42 +1431,19 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [supabaseUser, demoRiderUser]);
 
-  const [allRiderApplications, setAllRiderApplications] = useState<RiderOnboardingApplication[]>([
-    {
-      id: 'APP-RDR-8921',
-      fullName: 'Vikram Singh',
-      profilePhoto: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80',
-      phone: '+91 98451 92831',
-      email: 'vikram.singh@example.com',
-      city: 'Bengaluru',
-      district: 'Bengaluru Urban',
-      state: 'Karnataka',
-      pincode: '560008',
-      residentialAddress: '14/B, 2nd Cross, Old Airport Road, Kodihalli, Bengaluru',
-      bloodGroup: 'O+',
-      gender: 'Male',
-      dob: '1998-05-14',
-      documents: {
-        aadhaarFront: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600&auto=format&fit=crop&q=80',
-        aadhaarBack: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600&auto=format&fit=crop&q=80',
-        panFront: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600&auto=format&fit=crop&q=80',
-        panBack: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600&auto=format&fit=crop&q=80',
-        drivingLicenseFront: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80',
-        drivingLicenseBack: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80',
-        vehicleRc: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=600&auto=format&fit=crop&q=80',
-        bankProof: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=600&auto=format&fit=crop&q=80'
-      },
-      bankDetails: {
-        accountHolderName: 'Vikram Singh',
-        bankName: 'HDFC Bank Indiranagar',
-        accountNumber: '50100482914821',
-        ifscCode: 'HDFC0000140',
-        upiId: 'vikram.singh@okhdfcbank'
-      },
-      status: 'approved',
-      submittedAt: 'Today, 9:30 AM'
-    }
-  ]);
+  const [allRiderApplications, setAllRiderApplications] = useState<RiderOnboardingApplication[]>(() => {
+    try {
+      const saved = localStorage.getItem('tomattto_rider_applications');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('tomattto_rider_applications', JSON.stringify(allRiderApplications));
+    } catch {}
+  }, [allRiderApplications]);
 
   // Restaurant Partner Applications
   const [allRestaurantApplications, setAllRestaurantApplications] = useState<RestaurantPartnerApplication[]>(() => {
@@ -1534,7 +1548,10 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   // Place Order
-  const placeOrder = async (paymentMethod: 'upi' | 'card' | 'cod'): Promise<boolean> => {
+  const placeOrder = async (
+    paymentMethod: 'upi' | 'card' | 'cod',
+    tipAmount?: number
+  ): Promise<boolean> => {
     if (!selectedRestaurant || cart.length === 0 || isPlacingOrder) return false;
 
     if (!isLoggedIn) {
@@ -1542,6 +1559,14 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setCustomerScreen('auth');
       return false;
     }
+
+    const effectiveTip = Math.max(0, tipAmount !== undefined ? tipAmount : (selectedTip || 0));
+    const effectiveDeliveryFee = appliedCoupon?.code === 'FREESHIP' ? 0 : PRICING_CONFIG.CUSTOMER_DELIVERY_FEE;
+    const effectivePlatformFee = PRICING_CONFIG.CUSTOMER_PLATFORM_FEE;
+    const effectiveCommission = PRICING_CONFIG.RESTAURANT_COMMISSION_PER_ORDER;
+    const deliveryDistanceKm = Number(selectedRestaurant.distanceKm) || 2.5;
+    const riderRatePerKm = PRICING_CONFIG.RIDER_PAYOUT_PER_KM;
+    const riderPayout = Math.round(deliveryDistanceKm * riderRatePerKm) + effectiveTip;
 
     setIsPlacingOrder(true);
     setOrderError(null);
@@ -1568,7 +1593,7 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           p_items: rpcItems,
           p_payment_method: paymentMethod,
           p_coupon_code: appliedCoupon ? appliedCoupon.code : null,
-          p_tip_amount: 30.00,
+          p_tip_amount: effectiveTip,
           p_delivery_instructions: null,
           p_special_cooking_instructions: null
         };
@@ -1593,19 +1618,35 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             items: [...cart],
             status: (data.status || 'placed') as OrderStatus,
             itemTotal: Number(data.item_total ?? cartTotal),
-            deliveryFee: Number(data.delivery_fee ?? 35),
-            platformFee: Number(data.platform_fee ?? 5),
+            deliveryFee: Number(data.delivery_fee ?? effectiveDeliveryFee),
+            platformFee: Number(data.platform_fee ?? effectivePlatformFee),
+            restaurantCommission: effectiveCommission,
+            deliveryDistanceKm,
+            riderRatePerKm,
+            riderPayout,
+            customTip: effectiveTip,
             taxAmount: Number(data.tax_amount ?? Math.round(cartTotal * 0.05)),
-            discountAmount: Number(data.discount_amount ?? 0),
-            tipAmount: Number(data.tip_amount ?? 30),
-            totalAmount: Number(data.total_amount ?? cartTotal),
+            discountAmount: Number(data.discount_amount ?? (appliedCoupon ? Math.min(appliedCoupon.maxDiscount, (cartTotal * appliedCoupon.discountPercentage) / 100) : 0)),
+            tipAmount: Number(data.tip_amount ?? effectiveTip),
+            totalAmount: Number(
+              data.total_amount ??
+                Math.max(
+                  0,
+                  cartTotal -
+                    (appliedCoupon ? Math.min(appliedCoupon.maxDiscount, (cartTotal * appliedCoupon.discountPercentage) / 100) : 0) +
+                    effectiveDeliveryFee +
+                    effectivePlatformFee +
+                    Math.round(cartTotal * 0.05) +
+                    effectiveTip
+                )
+            ),
             appliedCoupon: appliedCoupon || undefined,
             paymentMethod,
             deliveryAddress: {
               label: 'Home',
               addressLine: selectedAddress
             },
-            rider: SAMPLE_RIDER,
+            rider: undefined,
             pickupOtp: `${Math.floor(1000 + Math.random() * 9000)}`,
             deliveryOtp: `${Math.floor(1000 + Math.random() * 9000)}`,
             estimatedDeliveryTime: '30-35 mins'
@@ -1616,6 +1657,7 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setIncomingOrder(serverOrder);
           setPartnerOrders((prev) => [serverOrder, ...prev]);
           clearCart();
+          setSelectedTip(0);
 
           try {
             confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
@@ -1627,56 +1669,9 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       }
 
-      // Fallback for offline demo mode when Supabase credentials are placeholder
-      const discountAmount = appliedCoupon
-        ? Math.min(appliedCoupon.maxDiscount, (cartTotal * appliedCoupon.discountPercentage) / 100)
-        : 0;
-      const deliveryFee = appliedCoupon?.code === 'FREESHIP' ? 0 : 35;
-      const platformFee = 5;
-      const taxAmount = Math.round(cartTotal * 0.05);
-      const tipAmount = 30;
-      const totalAmount = cartTotal - discountAmount + deliveryFee + platformFee + taxAmount + tipAmount;
-
-      const demoOrder: Order = {
-        id: `TOM-${Math.floor(100000 + Math.random() * 900000)}`,
-        createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        customerName: user.name,
-        customerPhone: user.phone,
-        restaurant: selectedRestaurant,
-        items: [...cart],
-        status: 'placed',
-        itemTotal: cartTotal,
-        deliveryFee,
-        platformFee,
-        taxAmount,
-        discountAmount,
-        tipAmount,
-        totalAmount,
-        appliedCoupon: appliedCoupon || undefined,
-        paymentMethod,
-        deliveryAddress: {
-          label: 'Home',
-          addressLine: selectedAddress
-        },
-        rider: SAMPLE_RIDER,
-        pickupOtp: `${Math.floor(1000 + Math.random() * 9000)}`,
-        deliveryOtp: `${Math.floor(1000 + Math.random() * 9000)}`,
-        estimatedDeliveryTime: '24 mins'
-      };
-
-      setCurrentOrder(demoOrder);
-      setAllOrders((prev) => [demoOrder, ...prev]);
-      setIncomingOrder(demoOrder);
-      setPartnerOrders((prev) => [demoOrder, ...prev]);
-      clearCart();
-
-      try {
-        confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
-      } catch {}
-
-      setCustomerScreen('order_success');
+      setOrderError('Backend order processing service is temporarily unavailable. Please check your connection and try again.');
       setIsPlacingOrder(false);
-      return true;
+      return false;
     } catch (err: any) {
       console.error('Error during checkout:', err);
       setOrderError(err.message || 'An unexpected error occurred.');
@@ -2153,7 +2148,16 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const assignedOrder: Order = {
       ...targetOrder,
       status: 'rider_assigned',
-      rider: SAMPLE_RIDER
+      rider: {
+        id: activeRiderApplicant?.id || user.id || 'rider-current',
+        name: activeRiderApplicant?.fullName || persistedRiderApp?.full_name || user.name || 'Delivery Partner',
+        phone: activeRiderApplicant?.phone || persistedRiderApp?.phone || user.phone || '',
+        photoUrl: user.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=face',
+        rating: 4.9,
+        vehicleNumber: 'Registered Delivery Vehicle',
+        lat: 12.9716,
+        lng: 77.5946
+      }
     };
 
     setActiveRiderOrder(assignedOrder);
@@ -2273,7 +2277,17 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       status: 'delivered'
     };
 
-    const tierPayout = calculateOrderPayoutForTier(3.2, true, activeRiderOrder.tipAmount || 30, riderTier);
+    const tripDistance = Number(activeRiderOrder.deliveryDistanceKm || activeRiderOrder.restaurant?.distanceKm) || 3.5;
+    const tripTip = Number(activeRiderOrder.tipAmount) || 0;
+
+    // Prevent duplicate payouts for the same order
+    if (completedRiderTrips.some((t) => t.orderNumber === activeRiderOrder.id)) {
+      setActiveRiderOrder(null);
+      setRiderStep('heading_to_restaurant');
+      return { success: true };
+    }
+
+    const tierPayout = calculateOrderPayoutForTier(tripDistance, true, tripTip, riderTier);
     const payout = tierPayout.totalPay;
     setRiderEarningsToday((prev) => prev + payout);
     setRiderTripsToday((prev) => prev + 1);
@@ -2292,10 +2306,10 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       restaurantArea: activeRiderOrder.restaurant.address || 'Indiranagar 100ft Rd',
       customerName: activeRiderOrder.customerName,
       customerArea: activeRiderOrder.deliveryAddress.addressLine,
-      distanceKm: 3.2,
-      durationMins: 18,
-      deliveryFee: tierPayout.basePay + tierPayout.distancePay,
-      customerTip: activeRiderOrder.tipAmount || 30,
+      distanceKm: tripDistance,
+      durationMins: Math.max(12, Math.round(tripDistance * 4)),
+      deliveryFee: tripDistance * PRICING_CONFIG.RIDER_PAYOUT_PER_KM,
+      customerTip: tripTip,
       surgeBonus: tierPayout.surgePay + tierPayout.tierIncentive,
       totalPayout: payout,
       completedAt: 'Just now',
@@ -2348,6 +2362,12 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     appData: Omit<RiderOnboardingApplication, 'id' | 'status' | 'submittedAt'> & { id?: string },
     _files?: any
   ): Promise<{ success: boolean; error?: string }> => {
+    if (!appData.registrationFeePaid || !appData.registrationPaymentId) {
+      return {
+        success: false,
+        error: 'Mandatory ₹499 one-time registration fee payment verification is required to submit rider onboarding.'
+      };
+    }
     const existing = allRiderApplications.find(
       (a) => a.phone === appData.phone || (appData.applicationRef && a.applicationRef === appData.applicationRef)
     );
@@ -2408,6 +2428,11 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 emergency_contact_phone: newApp.emergencyContactPhone || null,
                 status: 'submitted',
                 submitted_at: new Date().toISOString(),
+                registration_fee_paid: true,
+                registration_payment_id: newApp.registrationPaymentId,
+                registration_paid_at: newApp.registrationPaidAt || new Date().toISOString(),
+                starter_kit_status: 'allocated',
+                starter_kit_tshirt_size: newApp.starterKitTshirtSize || 'L',
                 metadata: {
                   state: newApp.state,
                   district: newApp.district,
@@ -2741,6 +2766,12 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       personalPanBackFile?: File;
     }
   ): Promise<{ success: boolean; applicationRef?: string; error?: string }> => {
+    if (!data.registrationFeePaid || !data.registrationPaymentId) {
+      return {
+        success: false,
+        error: 'Mandatory ₹499 one-time registration fee payment verification is required to submit partner application.'
+      };
+    }
     const appRef = `TOM-REST-${Date.now().toString(36).toUpperCase()}`;
     let createdAppId = crypto.randomUUID ? crypto.randomUUID() : `app-${Date.now()}`;
 
@@ -2769,6 +2800,11 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             postal_code: data.pincode || '560001',
             ownership_token_hash: `token_${Date.now()}_${Math.random().toString(36).substring(2)}`,
             status: 'submitted',
+            registration_fee_paid: true,
+            registration_payment_id: data.registrationPaymentId,
+            registration_paid_at: data.registrationPaidAt || new Date().toISOString(),
+            starter_kit_status: 'allocated',
+            starter_kit_tshirt_size: data.starterKitTshirtSize || 'L',
             operating_hours: {
               opening: data.openingTime || '10:00',
               closing: data.closingTime || '23:00',
@@ -2899,6 +2935,11 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         personalPanFront: data.documents?.personalPanFront ? 'pending' : undefined,
         personalPanBack: data.documents?.personalPanBack ? 'pending' : undefined
       },
+      registrationFeePaid: Boolean(data.registrationFeePaid),
+      registrationPaymentId: data.registrationPaymentId || '',
+      registrationPaidAt: data.registrationPaidAt || new Date().toISOString(),
+      starterKitStatus: data.starterKitStatus || 'allocated',
+      starterKitTshirtSize: data.starterKitTshirtSize || 'L',
       submittedAt: new Date().toISOString()
     };
 
@@ -3210,11 +3251,12 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const triggerSimulatedCustomerOrder = () => {
+    if (!restaurants || restaurants.length === 0 || !restaurants[0]?.categories?.[0]?.items?.[0]) return;
     const dish = restaurants[0].categories[0].items[0];
     const demoOrder: Order = {
       id: `TOM-${Math.floor(1000 + Math.random() * 9000)}`,
-      customerName: 'Priya Sharma',
-      customerPhone: '+91 98450 99881',
+      customerName: user?.name && user.name.trim() !== '' ? user.name : 'Customer',
+      customerPhone: user?.phone && user.phone.trim() !== '' ? user.phone : '',
       restaurant: restaurants[0],
       items: [
         {
@@ -3225,10 +3267,10 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       ],
       itemTotal: dish.price * 2,
-      totalAmount: dish.price * 2 + 55,
-      deliveryFee: 40,
-      platformFee: 5,
-      taxAmount: 10,
+      totalAmount: dish.price * 2 + PRICING_CONFIG.CUSTOMER_DELIVERY_FEE + PRICING_CONFIG.CUSTOMER_PLATFORM_FEE + Math.round(dish.price * 2 * 0.05) + 20,
+      deliveryFee: PRICING_CONFIG.CUSTOMER_DELIVERY_FEE,
+      platformFee: PRICING_CONFIG.CUSTOMER_PLATFORM_FEE,
+      taxAmount: Math.round(dish.price * 2 * 0.05),
       tipAmount: 20,
       discountAmount: 0,
       paymentMethod: 'upi',
@@ -3236,7 +3278,7 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       createdAt: 'Just now',
       deliveryAddress: {
         label: 'Home',
-        addressLine: 'Indiranagar 100ft Rd, 2nd Stage, Bengaluru'
+        addressLine: selectedAddress || userAddresses[0]?.line || 'Customer Delivery Address'
       },
       pickupOtp: `${Math.floor(1000 + Math.random() * 9000)}`,
       deliveryOtp: `${Math.floor(1000 + Math.random() * 9000)}`,
@@ -3248,11 +3290,12 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const triggerSimulatedDeliveryRequest = () => {
+    if (!restaurants || restaurants.length === 0 || !restaurants[0]?.categories?.[0]?.items?.[0]) return;
     const dish = restaurants[0].categories[0].items[0];
     const demoReq: Order = {
       id: `TOM-${Math.floor(1000 + Math.random() * 9000)}`,
-      customerName: 'Aarav Nair',
-      customerPhone: '+91 98201 44321',
+      customerName: user?.name && user.name.trim() !== '' ? user.name : 'Customer',
+      customerPhone: user?.phone && user.phone.trim() !== '' ? user.phone : '',
       restaurant: restaurants[0],
       items: [
         {
@@ -3263,10 +3306,10 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       ],
       itemTotal: dish.price,
-      totalAmount: dish.price + 65,
-      deliveryFee: 45,
-      platformFee: 5,
-      taxAmount: 15,
+      totalAmount: dish.price + PRICING_CONFIG.CUSTOMER_DELIVERY_FEE + PRICING_CONFIG.CUSTOMER_PLATFORM_FEE + Math.round(dish.price * 0.05) + 10,
+      deliveryFee: PRICING_CONFIG.CUSTOMER_DELIVERY_FEE,
+      platformFee: PRICING_CONFIG.CUSTOMER_PLATFORM_FEE,
+      taxAmount: Math.round(dish.price * 0.05),
       tipAmount: 30,
       discountAmount: 0,
       paymentMethod: 'upi',
@@ -3275,8 +3318,8 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       pickupOtp: '8910',
       createdAt: 'Just now',
       deliveryAddress: {
-        label: 'Apartment',
-        addressLine: 'Sobha Cinnamon, Harlur Road, Bengaluru'
+        label: 'Delivery Address',
+        addressLine: selectedAddress || userAddresses[0]?.line || 'Customer Delivery Address'
       },
       estimatedDeliveryTime: '26 mins'
     };
@@ -3305,17 +3348,18 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       appMode: 'customer',
       customerScreen: 'restaurant',
       action: () => {
-        setSelectedRestaurant(RESTAURANTS[0]); // Behrouz Biryani
+        if (restaurants.length > 0) {
+          setSelectedRestaurant(restaurants[0]);
+        }
       }
     },
     {
       appMode: 'customer',
       customerScreen: 'cart',
       action: () => {
-        // Pre-fill mouth-watering cart if empty
-        if (cart.length === 0) {
-          addToCart(RESTAURANTS[0].categories[0].items[0]); // Dum Gosht Biryani
-          addToCart(RESTAURANTS[0].categories[0].items[1]); // Zaikedaar Paneer Biryani
+        if (cart.length === 0 && restaurants.length > 0 && (restaurants[0].categories?.[0]?.items?.length ?? 0) >= 2) {
+          addToCart(restaurants[0].categories[0].items[0]);
+          addToCart(restaurants[0].categories[0].items[1]);
         }
       }
     },
@@ -3402,6 +3446,9 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         customerScreen,
         setCustomerScreen,
         restaurants,
+        isRestaurantsLoading,
+        restaurantsError,
+        refreshRestaurants,
         selectedRestaurant,
         setSelectedRestaurant,
         customizingItem,
@@ -3461,6 +3508,10 @@ export const TomatttoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setSelectedCuisine,
         vegOnlyFilter,
         setVegOnlyFilter,
+        dietaryFilter,
+        setDietaryFilter,
+        selectedTip,
+        setSelectedTip,
         placeOrder,
         isPlacingOrder,
         orderError,

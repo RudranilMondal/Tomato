@@ -15,8 +15,12 @@ import {
   Info
 } from 'lucide-react';
 
-export const AuthScreen: React.FC = () => {
-  const { loginUser, setCustomerScreen, user } = useTomattto();
+interface AuthScreenProps {
+  isMandatory?: boolean;
+}
+
+export const AuthScreen: React.FC<AuthScreenProps> = ({ isMandatory = false }) => {
+  const { loginUser, setCustomerScreen, user, isLoggedIn } = useTomattto();
 
   const [authStep, setAuthStep] = useState<'phone' | 'otp' | 'details' | 'email'>('phone');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -270,10 +274,11 @@ export const AuthScreen: React.FC = () => {
             } else if (authStep === 'otp' || authStep === 'email') {
               setAuthStep('phone');
               setErrorMsg('');
-            } else {
+            } else if (!isMandatory && isLoggedIn) {
               setCustomerScreen('home');
             }
           }}
+          disabled={(isMandatory || !isLoggedIn) && authStep === 'phone'}
           style={{
             width: '36px',
             height: '36px',
@@ -282,30 +287,47 @@ export const AuthScreen: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: 'var(--color-text-main)'
+            color: 'var(--color-text-main)',
+            opacity: ((isMandatory || !isLoggedIn) && authStep === 'phone') ? 0.3 : 1,
+            cursor: ((isMandatory || !isLoggedIn) && authStep === 'phone') ? 'default' : 'pointer'
           }}
         >
           <ArrowLeft size={18} />
         </button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <img src="/logo.png" alt="G1Bites" style={{ width: '26px', height: '26px', borderRadius: '6px', objectFit: 'contain' }} />
+          <img src="/logo.png" alt="Tomattto" style={{ width: '26px', height: '26px', borderRadius: '6px', objectFit: 'contain' }} />
           <span style={{ fontSize: '17px', fontWeight: 900, color: 'var(--color-primary)', letterSpacing: '-0.02em' }}>
-            G1Bites
+            Tomattto
           </span>
         </div>
 
-        <button
-          onClick={() => setCustomerScreen('home')}
-          style={{
-            fontSize: '12px',
-            fontWeight: 700,
-            color: 'var(--color-text-muted)',
-            padding: '4px 8px'
-          }}
-        >
-          Skip
-        </button>
+        {(!isMandatory && isLoggedIn) ? (
+          <button
+            onClick={() => setCustomerScreen('home')}
+            style={{
+              fontSize: '12px',
+              fontWeight: 700,
+              color: 'var(--color-text-muted)',
+              padding: '4px 8px'
+            }}
+          >
+            Skip
+          </button>
+        ) : (
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: 700,
+              color: 'var(--color-primary)',
+              backgroundColor: 'var(--color-primary-light)',
+              padding: '3px 8px',
+              borderRadius: 'var(--radius-full)'
+            }}
+          >
+            Sign In Required
+          </span>
+        )}
       </div>
 
       {/* Main Body */}
@@ -327,7 +349,7 @@ export const AuthScreen: React.FC = () => {
                 boxShadow: '0 8px 24px var(--color-primary-glow)'
               }}
             >
-              <img src="/logo.png" alt="G1Bites" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <img src="/logo.png" alt="Tomattto" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
             <h2 style={{ fontSize: '22px', fontWeight: 900, color: 'var(--color-text-main)', lineHeight: 1.2 }}>
               {authStep === 'otp'
@@ -344,7 +366,7 @@ export const AuthScreen: React.FC = () => {
                 : authStep === 'details'
                 ? 'Welcome! Tell us your name and delivery address to start ordering'
                 : authStep === 'email'
-                ? 'Sign in or create your G1Bites account'
+                ? 'Sign in or create your Tomattto account'
                 : 'Log in or sign up to unlock exclusive offers & live tracking'}
             </p>
           </div>
@@ -990,28 +1012,6 @@ export const AuthScreen: React.FC = () => {
                 </button>
 
                 {/* Explicit Dev-Only Quick Login */}
-                <button
-                  type="button"
-                  onClick={handleExplicitDevLogin}
-                  style={{
-                    width: '100%',
-                    padding: '11px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1.5px dashed var(--color-primary)',
-                    backgroundColor: 'rgba(255, 75, 58, 0.08)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    color: 'var(--color-primary)',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <Sparkles size={14} />
-                  <span>⚡ Quick Demo Customer Login (Ananya Sharma)</span>
-                </button>
               </div>
             </div>
           )}
@@ -1020,7 +1020,7 @@ export const AuthScreen: React.FC = () => {
         {/* Footer Disclaimer */}
         <div style={{ textAlign: 'center', marginTop: '28px', borderTop: '1px solid var(--color-border-subtle)', paddingTop: '16px' }}>
           <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', lineHeight: 1.4 }}>
-            By continuing, you agree to G1Bites's{' '}
+            By continuing, you agree to Tomattto's{' '}
             <span style={{ color: 'var(--color-text-main)', fontWeight: 700, textDecoration: 'underline' }}>
               Terms of Service
             </span>{' '}

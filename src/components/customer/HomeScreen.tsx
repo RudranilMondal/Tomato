@@ -18,17 +18,22 @@ import {
   Bell,
   Flame,
   X,
-  RotateCcw
+  RotateCcw,
+  Mic
 } from 'lucide-react';
+import { DietaryBadge } from '../common/DietaryBadge';
 
 interface HomeScreenProps {
   onOpenLocation: () => void;
-  onOpenSearch: () => void;
+  onOpenSearch: (startVoice?: boolean) => void;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ onOpenLocation, onOpenSearch }) => {
   const {
     restaurants,
+    isRestaurantsLoading,
+    restaurantsError,
+    refreshRestaurants,
     setSelectedRestaurant,
     setCustomerScreen,
     selectedAddress,
@@ -39,7 +44,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onOpenLocation, onOpenSe
     favorites,
     toggleFavorite,
     isFavorite,
-    isLoggedIn
+    isLoggedIn,
+    dietaryFilter,
+    setDietaryFilter
   } = useTomattto();
 
   // Filters state
@@ -55,13 +62,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onOpenLocation, onOpenSe
       id: 1,
       tag: 'MEGA DEAL',
       title: '50% OFF up to ₹100',
-      subtitle: 'Use code G1BITES50 on your favorite meals',
+      subtitle: 'Use code TOMATTTO50 on your favorite meals',
       bg: 'linear-gradient(135deg, #FF4B3A 0%, #FF8A65 100%)',
       img: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=400&auto=format&fit=crop&q=80'
     },
     {
       id: 2,
-      tag: 'G1BITES GOLD',
+      tag: 'TOMATTTO GOLD',
       title: 'Free Delivery Always',
       subtitle: 'Zero delivery fee on all orders above ₹249',
       bg: 'linear-gradient(135deg, #1E1E24 0%, #3A3A48 100%)',
@@ -89,19 +96,33 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onOpenLocation, onOpenSe
   const filteredRestaurants = restaurants
     .filter((r) => {
       // 1. Horizontal Cuisine Rail
-      if (selectedCuisine && !r.cuisines.some((c) => c.toLowerCase() === selectedCuisine.toLowerCase())) {
+      if (selectedCuisine && !r.cuisines?.some((c) => c.toLowerCase() === selectedCuisine.toLowerCase())) {
         return false;
       }
 
       // 2. Multi-Select Cuisines from Modal
       if (
         filterOptions.cuisines.length > 0 &&
-        !filterOptions.cuisines.some((c) => r.cuisines.some((rc) => rc.toLowerCase() === c.toLowerCase()))
+        !filterOptions.cuisines.some((c) => r.cuisines?.some((rc) => rc.toLowerCase() === c.toLowerCase()))
       ) {
         return false;
       }
 
-      // 3. Dietary Preferences
+      // 3. Indian Standard Veg / Non-Veg Quick Filter
+      if (dietaryFilter === 'veg') {
+        if (!r.isPureVeg && !r.categories.some((cat) => cat.items.some((i) => i.dietary === 'veg'))) {
+          return false;
+        }
+      } else if (dietaryFilter === 'non_veg') {
+        if (r.isPureVeg) {
+          return false;
+        }
+        if (r.categories.length > 0 && !r.categories.some((cat) => cat.items.some((i) => i.dietary === 'non_veg'))) {
+          return false;
+        }
+      }
+
+      // Modal Dietary Preferences
       if (filterOptions.pureVegOnly && !r.isPureVeg) return false;
       if (
         filterOptions.dietary.includes('veg') &&
@@ -186,7 +207,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onOpenLocation, onOpenSe
           >
             <img
               src="/logo.png"
-              alt="G1Bites"
+              alt="Tomattto"
               style={{
                 width: '34px',
                 height: '34px',
@@ -299,7 +320,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onOpenLocation, onOpenSe
 
         {/* Search Bar Trigger */}
         <div
-          onClick={onOpenSearch}
+          onClick={() => onOpenSearch()}
           style={{
             marginTop: '12px',
             backgroundColor: 'var(--color-surface-muted)',
@@ -316,6 +337,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onOpenLocation, onOpenSe
           <span style={{ fontSize: '13px', color: 'var(--color-text-muted)', flex: 1 }}>
             Search "biryani", "pizza", "burgers"...
           </span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenSearch(true);
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--color-primary)',
+              cursor: 'pointer'
+            }}
+            title="Search by Voice"
+          >
+            <Mic size={17} />
+          </button>
           <div
             style={{
               width: '1px',
@@ -358,6 +399,92 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onOpenLocation, onOpenSe
                 {countActiveFilters(filterOptions)}
               </span>
             )}
+          </button>
+        </div>
+
+        {/* Fixed Veg / Non-Veg / All Indian Classification Filter Bar */}
+        <div
+          style={{
+            marginTop: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            backgroundColor: 'var(--color-surface)',
+            padding: '3px',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--color-border)'
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setDietaryFilter('all')}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              padding: '6px 8px',
+              borderRadius: 'var(--radius-sm)',
+              border: dietaryFilter === 'all' ? '1.5px solid var(--color-primary)' : '1px solid transparent',
+              backgroundColor: dietaryFilter === 'all' ? 'var(--color-primary-light)' : 'transparent',
+              color: dietaryFilter === 'all' ? 'var(--color-primary)' : 'var(--color-text-muted)',
+              fontSize: '12px',
+              fontWeight: dietaryFilter === 'all' ? 800 : 600,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <DietaryBadge type="all" size={13} />
+            <span>All</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setDietaryFilter('veg')}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              padding: '6px 8px',
+              borderRadius: 'var(--radius-sm)',
+              border: dietaryFilter === 'veg' ? '1.5px solid var(--color-veg)' : '1px solid transparent',
+              backgroundColor: dietaryFilter === 'veg' ? 'rgba(46, 204, 113, 0.12)' : 'transparent',
+              color: dietaryFilter === 'veg' ? 'var(--color-veg)' : 'var(--color-text-muted)',
+              fontSize: '12px',
+              fontWeight: dietaryFilter === 'veg' ? 800 : 600,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <DietaryBadge type="veg" size={13} />
+            <span>Veg Only</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setDietaryFilter('non_veg')}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              padding: '6px 8px',
+              borderRadius: 'var(--radius-sm)',
+              border: dietaryFilter === 'non_veg' ? '1.5px solid var(--color-nonveg)' : '1px solid transparent',
+              backgroundColor: dietaryFilter === 'non_veg' ? 'rgba(231, 76, 60, 0.12)' : 'transparent',
+              color: dietaryFilter === 'non_veg' ? 'var(--color-nonveg)' : 'var(--color-text-muted)',
+              fontSize: '12px',
+              fontWeight: dietaryFilter === 'non_veg' ? 800 : 600,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <DietaryBadge type="non_veg" size={13} />
+            <span>Non-Veg</span>
           </button>
         </div>
       </div>
@@ -1081,7 +1208,110 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onOpenLocation, onOpenSe
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {filteredRestaurants.length === 0 ? (
+            {isRestaurantsLoading ? (
+              <div
+                style={{
+                  backgroundColor: 'var(--color-surface)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '40px 24px',
+                  textAlign: 'center',
+                  border: '1px solid var(--color-border)',
+                  boxShadow: 'var(--shadow-sm)'
+                }}
+              >
+                <div style={{ fontSize: '28px', marginBottom: '12px' }}>⏳</div>
+                <h4 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-text-main)' }}>
+                  Loading restaurants...
+                </h4>
+                <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                  Connecting to live kitchen feed
+                </p>
+              </div>
+            ) : restaurantsError ? (
+              <div
+                style={{
+                  backgroundColor: 'var(--color-surface)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '32px 24px',
+                  textAlign: 'center',
+                  border: '1px solid #FECACA',
+                  boxShadow: 'var(--shadow-sm)'
+                }}
+              >
+                <div style={{ fontSize: '28px', marginBottom: '10px' }}>⚠️</div>
+                <h4 style={{ fontSize: '15px', fontWeight: 700, color: '#DC2626' }}>
+                  Unable to load restaurants
+                </h4>
+                <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px', maxWidth: '300px', margin: '4px auto 0' }}>
+                  {restaurantsError}
+                </p>
+                <button
+                  onClick={() => refreshRestaurants()}
+                  style={{
+                    marginTop: '16px',
+                    padding: '8px 20px',
+                    borderRadius: 'var(--radius-full)',
+                    backgroundColor: 'var(--color-primary)',
+                    color: '#FFFFFF',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    border: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Retry Connection
+                </button>
+              </div>
+            ) : restaurants.length === 0 ? (
+              <div
+                style={{
+                  backgroundColor: 'var(--color-surface)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '40px 24px',
+                  textAlign: 'center',
+                  border: '1px solid var(--color-border)',
+                  boxShadow: 'var(--shadow-sm)'
+                }}
+              >
+                <div
+                  style={{
+                    width: '64px',
+                    height: '64px',
+                    borderRadius: '50%',
+                    backgroundColor: 'var(--color-surface-muted)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '30px',
+                    margin: '0 auto 14px'
+                  }}
+                >
+                  🏪
+                </div>
+                <h4 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--color-text-main)' }}>
+                  No restaurants currently available
+                </h4>
+                <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '6px', maxWidth: '300px', margin: '6px auto 0', lineHeight: 1.4 }}>
+                  New restaurants will appear here once verified partner kitchens go live in your area.
+                </p>
+                <button
+                  onClick={() => refreshRestaurants()}
+                  style={{
+                    marginTop: '18px',
+                    padding: '10px 22px',
+                    borderRadius: 'var(--radius-full)',
+                    backgroundColor: 'var(--color-primary)',
+                    color: '#FFFFFF',
+                    fontSize: '13px',
+                    fontWeight: 800,
+                    border: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Refresh Feed
+                </button>
+              </div>
+            ) : filteredRestaurants.length === 0 ? (
               <div
                 style={{
                   backgroundColor: 'var(--color-surface)',
@@ -1285,7 +1515,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onOpenLocation, onOpenSe
                         textOverflow: 'ellipsis'
                       }}
                     >
-                      {restaurant.cuisines.join(' • ')} • ₹{restaurant.costForTwo} for two
+                      {(restaurant.cuisines || []).join(' • ')} • ₹{restaurant.costForTwo} for two
                     </p>
 
                     {/* Offer Banner Tag */}

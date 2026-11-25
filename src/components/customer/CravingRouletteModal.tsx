@@ -208,10 +208,12 @@ export const CravingRouletteModal: React.FC<CravingRouletteModalProps> = ({ isOp
 
   const handleOrderWinner = (item: RouletteItem) => {
     // Find restaurant or fallback to first
-    const rest = restaurants.find((r) => r.id === item.restaurantId) || restaurants[0];
-    setSelectedRestaurant(rest);
-    applyCoupon(item.discountCode);
-    setCustomerScreen('restaurant');
+    const rest = restaurants.find((r) => r.id === item.restaurantId) || (restaurants.length > 0 ? restaurants[0] : null);
+    if (rest) {
+      setSelectedRestaurant(rest);
+      applyCoupon(item.discountCode);
+      setCustomerScreen('restaurant');
+    }
     onClose();
   };
 
@@ -300,16 +302,41 @@ export const CravingRouletteModal: React.FC<CravingRouletteModalProps> = ({ isOp
         </div>
 
         {/* Roulette Wheel Stage */}
-        <div
-          style={{
-            padding: '24px 20px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            position: 'relative',
-            overflow: 'hidden'
-          }}
-        >
+        {restaurants.length === 0 ? (
+          <div style={{ padding: '48px 24px', textAlign: 'center' }}>
+            <div style={{ fontSize: '36px', marginBottom: '14px' }}>🎰</div>
+            <h4 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '8px' }}>
+              Craving Roulette is taking a break
+            </h4>
+            <p style={{ fontSize: '13px', color: '#A5A5B2', maxWidth: '300px', margin: '0 auto 20px', lineHeight: 1.5 }}>
+              Roulette spinning requires verified live restaurants in your delivery area. Check back once kitchens go live!
+            </p>
+            <button
+              onClick={onClose}
+              style={{
+                padding: '10px 24px',
+                borderRadius: 'var(--radius-full)',
+                backgroundColor: 'var(--color-primary)',
+                color: '#FFFFFF',
+                fontWeight: 700,
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              Got it
+            </button>
+          </div>
+        ) : (
+          <div
+            style={{
+              padding: '24px 20px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              position: 'relative',
+              overflow: 'hidden'
+            }}
+          >
           {/* Neon & Gold Pointer Needle on Top */}
           <div
             style={{
@@ -633,6 +660,7 @@ export const CravingRouletteModal: React.FC<CravingRouletteModalProps> = ({ isOp
             </div>
           )}
         </div>
+      )}
       </div>
     </div>
   );

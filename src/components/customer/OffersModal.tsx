@@ -177,7 +177,7 @@ export const OffersModal: React.FC<OffersModalProps> = ({ isOpen, onClose, onCou
             <Sparkles size={24} />
             <div>
               <span style={{ fontSize: '12px', fontWeight: 900, display: 'block' }}>
-                G1Bites Gold Privilege Active
+                Tomattto Gold Privilege Active
               </span>
               <span style={{ fontSize: '10px', opacity: 0.95 }}>
                 Free delivery unlocked on all orders + extra ₹25 cash rebate!

@@ -85,9 +85,9 @@ export const OrderTrackingScreen: React.FC = () => {
           >
             <ArrowLeft size={18} />
           </button>
-          <img src="/logo.png" alt="G1Bites" style={{ width: '26px', height: '26px', borderRadius: '6px', objectFit: 'contain' }} />
+          <img src="/logo.png" alt="Tomattto" style={{ width: '26px', height: '26px', borderRadius: '6px', objectFit: 'contain' }} />
           <div>
-            <h3 style={{ fontSize: '15px', fontWeight: 800 }}>G1Bites Live Tracking</h3>
+            <h3 style={{ fontSize: '15px', fontWeight: 800 }}>Tomattto Live Tracking</h3>
             <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
               Order {currentOrder.id}
             </span>
@@ -274,7 +274,7 @@ export const OrderTrackingScreen: React.FC = () => {
               boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
             }}
           >
-            Vikram • 1.2 km away
+            {currentOrder?.rider?.name ? `${currentOrder.rider.name} • In Transit` : 'Delivery Partner • In Transit'}
           </div>
         </div>
 

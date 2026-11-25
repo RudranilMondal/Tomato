@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useTomattto } from '../../context/TomatttoContext';
+import { openRazorpayCheckout } from '../../lib/razorpay';
+import { PRICING_CONFIG } from '../../config/pricing';
 import {
   RiderOnboardingApplication,
   RiderKycDocuments,
@@ -359,7 +361,8 @@ export const RiderOnboardingWizard: React.FC<RiderOnboardingWizardProps> = ({
     submitRiderOnboarding,
     persistedRiderApp,
     supabaseUser,
-    activeRiderApplicant
+    activeRiderApplicant,
+    allRiderApplications
   } = useTomattto();
 
   const [step, setStep] = useState<1 | 2 | 3 | 4>(initialStep);
@@ -805,10 +808,92 @@ export const RiderOnboardingWizard: React.FC<RiderOnboardingWizardProps> = ({
     }
   };
 
+  // Step 4 Registration Fee & Starter Kit
+  const [isRegFeePaid, setIsRegFeePaid] = useState<boolean>(() => {
+    if (Boolean(persistedRiderApp?.metadata?.registrationFeePaid || persistedRiderApp?.registrationFeePaid)) return true;
+    try {
+      const saved = localStorage.getItem('tomattto_rider_reg_paid');
+      if (saved && JSON.parse(saved)?.paid) return true;
+    } catch {}
+    return false;
+  });
+  const [regPaymentId, setRegPaymentId] = useState<string | null>(() => {
+    const existingId = persistedRiderApp?.metadata?.registrationPaymentId || persistedRiderApp?.registrationPaymentId || null;
+    if (existingId) return existingId;
+    try {
+      const saved = localStorage.getItem('tomattto_rider_reg_paid');
+      if (saved) return JSON.parse(saved)?.paymentId || null;
+    } catch {}
+    return null;
+  });
+  const [starterKitTshirtSize, setStarterKitTshirtSize] = useState<'S' | 'M' | 'L' | 'XL' | 'XXL'>('L');
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  // Prevent charging the same rider partner again if already registered and paid
+  useEffect(() => {
+    if (isRegFeePaid) return;
+    try {
+      if (phone) {
+        const byPhone = localStorage.getItem(`tomattto_rider_reg_paid_${phone}`);
+        if (byPhone && JSON.parse(byPhone)?.paid) {
+          setIsRegFeePaid(true);
+          setRegPaymentId(JSON.parse(byPhone)?.paymentId || null);
+          return;
+        }
+      }
+    } catch {}
+    const existing = allRiderApplications.find(
+      (a) =>
+        (phone && a.phone === phone) ||
+        (email && a.email?.toLowerCase() === email.toLowerCase()) ||
+        (fullName && a.fullName.toLowerCase() === fullName.toLowerCase())
+    );
+    if (existing?.registrationFeePaid) {
+      setIsRegFeePaid(true);
+      if (existing.registrationPaymentId) {
+        setRegPaymentId(existing.registrationPaymentId);
+      }
+    }
+  }, [phone, email, fullName, allRiderApplications, isRegFeePaid]);
+
+  const handlePayRegistrationFee = async () => {
+    setIsProcessingPayment(true);
+    setPaymentError(null);
+    try {
+      const res = await openRazorpayCheckout({
+        amountInRupees: PRICING_CONFIG.RIDER_REGISTRATION_FEE,
+        intent: 'rider_registration',
+        restaurantName: 'Tomattto Delivery Partner Registration',
+        customerName: fullName || 'Delivery Partner',
+        customerEmail: email,
+        customerPhone: phone
+      });
+      setIsRegFeePaid(true);
+      setRegPaymentId(res.razorpay_payment_id);
+      try {
+        const payload = JSON.stringify({ paid: true, paymentId: res.razorpay_payment_id, paidAt: new Date().toISOString() });
+        localStorage.setItem('tomattto_rider_reg_paid', payload);
+        if (phone) localStorage.setItem(`tomattto_rider_reg_paid_${phone}`, payload);
+      } catch {}
+    } catch (err: any) {
+      if (err?.message !== 'PAYMENT_CANCELLED') {
+        setPaymentError(err?.message || 'Payment processing failed. Please try again.');
+      }
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!consentDataAccuracy || !consentTerms) {
       setErrors({ consent: 'You must accept the declaration and terms of service to proceed.' });
+      return;
+    }
+
+    if (!isRegFeePaid) {
+      setErrors({ consent: 'Please complete the mandatory ₹499 one-time registration fee payment to activate your onboarding and Starter Kit.' });
       return;
     }
 
@@ -850,6 +935,11 @@ export const RiderOnboardingWizard: React.FC<RiderOnboardingWizardProps> = ({
       bloodGroup,
       gender,
       dob,
+      registrationFeePaid: Boolean(regPaymentId),
+      registrationPaymentId: regPaymentId || '',
+      registrationPaidAt: new Date().toISOString(),
+      starterKitStatus: 'allocated' as const,
+      starterKitTshirtSize,
       documents: {
         ...documents,
         qualificationProof: qualificationProof || null
@@ -941,7 +1031,7 @@ export const RiderOnboardingWizard: React.FC<RiderOnboardingWizardProps> = ({
         </h2>
 
         <p style={{ fontSize: '13px', color: '#9CA3AF', maxWidth: '320px', lineHeight: 1.5, marginBottom: '20px' }}>
-          Thank you for applying to join the G1Bites Delivery Fleet. Our operations team is reviewing your KYC and vehicle documents.
+          Thank you for applying to join the Tomattto Delivery Fleet. Our operations team is reviewing your KYC and vehicle documents.
         </p>
 
         {/* Application Ref Badge */}
@@ -2629,6 +2719,158 @@ export const RiderOnboardingWizard: React.FC<RiderOnboardingWizardProps> = ({
             </div>
           </div>
 
+          {/* Starter Kit & One-Time Registration Fee Card */}
+          <div
+            style={{
+              borderRadius: '12px',
+              backgroundColor: '#1E1E24',
+              border: isRegFeePaid ? '1.5px solid #10B981' : '1.5px solid var(--color-primary, #FF4B3A)',
+              padding: '16px',
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Sparkles size={18} color="var(--color-primary, #FF4B3A)" />
+                <div>
+                  <h3 style={{ fontSize: '14px', fontWeight: 800, margin: 0 }}>
+                    Tomattto Starter Kit & Registration Fee
+                  </h3>
+                  <p style={{ fontSize: '11px', color: '#9CA3AF', margin: '2px 0 0' }}>
+                    One-time activation fee: <b>₹{PRICING_CONFIG.RIDER_REGISTRATION_FEE}</b> (Includes Official Starter Kit)
+                  </p>
+                </div>
+              </div>
+
+              {isRegFeePaid ? (
+                <span
+                  style={{
+                    backgroundColor: 'rgba(46, 204, 113, 0.15)',
+                    color: 'var(--color-veg, #2ECC71)',
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    padding: '4px 10px',
+                    borderRadius: '100px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <CheckCircle2 size={13} color="var(--color-veg, #2ECC71)" />
+                  <span>Fee Paid</span>
+                </span>
+              ) : (
+                <span
+                  style={{
+                    backgroundColor: 'rgba(255, 75, 58, 0.15)',
+                    color: 'var(--color-primary, #FF4B3A)',
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    padding: '4px 10px',
+                    borderRadius: '100px'
+                  }}
+                >
+                  Payment Required (₹499)
+                </span>
+              )}
+            </div>
+
+            {/* Included Starter Kit Box */}
+            <div
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                borderRadius: '8px',
+                padding: '12px',
+                marginBottom: '12px',
+                border: '1px solid rgba(255, 255, 255, 0.08)'
+              }}
+            >
+              <span style={{ fontSize: '11px', fontWeight: 800, color: '#D1D5DB', display: 'block', marginBottom: '6px' }}>
+                Starter Kit Delivered to Your Residential Address:
+              </span>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px', fontSize: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <CheckCircle2 size={14} color="#10B981" />
+                  <span><b>1 × Official Rider T-Shirt</b></span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <CheckCircle2 size={14} color="#10B981" />
+                  <span><b>1 × Insulated Delivery Bag</b></span>
+                </div>
+              </div>
+
+              <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <label style={{ fontSize: '11px', color: '#9CA3AF', fontWeight: 600 }}>T-Shirt Size:</label>
+                <select
+                  value={starterKitTshirtSize}
+                  onChange={(e) => setStarterKitTshirtSize(e.target.value as any)}
+                  disabled={isRegFeePaid}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    backgroundColor: '#1E1E24',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: '#FFFFFF',
+                    fontSize: '11px',
+                    fontWeight: 700
+                  }}
+                >
+                  <option value="S">S (38")</option>
+                  <option value="M">M (40")</option>
+                  <option value="L">L (42")</option>
+                  <option value="XL">XL (44")</option>
+                  <option value="XXL">XXL (46")</option>
+                </select>
+              </div>
+            </div>
+
+            {paymentError && (
+              <div
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                  border: '1px solid rgba(231, 76, 60, 0.3)',
+                  color: '#EF4444',
+                  fontSize: '11px',
+                  marginBottom: '10px'
+                }}
+              >
+                {paymentError}
+              </div>
+            )}
+
+            {!isRegFeePaid ? (
+              <button
+                type="button"
+                onClick={handlePayRegistrationFee}
+                disabled={isProcessingPayment}
+                style={{
+                  width: '100%',
+                  padding: '11px',
+                  borderRadius: '8px',
+                  backgroundColor: 'var(--color-primary, #FF4B3A)',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  fontSize: '13px',
+                  fontWeight: 800,
+                  cursor: isProcessingPayment ? 'wait' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+              >
+                <CreditCard size={15} />
+                <span>{isProcessingPayment ? 'Connecting to Razorpay...' : `Pay ₹${PRICING_CONFIG.RIDER_REGISTRATION_FEE} Registration Fee`}</span>
+              </button>
+            ) : (
+              <div style={{ fontSize: '11px', color: 'var(--color-veg, #2ECC71)', fontWeight: 600 }}>
+                Payment Ref: {regPaymentId} • Starter Kit will be dispatched upon KYC approval.
+              </div>
+            )}
+          </div>
+
           {/* Consent & Declarations */}
           <div
             style={{
@@ -2661,7 +2903,7 @@ export const RiderOnboardingWizard: React.FC<RiderOnboardingWizardProps> = ({
                 style={{ marginTop: '2px', accentColor: 'var(--color-primary, #FF4B3A)' }}
               />
               <span>
-                I agree to the G1Bites Fleet Partner Code of Conduct, safety policies, and background verification terms.
+                I agree to the Tomattto Fleet Partner Code of Conduct, safety policies, and background verification terms.
               </span>
             </label>
           </div>

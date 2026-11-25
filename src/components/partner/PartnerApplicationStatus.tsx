@@ -538,7 +538,7 @@ export const PartnerApplicationStatus: React.FC<PartnerApplicationStatusProps> =
                   {currentStatus === 'Draft' && 'Application Draft in Progress'}
                   {currentStatus === 'Submitted' && 'Application Submitted & Queued'}
                   {currentStatus === 'Under Review' && 'Application Under Compliance Review'}
-                  {currentStatus === 'Approved' && 'Application Approved — Welcome to G1Bites!'}
+                  {currentStatus === 'Approved' && 'Application Approved — Welcome to Tomattto!'}
                   {currentStatus === 'Action Required' && 'Action Required — Updates Requested'}
                   {currentStatus === 'Rejected' && 'Application Requires Changes'}
                 </h3>

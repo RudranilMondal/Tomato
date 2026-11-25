@@ -8,7 +8,7 @@ interface RiderCallModalProps {
 }
 
 export const RiderCallModal: React.FC<RiderCallModalProps> = ({ isOpen, onClose }) => {
-  const { currentOrder } = useTomattto();
+  const { currentOrder, user } = useTomattto();
   const [callDuration, setCallDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeaker, setIsSpeaker] = useState(true);
@@ -86,9 +86,9 @@ export const RiderCallModal: React.FC<RiderCallModalProps> = ({ isOpen, onClose 
           />
         </div>
 
-        <h2 style={{ fontSize: '22px', fontWeight: 800 }}>{rider?.name || 'Vikram Singh'}</h2>
+        <h2 style={{ fontSize: '22px', fontWeight: 800 }}>{rider?.name || 'Delivery Partner'}</h2>
         <p style={{ fontSize: '13px', color: '#A5A5B2', marginTop: '4px' }}>
-          Delivery Partner • {rider?.vehicleNumber || 'KA 03 EN 4592'}
+          Delivery Partner • {rider?.vehicleNumber || 'Registered Vehicle'}
         </p>
 
         <div style={{ marginTop: '14px', fontSize: '16px', fontWeight: 700, color: '#2ECC71' }}>
@@ -111,10 +111,10 @@ export const RiderCallModal: React.FC<RiderCallModalProps> = ({ isOpen, onClose 
         </span>
         <p style={{ fontSize: '13px', color: '#FFFFFF', marginTop: '6px', fontStyle: 'italic' }}>
           {callDuration < 4
-            ? '"Hello Souvik ji! Reaching your society in about 5 minutes."'
+            ? `"Hello ${user.name ? user.name.split(' ')[0] : 'there'}! Reaching your location shortly."`
             : callDuration < 10
-            ? '"Should I leave the parcel at tower lobby or come upstairs?"'
-            : '"Got it, thanks! Will deliver safely."'
+            ? '"Should I leave the parcel at the door or meet you outside?"'
+            : '"Got it, thanks! Delivering now."'
           }
         </p>
       </div>

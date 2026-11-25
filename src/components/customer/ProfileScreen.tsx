@@ -74,7 +74,7 @@ export const ProfileScreen: React.FC = () => {
     },
     {
       icon: <CreditCard size={18} color="#27AE60" />,
-      title: 'G1Bites Credits & Wallet',
+      title: 'Tomattto Credits & Wallet',
       subtitle: isLoggedIn
         ? `₹${walletBalance} available balance • Top-up & passbook`
         : 'Log in to access credits & wallet passbook',
@@ -119,7 +119,7 @@ export const ProfileScreen: React.FC = () => {
           {
             icon: <LogOut size={18} color="var(--color-primary)" />,
             title: 'Log Out',
-            subtitle: 'Sign out of your G1Bites account',
+            subtitle: 'Sign out of your Tomattto account',
             action: () => setIsLogoutModalOpen(true),
             isDanger: true
           }
@@ -218,7 +218,7 @@ export const ProfileScreen: React.FC = () => {
                   }}
                 >
                   <img src="/logo.png" alt="" style={{ width: '13px', height: '13px', borderRadius: '3px', objectFit: 'contain' }} />
-                  <span>G1Bites Gold Member</span>
+                  <span>Tomattto Gold Member</span>
                 </span>
               </div>
 
@@ -352,7 +352,7 @@ export const ProfileScreen: React.FC = () => {
         {/* Version info */}
         <div style={{ textAlign: 'center', marginTop: '20px' }}>
           <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontWeight: 600 }}>
-            G1Bites v1.0.0 (Phase 1 Demo Build)
+            Tomattto v1.0.0 (Phase 1 Demo Build)
           </span>
         </div>
       </div>
@@ -439,7 +439,7 @@ export const ProfileScreen: React.FC = () => {
                 <LogOut size={26} />
               </div>
               <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--color-text-main)' }}>
-                Log out of G1Bites?
+                Log out of Tomattto?
               </h3>
               <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '6px' }}>
                 You will need to sign in again to place food orders and view order history.

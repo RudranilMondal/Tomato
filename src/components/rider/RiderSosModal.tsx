@@ -55,7 +55,7 @@ export const RiderSosModal: React.FC<RiderSosModalProps> = ({ isOpen, onClose })
             </div>
             <div>
               <h3 style={{ fontSize: '17px', fontWeight: 900, color: '#E74C3C' }}>Emergency SOS</h3>
-              <p style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>24x7 G1Bites Rider Safety Protocol</p>
+              <p style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>24x7 Tomattto Rider Safety Protocol</p>
             </div>
           </div>
 
@@ -79,7 +79,7 @@ export const RiderSosModal: React.FC<RiderSosModalProps> = ({ isOpen, onClose })
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
           <button
             onClick={() => {
-              alert('Dialing G1Bites 24x7 Rider Emergency Hotline (1800-G1B-HELP)... Real-time GPS dispatched.');
+              alert('Dialing Tomattto 24x7 Rider Emergency Hotline (1800-G1B-HELP)... Real-time GPS dispatched.');
               onClose();
             }}
             style={{

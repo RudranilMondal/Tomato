@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTomattto } from '../../context/TomatttoContext';
+import { openRazorpayCheckout } from '../../lib/razorpay';
+import { PRICING_CONFIG } from '../../config/pricing';
 import {
   Store,
   MapPin,
@@ -177,7 +179,7 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
   // ==========================================
   // STEP 4 STATE: Review & Submit
   // ==========================================
-  const { submitRestaurantApplication } = useTomattto();
+  const { submitRestaurantApplication, allRestaurantApplications } = useTomattto();
   const [isConsentChecked, setIsConsentChecked] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -560,11 +562,89 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
   };
 
   // ==========================================
-  // STEP 4 HANDLERS: Review & Submit
+  // STEP 4 HANDLERS: Registration Fee & Review Submit
   // ==========================================
+  const [isRegFeePaid, setIsRegFeePaid] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('tomattto_partner_reg_paid');
+      if (saved && JSON.parse(saved)?.paid) return true;
+    } catch {}
+    return false;
+  });
+  const [regPaymentId, setRegPaymentId] = useState<string | null>(() => {
+    try {
+      const saved = localStorage.getItem('tomattto_partner_reg_paid');
+      if (saved) return JSON.parse(saved)?.paymentId || null;
+    } catch {}
+    return null;
+  });
+  const [starterKitTshirtSize, setStarterKitTshirtSize] = useState<'S' | 'M' | 'L' | 'XL' | 'XXL'>('L');
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  // Prevent charging the same restaurant partner again if already registered and paid
+  useEffect(() => {
+    if (isRegFeePaid) return;
+    try {
+      if (contactNumber) {
+        const byPhone = localStorage.getItem(`tomattto_partner_reg_paid_${contactNumber}`);
+        if (byPhone && JSON.parse(byPhone)?.paid) {
+          setIsRegFeePaid(true);
+          setRegPaymentId(JSON.parse(byPhone)?.paymentId || null);
+          return;
+        }
+      }
+    } catch {}
+    const existing = allRestaurantApplications.find(
+      (a) =>
+        (contactNumber && a.phone === contactNumber) ||
+        (emailAddress && a.email?.toLowerCase() === emailAddress.toLowerCase()) ||
+        (restaurantName && a.restaurantName.toLowerCase() === restaurantName.toLowerCase())
+    );
+    if (existing?.registrationFeePaid) {
+      setIsRegFeePaid(true);
+      if (existing.registrationPaymentId) {
+        setRegPaymentId(existing.registrationPaymentId);
+      }
+    }
+  }, [contactNumber, emailAddress, restaurantName, allRestaurantApplications, isRegFeePaid]);
+
+  const handlePayRegistrationFee = async () => {
+    setIsProcessingPayment(true);
+    setPaymentError(null);
+    try {
+      const res = await openRazorpayCheckout({
+        amountInRupees: PRICING_CONFIG.PARTNER_REGISTRATION_FEE,
+        intent: 'partner_registration',
+        restaurantName: restaurantName || 'Restaurant Partner Registration',
+        customerName: ownerName || 'Restaurant Owner',
+        customerEmail: emailAddress,
+        customerPhone: contactNumber
+      });
+      setIsRegFeePaid(true);
+      setRegPaymentId(res.razorpay_payment_id);
+      try {
+        const payload = JSON.stringify({ paid: true, paymentId: res.razorpay_payment_id, paidAt: new Date().toISOString() });
+        localStorage.setItem('tomattto_partner_reg_paid', payload);
+        if (contactNumber) localStorage.setItem(`tomattto_partner_reg_paid_${contactNumber}`, payload);
+      } catch {}
+    } catch (err: any) {
+      if (err?.message !== 'PAYMENT_CANCELLED') {
+        setPaymentError(err?.message || 'Payment processing failed. Please try again.');
+      }
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  };
+
   const handleSubmitApplication = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isConsentChecked || isSubmitting) return;
+
+    if (!isRegFeePaid) {
+      setSubmissionError('Please complete the mandatory ₹499 one-time registration fee payment to submit your partner application.');
+      return;
+    }
 
     setIsSubmitting(true);
     setSubmissionError(null);
@@ -593,6 +673,11 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
           gstin: gstRegistered === 'yes' ? gstin : undefined,
           fssaiNumber,
           fssaiExpiryDate,
+          registrationFeePaid: Boolean(regPaymentId),
+          registrationPaymentId: regPaymentId || '',
+          registrationPaidAt: new Date().toISOString(),
+          starterKitStatus: 'allocated',
+          starterKitTshirtSize,
           bankDetails: {
             accountHolderName,
             bankName,
@@ -737,9 +822,9 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
           <div style={{ height: '20px', width: '1px', backgroundColor: '#E5E7EB' }} />
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <img src="/logo.png" alt="G1Bites" style={{ width: '24px', height: '24px', borderRadius: '6px', objectFit: 'contain' }} />
+            <img src="/logo.png" alt="Tomattto" style={{ width: '24px', height: '24px', borderRadius: '6px', objectFit: 'contain' }} />
             <span style={{ fontSize: '15px', fontWeight: 800, color: '#111827' }}>
-              G1Bites <span style={{ color: 'var(--color-primary)' }}>Partner Portal</span>
+              Tomattto <span style={{ color: 'var(--color-primary)' }}>Partner Portal</span>
             </span>
           </div>
         </div>
@@ -797,7 +882,7 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
             }}
           >
             <Sparkles size={13} />
-            <span>GROW WITH G1BITES</span>
+            <span>GROW WITH TOMATTTO</span>
           </div>
 
           {currentStep === 1 && (
@@ -806,7 +891,7 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
                 Become a Restaurant Partner
               </h1>
               <p style={{ fontSize: '15px', color: '#6B7280', margin: 0, maxWidth: '580px', marginInline: 'auto' }}>
-                Join G1Bites and grow your restaurant business with more customers.
+                Join Tomattto and grow your restaurant business with more customers.
               </p>
             </>
           )}
@@ -1003,7 +1088,7 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
                     Restaurant Information
                   </h2>
                   <p style={{ fontSize: '12px', color: '#6B7280', margin: '2px 0 0' }}>
-                    Brand identity and categories displayed to customers on the G1Bites app.
+                    Brand identity and categories displayed to customers on the Tomattto app.
                   </p>
                 </div>
               </div>
@@ -4513,6 +4598,181 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
                   </div>
                 </div>
 
+                {/* 3.5. STARTER KIT & REGISTRATION FEE CARD */}
+                <div
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: '16px',
+                    border: isRegFeePaid ? '1.5px solid #10B981' : '1.5px solid var(--color-primary)',
+                    padding: '24px',
+                    marginBottom: '24px',
+                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div
+                        style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '10px',
+                          backgroundColor: isRegFeePaid ? '#ECFDF5' : '#FFF5F4',
+                          color: isRegFeePaid ? '#059669' : 'var(--color-primary)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        <Sparkles size={18} />
+                      </div>
+                      <div>
+                        <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#111827', margin: 0 }}>
+                          Tomattto Starter Kit & One-Time Registration Fee
+                        </h3>
+                        <p style={{ fontSize: '12px', color: '#6B7280', margin: '2px 0 0' }}>
+                          One-time platform activation fee: <b>₹{PRICING_CONFIG.PARTNER_REGISTRATION_FEE}</b> (includes Official Starter Kit)
+                        </p>
+                      </div>
+                    </div>
+
+                    {isRegFeePaid ? (
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          backgroundColor: '#ECFDF5',
+                          color: '#065F46',
+                          fontSize: '12px',
+                          fontWeight: 800,
+                          padding: '6px 14px',
+                          borderRadius: '100px'
+                        }}
+                      >
+                        <CheckCircle2 size={16} color="#059669" />
+                        <span>Registration Fee Paid</span>
+                      </span>
+                    ) : (
+                      <span
+                        style={{
+                          backgroundColor: '#FFF5F4',
+                          color: 'var(--color-primary)',
+                          fontSize: '12px',
+                          fontWeight: 800,
+                          padding: '6px 14px',
+                          borderRadius: '100px',
+                          border: '1px solid rgba(255, 75, 58, 0.2)'
+                        }}
+                      >
+                        Payment Required (₹499)
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Starter Kit Included Items Box */}
+                  <div
+                    style={{
+                      backgroundColor: '#F9FAFB',
+                      borderRadius: '12px',
+                      padding: '16px',
+                      marginBottom: '16px',
+                      border: '1px solid #E5E7EB'
+                    }}
+                  >
+                    <span style={{ fontSize: '12px', fontWeight: 800, color: '#374151', display: 'block', marginBottom: '8px' }}>
+                      Starter Kit Included with Registration:
+                    </span>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#111827' }}>
+                        <CheckCircle2 size={16} color="#10B981" />
+                        <span><b>1 × Tomattto Official Partner T-Shirt</b></span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#111827' }}>
+                        <CheckCircle2 size={16} color="#10B981" />
+                        <span><b>1 × Insulated Thermal Delivery Bag</b></span>
+                      </div>
+                    </div>
+
+                    {/* T-Shirt Size Selector */}
+                    <div style={{ marginTop: '14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <label style={{ fontSize: '12px', fontWeight: 700, color: '#4B5563' }}>
+                        Select Partner T-Shirt Size:
+                      </label>
+                      <select
+                        value={starterKitTshirtSize}
+                        onChange={(e) => setStarterKitTshirtSize(e.target.value as any)}
+                        disabled={isRegFeePaid}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '8px',
+                          border: '1px solid #D1D5DB',
+                          backgroundColor: '#FFFFFF',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          color: '#111827',
+                          cursor: isRegFeePaid ? 'default' : 'pointer'
+                        }}
+                      >
+                        <option value="S">S (Small - 38")</option>
+                        <option value="M">M (Medium - 40")</option>
+                        <option value="L">L (Large - 42")</option>
+                        <option value="XL">XL (Extra Large - 44")</option>
+                        <option value="XXL">XXL (Double Extra Large - 46")</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {paymentError && (
+                    <div
+                      style={{
+                        padding: '10px 14px',
+                        borderRadius: '8px',
+                        backgroundColor: '#FEF2F2',
+                        border: '1px solid #FCA5A5',
+                        color: '#B91C1C',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        marginBottom: '14px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}
+                    >
+                      <AlertCircle size={15} />
+                      <span>{paymentError}</span>
+                    </div>
+                  )}
+
+                  {!isRegFeePaid ? (
+                    <button
+                      type="button"
+                      onClick={handlePayRegistrationFee}
+                      disabled={isProcessingPayment}
+                      style={{
+                        padding: '12px 24px',
+                        borderRadius: '10px',
+                        backgroundColor: 'var(--color-primary)',
+                        color: '#FFFFFF',
+                        border: 'none',
+                        fontSize: '14px',
+                        fontWeight: 800,
+                        cursor: isProcessingPayment ? 'wait' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        boxShadow: '0 4px 14px var(--color-primary-glow)'
+                      }}
+                    >
+                      <CreditCard size={17} />
+                      <span>{isProcessingPayment ? 'Connecting to Razorpay...' : `Pay ₹${PRICING_CONFIG.PARTNER_REGISTRATION_FEE} Registration Fee`}</span>
+                    </button>
+                  ) : (
+                    <div style={{ fontSize: '12px', color: '#059669', fontWeight: 600 }}>
+                      Payment Ref: {regPaymentId || 'Verified'} • Starter Kit will be dispatched to your outlet address upon document clearance.
+                    </div>
+                  )}
+                </div>
+
                 {/* 4. DECLARATION & CONSENT CARD */}
                 <div
                   style={{
@@ -4551,7 +4811,7 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
                         I confirm that the information and documents provided are accurate and belong to my restaurant/business.
                       </span>
                       <p style={{ fontSize: '11px', color: '#6B7280', margin: '4px 0 0', lineHeight: 1.35 }}>
-                        By submitting this application, you agree to G1Bites's Partner Terms of Service and Merchant Code of Conduct. Submitting fraudulent licenses or false bank details will result in rejection.
+                        By submitting this application, you agree to Tomattto's Partner Terms of Service and Merchant Code of Conduct. Submitting fraudulent licenses or false bank details will result in rejection.
                       </p>
                     </div>
                   </label>
@@ -4699,7 +4959,7 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
                   Application details submitted for review.
                 </h2>
                 <p style={{ fontSize: '14px', color: '#4B5563', margin: '0 auto 24px', maxWidth: '540px', lineHeight: 1.5 }}>
-                  Thank you for applying to partner with G1Bites. Your application details and compliance documents have been logged and queued for review by the Partner Onboarding & Compliance team.
+                  Thank you for applying to partner with Tomattto. Your application details and compliance documents have been logged and queued for review by the Partner Onboarding & Compliance team.
                 </p>
 
                 {/* Application Reference Summary Box */}
@@ -4779,7 +5039,7 @@ export const RestaurantOnboardingWizard: React.FC<RestaurantOnboardingWizardProp
                   </h4>
                   <ul style={{ fontSize: '12px', color: '#78350F', margin: 0, paddingLeft: '18px', lineHeight: 1.5 }}>
                     <li>Our compliance team will verify your FSSAI license and regulatory documents (typically 24–48 business hours).</li>
-                    <li>You will receive an onboarding call from your dedicated G1Bites Merchant Partner Manager.</li>
+                    <li>You will receive an onboarding call from your dedicated Tomattto Merchant Partner Manager.</li>
                     <li>Digital merchant agreement and order management terminal login credentials will be emailed to you upon clearance.</li>
                   </ul>
                 </div>

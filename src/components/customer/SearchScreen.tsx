@@ -1,19 +1,52 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTomattto } from '../../context/TomatttoContext';
 import { Restaurant, MenuItem } from '../../types';
-import { Search, ArrowLeft, X, Star, Clock, Sparkles } from 'lucide-react';
+import { Search, ArrowLeft, X, Star, Clock, Sparkles, Mic, MicOff, AlertCircle } from 'lucide-react';
+import { useVoiceSearch } from '../../hooks/useVoiceSearch';
+import { DietaryBadge } from '../common/DietaryBadge';
 
-export const SearchScreen: React.FC = () => {
+interface SearchScreenProps {
+  autoStartVoice?: boolean;
+}
+
+export const SearchScreen: React.FC<SearchScreenProps> = ({ autoStartVoice = false }) => {
   const {
     restaurants,
     setSelectedRestaurant,
     setCustomizingItem,
     setCustomerScreen,
-    addToCart
+    addToCart,
+    dietaryFilter,
+    setDietaryFilter
   } = useTomattto();
 
   const [query, setQuery] = useState('');
-  const [filterVegOnly, setFilterVegOnly] = useState(false);
+
+  const {
+    isListening,
+    isSupported,
+    transcript,
+    errorMessage,
+    startListening,
+    stopListening
+  } = useVoiceSearch((finalText) => {
+    if (finalText) {
+      setQuery(finalText);
+    }
+  });
+
+  useEffect(() => {
+    if (autoStartVoice) {
+      startListening();
+    }
+  }, [autoStartVoice, startListening]);
+
+  // Keep search input updated live as interim results arrive
+  useEffect(() => {
+    if (isListening && transcript) {
+      setQuery(transcript);
+    }
+  }, [isListening, transcript]);
 
   // Quick suggestions
   const SUGGESTIONS = ['Biryani', 'Pizza', 'Burgers', 'Butter Chicken', 'Dosa', 'Cheesecake', 'Noodles'];
@@ -26,7 +59,17 @@ export const SearchScreen: React.FC = () => {
         const matchesDish = r.categories.some((cat) =>
           cat.items.some((item) => item.name.toLowerCase().includes(query.toLowerCase()))
         );
-        if (filterVegOnly && !r.isPureVeg) return false;
+
+        if (dietaryFilter === 'veg') {
+          if (!r.isPureVeg && !r.categories.some((cat) => cat.items.some((i) => i.dietary === 'veg'))) {
+            return false;
+          }
+        } else if (dietaryFilter === 'non_veg') {
+          if (r.isPureVeg || !r.categories.some((cat) => cat.items.some((i) => i.dietary === 'non_veg'))) {
+            return false;
+          }
+        }
+
         return matchesName || matchesCuisine || matchesDish;
       })
     : [];
@@ -38,9 +81,9 @@ export const SearchScreen: React.FC = () => {
       r.categories.forEach((cat) => {
         cat.items.forEach((item) => {
           if (item.name.toLowerCase().includes(query.toLowerCase())) {
-            if (!filterVegOnly || item.dietary === 'veg') {
-              matchingDishes.push({ restaurant: r, item });
-            }
+            if (dietaryFilter === 'veg' && item.dietary !== 'veg') return;
+            if (dietaryFilter === 'non_veg' && item.dietary === 'veg') return;
+            matchingDishes.push({ restaurant: r, item });
           }
         });
       });
@@ -121,39 +164,182 @@ export const SearchScreen: React.FC = () => {
                 borderRadius: '50%',
                 backgroundColor: 'var(--color-border)',
                 color: 'var(--color-text-muted)',
-                display: 'flex'
+                display: 'flex',
+                border: 'none',
+                cursor: 'pointer'
               }}
+              title="Clear search"
             >
               <X size={12} />
             </button>
           )}
+
+          {/* Voice Search Microphone Button */}
+          <button
+            type="button"
+            onClick={() => {
+              if (isListening) {
+                stopListening();
+              } else {
+                startListening();
+              }
+            }}
+            style={{
+              padding: '5px',
+              borderRadius: '50%',
+              backgroundColor: isListening ? 'var(--color-primary)' : 'transparent',
+              color: isListening ? '#FFFFFF' : 'var(--color-primary)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              boxShadow: isListening ? '0 0 12px var(--color-primary)' : 'none',
+              animation: isListening ? 'pulse 1.2s infinite' : 'none'
+            }}
+            title={isListening ? 'Stop listening' : 'Search by voice'}
+          >
+            {isListening ? <MicOff size={16} /> : <Mic size={16} />}
+          </button>
         </div>
       </div>
 
-      {/* Quick Filters */}
+      {/* Voice Listening Active Strip */}
+      {isListening && (
+        <div
+          style={{
+            backgroundColor: 'rgba(255, 75, 58, 0.1)',
+            borderBottom: '1px solid rgba(255, 75, 58, 0.25)',
+            padding: '10px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            animation: 'fadeIn 0.2s ease'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span
+              style={{
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                backgroundColor: 'var(--color-primary)',
+                display: 'inline-block',
+                boxShadow: '0 0 8px var(--color-primary)'
+              }}
+            />
+            <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-primary)' }}>
+              Listening... Speak dish or restaurant name now
+            </span>
+          </div>
+
+          <button
+            onClick={stopListening}
+            style={{
+              fontSize: '11px',
+              fontWeight: 800,
+              color: 'var(--color-text-muted)',
+              backgroundColor: 'var(--color-surface)',
+              border: '1px solid var(--color-border)',
+              padding: '3px 8px',
+              borderRadius: 'var(--radius-sm)',
+              cursor: 'pointer'
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {/* Voice Search Error Notice */}
+      {errorMessage && (
+        <div
+          style={{
+            backgroundColor: 'rgba(231, 76, 60, 0.1)',
+            borderBottom: '1px solid rgba(231, 76, 60, 0.2)',
+            padding: '8px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '11px',
+            color: 'var(--color-nonveg)'
+          }}
+        >
+          <AlertCircle size={14} />
+          <span style={{ flex: 1 }}>{errorMessage}</span>
+        </div>
+      )}
+
+      {/* Indian Standard Veg / Non-Veg Filter Bar */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
-          padding: '10px 16px',
+          padding: '8px 16px',
           borderBottom: '1px solid var(--color-border-subtle)',
           backgroundColor: 'var(--color-surface)'
         }}
       >
         <button
-          onClick={() => setFilterVegOnly(!filterVegOnly)}
+          onClick={() => setDietaryFilter('all')}
           style={{
             padding: '5px 12px',
             borderRadius: 'var(--radius-full)',
             fontSize: '11px',
-            fontWeight: filterVegOnly ? 700 : 500,
-            backgroundColor: filterVegOnly ? 'var(--color-veg-bg)' : 'var(--color-surface-muted)',
-            color: filterVegOnly ? 'var(--color-veg)' : 'var(--color-text-main)',
-            border: filterVegOnly ? '1.5px solid var(--color-veg)' : '1px solid var(--color-border)'
+            fontWeight: dietaryFilter === 'all' ? 800 : 500,
+            backgroundColor: dietaryFilter === 'all' ? 'var(--color-primary-light)' : 'var(--color-surface-muted)',
+            color: dietaryFilter === 'all' ? 'var(--color-primary)' : 'var(--color-text-main)',
+            border: dietaryFilter === 'all' ? '1.5px solid var(--color-primary)' : '1px solid var(--color-border)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            cursor: 'pointer'
           }}
         >
-          🌱 Pure Veg Only
+          <DietaryBadge type="all" size={11} />
+          <span>All Items</span>
+        </button>
+
+        <button
+          onClick={() => setDietaryFilter('veg')}
+          style={{
+            padding: '5px 12px',
+            borderRadius: 'var(--radius-full)',
+            fontSize: '11px',
+            fontWeight: dietaryFilter === 'veg' ? 800 : 500,
+            backgroundColor: dietaryFilter === 'veg' ? 'rgba(46, 204, 113, 0.12)' : 'var(--color-surface-muted)',
+            color: dietaryFilter === 'veg' ? 'var(--color-veg)' : 'var(--color-text-main)',
+            border: dietaryFilter === 'veg' ? '1.5px solid var(--color-veg)' : '1px solid var(--color-border)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            cursor: 'pointer'
+          }}
+        >
+          <DietaryBadge type="veg" size={11} />
+          <span>Pure Veg</span>
+        </button>
+
+        <button
+          onClick={() => setDietaryFilter('non_veg')}
+          style={{
+            padding: '5px 12px',
+            borderRadius: 'var(--radius-full)',
+            fontSize: '11px',
+            fontWeight: dietaryFilter === 'non_veg' ? 800 : 500,
+            backgroundColor: dietaryFilter === 'non_veg' ? 'rgba(231, 76, 60, 0.12)' : 'var(--color-surface-muted)',
+            color: dietaryFilter === 'non_veg' ? 'var(--color-nonveg)' : 'var(--color-text-main)',
+            border: dietaryFilter === 'non_veg' ? '1.5px solid var(--color-nonveg)' : '1px solid var(--color-border)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            cursor: 'pointer'
+          }}
+        >
+          <DietaryBadge type="non_veg" size={11} />
+          <span>Non-Veg</span>
         </button>
       </div>
 
@@ -393,7 +579,7 @@ export const SearchScreen: React.FC = () => {
                           </span>
                         </div>
                         <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
-                          {r.cuisines.join(' • ')}
+                          {(r.cuisines || []).join(' • ')}
                         </p>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', fontSize: '11px', color: 'var(--color-text-muted)' }}>
                           <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>

@@ -136,6 +136,8 @@ export interface RiderInfo {
   lng: number;
 }
 
+export type VegFilterType = 'all' | 'veg' | 'non_veg';
+
 export interface Order {
   id: string;
   createdAt: string;
@@ -150,7 +152,12 @@ export interface Order {
   taxAmount: number;
   discountAmount: number;
   tipAmount: number;
+  customTip?: number;
   totalAmount: number;
+  restaurantCommission?: number;
+  deliveryDistanceKm?: number;
+  riderRatePerKm?: number;
+  riderPayout?: number;
   appliedCoupon?: Coupon;
   paymentMethod: 'upi' | 'card' | 'cod';
   paymentStatus?: 'pending' | 'captured' | 'failed' | 'refunded';
@@ -306,6 +313,13 @@ export interface RiderOnboardingApplication {
   totalWorkingHours?: number;
   completedOrdersCount?: number;
   submittedAt: string;
+  registrationFeePaid?: boolean;
+  registrationPaymentId?: string;
+  registrationPaidAt?: string;
+  starterKitStatus?: 'not_allocated' | 'allocated' | 'ready_for_dispatch' | 'dispatched' | 'handed_over' | 'pending' | 'delivered';
+  starterKitTshirtSize?: 'S' | 'M' | 'L' | 'XL' | 'XXL';
+  starterKitDispatchedAt?: string;
+  starterKitTrackingNumber?: string;
   rejectionReason?: string;
   resubmissionNote?: string;
   timeline?: { action: string; timestamp: string; note?: string; by?: string }[];
@@ -398,6 +412,13 @@ export interface RestaurantPartnerApplication {
   rejectionReason?: string;
   reviewerNotes?: string;
   submittedAt?: string;
+  registrationFeePaid?: boolean;
+  registrationPaymentId?: string;
+  registrationPaidAt?: string;
+  starterKitStatus?: 'not_allocated' | 'allocated' | 'ready_for_dispatch' | 'dispatched' | 'handed_over' | 'pending' | 'delivered';
+  starterKitTshirtSize?: 'S' | 'M' | 'L' | 'XL' | 'XXL';
+  starterKitDispatchedAt?: string;
+  starterKitTrackingNumber?: string;
   reviewedAt?: string;
   reviewedBy?: string;
   createdAt?: string;
@@ -465,6 +486,25 @@ export interface RestaurantPartnerSession {
   restaurants?: Restaurant[];
   application?: RestaurantPartnerApplication;
 }
+
+// ==========================================
+// PLATFORM FINANCIAL MANAGEMENT TYPES
+// ==========================================
+
+export interface PlatformFinancialMetrics {
+  totalCustomerPlatformFees: number; // ₹9 per completed order
+  totalRestaurantCommissions: number; // ₹10 per completed order
+  totalPartnerRegistrationFees: number; // ₹499 per registered partner
+  totalRiderRegistrationFees: number; // ₹499 per registered rider
+  totalGrossRevenue: number;
+  totalRiderPayouts: number; // ₹12/km
+  totalRiderTipsPayable: number;
+  totalNetRevenue: number;
+  completedOrdersCount: number;
+  totalDistanceKmCovered: number;
+  allocatedStarterKits: number;
+}
+
 
 
 

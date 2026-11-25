@@ -19,7 +19,6 @@ import {
   CheckCircle2,
   AlertCircle,
   RefreshCw,
-  Sparkles,
   Lock,
   Store,
   Bike,
@@ -106,9 +105,9 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
   // Default labels and icon per portal role
   const roleConfig = {
     customer: {
-      defaultTitle: 'Sign in to G1Bites',
+      defaultTitle: 'Sign in to Tomattto',
       defaultSubtitle: 'Access saved addresses, live tracking & orders',
-      icon: <img src="/logo.png" alt="G1Bites" style={{ width: '22px', height: '22px', borderRadius: '4px', objectFit: 'contain' }} />,
+      icon: <img src="/logo.png" alt="Tomattto" style={{ width: '22px', height: '22px', borderRadius: '4px', objectFit: 'contain' }} />,
       badge: 'Customer Account',
       registerPrompt: "Don't have an account?",
       registerAction: 'Sign up now'
@@ -118,7 +117,7 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
       defaultSubtitle: 'Manage live orders, menu catalog, store hours & payouts',
       icon: <Store size={22} color="var(--color-primary)" />,
       badge: 'Merchant Partner Portal',
-      registerPrompt: 'Want to list your outlet on G1Bites?',
+      registerPrompt: 'Want to list your outlet on Tomattto?',
       registerAction: 'Become a Restaurant Partner'
     },
     rider: {
@@ -126,7 +125,7 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
       defaultSubtitle: 'Accept high-yield trips, daily earnings & tier rewards',
       icon: <Bike size={22} color="var(--color-primary)" />,
       badge: 'Rider Fleet Network',
-      registerPrompt: 'Want to earn with G1Bites delivery fleet?',
+      registerPrompt: 'Want to earn with Tomattto delivery fleet?',
       registerAction: 'Join Fleet Onboarding'
     }
   }[role];
@@ -392,32 +391,6 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // Explicit, Isolated Dev-Only Instant Login Handler
-  const handleExplicitDevLogin = () => {
-    setIsLoading(true);
-    if (role === 'restaurant_owner') {
-      loginPartner({
-        user: {
-          id: 'demo-rest-owner-99',
-          phone: '+919876543210',
-          fullName: 'Behrouz Biryani (Owner)'
-        },
-        status: 'approved',
-        restaurant: restaurants[0],
-        restaurants: [restaurants[0]]
-      });
-    } else if (role === 'rider') {
-      loginDemoRider();
-    } else {
-      loginUser({
-        phone: '+919876543210',
-        name: 'Ananya Sharma (Customer)'
-      });
-    }
-    setIsLoading(false);
-    onClose();
   };
 
   return (
@@ -973,61 +946,6 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
                   </button>
                 )}
               </div>
-            </div>
-          )}
-
-          {/* Explicit, Isolated Dev-Only Instant Login Section */}
-          {demoActive && step === 'input' && (
-            <div
-              style={{
-                marginTop: '4px',
-                padding: '12px 14px',
-                borderRadius: 'var(--radius-md)',
-                backgroundColor: 'rgba(255, 75, 58, 0.06)',
-                border: '1.5px dashed var(--color-primary)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: 800,
-                    color: 'var(--color-primary)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px'
-                  }}
-                >
-                  <Sparkles size={13} />
-                  ⚡ Quick Demo Login (Dev Only)
-                </span>
-                <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Bypasses SMS Gateway</span>
-              </div>
-              <button
-                type="button"
-                onClick={handleExplicitDevLogin}
-                style={{
-                  padding: '9px 12px',
-                  borderRadius: 'var(--radius-sm)',
-                  backgroundColor: 'var(--color-surface)',
-                  border: '1px solid var(--color-border)',
-                  color: 'var(--color-text-main)',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  transition: 'background-color 0.15s ease'
-                }}
-              >
-                <span>Instant Demo Login as {role === 'restaurant_owner' ? 'Restaurant Owner' : role === 'rider' ? 'Delivery Fleet Rider' : 'Customer'}</span>
-                <ArrowRight size={13} />
-              </button>
             </div>
           )}
 

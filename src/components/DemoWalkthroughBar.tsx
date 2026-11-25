@@ -21,7 +21,7 @@ const STEPS_INFO = [
   },
   {
     title: '5. Cart & Smart Checkout',
-    desc: 'Apply coupon G1BITES50, select tip, add delivery instructions, and see bill summary.'
+    desc: 'Apply coupon TOMATTTO50, select tip, add delivery instructions, and see bill summary.'
   },
   {
     title: '6. Live GPS Rider Order Tracking',

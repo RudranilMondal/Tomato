@@ -10,73 +10,6 @@ interface RiderTripsModalProps {
   completedTrips?: CompletedTrip[];
 }
 
-const PAST_TRIPS: CompletedTrip[] = [
-  {
-    id: 'TRIP-108',
-    orderNumber: 'TOM-8921',
-    restaurantName: 'Meghana Foods',
-    restaurantArea: 'Indiranagar 100ft Rd',
-    customerName: 'Rahul Verma',
-    customerArea: 'Defence Colony, 4th Cross',
-    distanceKm: 3.2,
-    durationMins: 19,
-    deliveryFee: 45,
-    customerTip: 30,
-    surgeBonus: 15,
-    totalPayout: 90,
-    completedAt: 'Today, 1:42 PM',
-    status: 'Completed'
-  },
-  {
-    id: 'TRIP-107',
-    orderNumber: 'TOM-8845',
-    restaurantName: 'Truffles',
-    restaurantArea: 'Koramangala 5th Block',
-    customerName: 'Priya Sundaram',
-    customerArea: 'Sony World Signal, 7th Block',
-    distanceKm: 2.1,
-    durationMins: 14,
-    deliveryFee: 40,
-    customerTip: 20,
-    surgeBonus: 0,
-    totalPayout: 60,
-    completedAt: 'Today, 12:15 PM',
-    status: 'Completed'
-  },
-  {
-    id: 'TRIP-106',
-    orderNumber: 'TOM-8712',
-    restaurantName: 'Leon Grill',
-    restaurantArea: 'Indiranagar Metro',
-    customerName: 'Arjun Das',
-    customerArea: 'HAL 2nd Stage, Doopanahalli',
-    distanceKm: 4.5,
-    durationMins: 24,
-    deliveryFee: 55,
-    customerTip: 50,
-    surgeBonus: 20,
-    totalPayout: 125,
-    completedAt: 'Today, 11:20 AM',
-    status: 'Completed'
-  },
-  {
-    id: 'TRIP-105',
-    orderNumber: 'TOM-8650',
-    restaurantName: 'Chai Point',
-    restaurantArea: 'Domlur Flyover',
-    customerName: 'Sneha Patel',
-    customerArea: 'Embassy Golf Links, Tower D',
-    distanceKm: 1.8,
-    durationMins: 11,
-    deliveryFee: 35,
-    customerTip: 10,
-    surgeBonus: 0,
-    totalPayout: 45,
-    completedAt: 'Today, 10:05 AM',
-    status: 'Completed'
-  }
-];
-
 export const RiderTripsModal: React.FC<RiderTripsModalProps> = ({
   isOpen,
   onClose,
@@ -86,7 +19,7 @@ export const RiderTripsModal: React.FC<RiderTripsModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  const tripsList = completedTrips && completedTrips.length > 0 ? completedTrips : PAST_TRIPS;
+  const tripsList = completedTrips || [];
 
   return (
     <div
@@ -202,7 +135,14 @@ export const RiderTripsModal: React.FC<RiderTripsModalProps> = ({
           }}
           className="no-scrollbar"
         >
-          {tripsList.map((trip) => (
+          {tripsList.length === 0 ? (
+            <div style={{ padding: '36px 20px', textAlign: 'center', color: '#A5A5B2' }}>
+              <Bike size={32} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
+              <h4 style={{ fontSize: '15px', fontWeight: 700, color: '#FFFFFF', margin: 0 }}>No completed trips found</h4>
+              <p style={{ fontSize: '12px', marginTop: '6px' }}>Delivered orders will appear in your trip log history.</p>
+            </div>
+          ) : (
+            tripsList.map((trip) => (
             <div
               key={trip.id}
               style={{
@@ -281,7 +221,7 @@ export const RiderTripsModal: React.FC<RiderTripsModalProps> = ({
                 </div>
               </div>
             </div>
-          ))}
+          )))}
         </div>
 
         {/* Footer */}

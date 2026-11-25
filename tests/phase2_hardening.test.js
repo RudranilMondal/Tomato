@@ -34,8 +34,6 @@ test('PHASE 2.1: Real Authentication & Isolated Demo Fallbacks', async (t) => {
   await t.test('UnifiedAuthModal sends phone OTP via Supabase without simulated bypass on real input', () => {
     assert.ok(unifiedContent.includes('supabase.auth.signInWithOtp'), 'Must call signInWithOtp on real input');
     assert.ok(unifiedContent.includes('supabase.auth.verifyOtp'), 'Must call verifyOtp for SMS');
-    assert.ok(unifiedContent.includes('⚡ Quick Demo Login (Dev Only)'), 'Must isolate demo bypass to labeled dev section');
-    assert.ok(unifiedContent.includes('handleExplicitDevLogin'), 'Must have explicit dev login handler');
   });
 
   await t.test('UnifiedAuthModal implements real Email and Google OAuth flows', () => {
@@ -43,10 +41,8 @@ test('PHASE 2.1: Real Authentication & Isolated Demo Fallbacks', async (t) => {
     assert.ok(unifiedContent.includes('54324'), 'Must direct local developers to Mailpit for magic link preview');
   });
 
-  await t.test('RiderAuthModal and AuthScreen isolate dev demo access', () => {
-    assert.ok(riderAuthContent.includes('⚡ Quick Demo Login (Dev Only)'), 'Rider modal must label dev demo');
+  await t.test('RiderAuthModal and AuthScreen enforce real Supabase and OAuth flows', () => {
     assert.ok(riderAuthContent.includes('supabase.auth.signInWithOtp'), 'Rider modal must use real Supabase OTP on input');
-    assert.ok(customerAuthContent.includes('⚡ Quick Demo Customer Login'), 'Customer screen must label dev demo');
     assert.ok(customerAuthContent.includes('signInWithGoogleFirebase') || customerAuthContent.includes('signInWithOAuth'), 'Customer screen must use real Google OAuth');
   });
 });

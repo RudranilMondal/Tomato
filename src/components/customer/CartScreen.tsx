@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTomattto } from '../../context/TomatttoContext';
 import { COUPONS } from '../../data/mockData';
+import { PRICING_CONFIG } from '../../config/pricing';
 import {
   ArrowLeft,
   Plus,
@@ -34,12 +35,16 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onOpenPayment }) => {
     removeCoupon,
     setCustomerScreen,
     selectedAddress,
-    isLoggedIn
+    isLoggedIn,
+    selectedTip,
+    setSelectedTip
   } = useTomattto();
 
   const [couponCodeInput, setCouponCodeInput] = useState('');
   const [couponError, setCouponError] = useState('');
-  const [tip, setTip] = useState<number>(30);
+  const [customTipValue, setCustomTipValue] = useState<string>('');
+  const [isCustomTipActive, setIsCustomTipActive] = useState<boolean>(false);
+  const [customTipError, setCustomTipError] = useState<string>('');
   const [deliveryInstruction, setDeliveryInstruction] = useState<string>('Leave at door');
   const [isOffersModalOpen, setIsOffersModalOpen] = useState(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
@@ -109,16 +114,17 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onOpenPayment }) => {
   const discountAmount = appliedCoupon
     ? Math.min(appliedCoupon.maxDiscount, (cartTotal * appliedCoupon.discountPercentage) / 100)
     : 0;
-  const deliveryFee = appliedCoupon?.code === 'FREESHIP' ? 0 : 35;
-  const platformFee = 5;
+  const deliveryFee = appliedCoupon?.code === 'FREESHIP' ? 0 : PRICING_CONFIG.CUSTOMER_DELIVERY_FEE;
+  const platformFee = PRICING_CONFIG.CUSTOMER_PLATFORM_FEE;
   const taxAmount = Math.round(cartTotal * 0.05);
-  const toPayTotal = cartTotal - discountAmount + deliveryFee + platformFee + taxAmount + tip;
+  const tip = selectedTip || 0;
+  const toPayTotal = Math.max(0, cartTotal - discountAmount + deliveryFee + platformFee + taxAmount + tip);
 
   const handleApplyCoupon = (code: string) => {
     setCouponError('');
     const success = applyCoupon(code);
     if (!success) {
-      setCouponError('Invalid coupon code. Try G1BITES50');
+      setCouponError('Invalid coupon code. Try TOMATTTO50');
     }
   };
 
@@ -499,32 +505,151 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onOpenPayment }) => {
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
             <h4 style={{ fontSize: '13px', fontWeight: 800 }}>Say Thanks with a Tip</h4>
-            <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>100% goes to your rider</span>
+            <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>100% goes directly to your rider</span>
           </div>
 
-          <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-            {[20, 30, 50].map((amt) => {
-              const isSelected = tip === amt;
+          <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
+            {PRICING_CONFIG.PREDEFINED_TIPS.map((amt) => {
+              const isSelected = selectedTip === amt && !isCustomTipActive;
               return (
                 <button
                   key={amt}
-                  onClick={() => setTip(isSelected ? 0 : amt)}
+                  type="button"
+                  onClick={() => {
+                    setIsCustomTipActive(false);
+                    setCustomTipValue('');
+                    setCustomTipError('');
+                    setSelectedTip(isSelected ? 0 : amt);
+                  }}
                   style={{
-                    flex: 1,
+                    flex: '1 1 65px',
                     padding: '8px',
                     borderRadius: 'var(--radius-sm)',
                     backgroundColor: isSelected ? 'var(--color-primary-light)' : 'var(--color-surface-muted)',
                     border: isSelected ? '1.5px solid var(--color-primary)' : '1px solid var(--color-border)',
                     color: isSelected ? 'var(--color-primary)' : 'var(--color-text-main)',
                     fontSize: '13px',
-                    fontWeight: 700
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
                   }}
                 >
-                  ₹{amt}
+                  {isSelected ? `✓ ₹${amt}` : `₹${amt}`}
                 </button>
               );
             })}
+
+            {/* Custom Tip Toggle Button */}
+            <button
+              type="button"
+              onClick={() => {
+                const nextActive = !isCustomTipActive;
+                setIsCustomTipActive(nextActive);
+                setCustomTipError('');
+                if (!nextActive && selectedTip > 0 && !PRICING_CONFIG.PREDEFINED_TIPS.includes(selectedTip as any)) {
+                  setSelectedTip(0);
+                  setCustomTipValue('');
+                }
+              }}
+              style={{
+                flex: '1 1 95px',
+                padding: '8px',
+                borderRadius: 'var(--radius-sm)',
+                backgroundColor: isCustomTipActive ? 'var(--color-primary-light)' : 'var(--color-surface-muted)',
+                border: isCustomTipActive ? '1.5px solid var(--color-primary)' : '1px solid var(--color-border)',
+                color: isCustomTipActive ? 'var(--color-primary)' : 'var(--color-text-main)',
+                fontSize: '12px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              {isCustomTipActive && selectedTip > 0 && !PRICING_CONFIG.PREDEFINED_TIPS.includes(selectedTip as any)
+                ? `✓ Custom ₹${selectedTip}`
+                : isCustomTipActive
+                ? 'Custom Tip'
+                : '+ Custom Tip'}
+            </button>
           </div>
+
+          {/* Custom Tip Input Tray */}
+          {isCustomTipActive && (
+            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed var(--color-border)' }}>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <div style={{ position: 'relative', flex: 1 }}>
+                  <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontWeight: 800, color: 'var(--color-text-muted)', fontSize: '13px' }}>₹</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="2000"
+                    step="1"
+                    placeholder="Enter tip (e.g. 15, 45, 100)"
+                    value={customTipValue}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCustomTipValue(val);
+                      const num = parseInt(val, 10);
+                      if (val === '') {
+                        setCustomTipError('');
+                        setSelectedTip(0);
+                      } else if (isNaN(num) || num <= 0) {
+                        setCustomTipError('Tip must be a positive amount');
+                        setSelectedTip(0);
+                      } else {
+                        setCustomTipError('');
+                        setSelectedTip(num);
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px 8px 24px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: customTipError ? '1px solid var(--color-nonveg)' : '1px solid var(--color-border)',
+                      backgroundColor: 'var(--color-surface-muted)',
+                      color: 'var(--color-text-main)',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      outline: 'none'
+                    }}
+                  />
+                </div>
+
+                {selectedTip > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedTip(0);
+                      setCustomTipValue('');
+                      setIsCustomTipActive(false);
+                      setCustomTipError('');
+                    }}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius-sm)',
+                      backgroundColor: 'var(--color-surface-muted)',
+                      border: '1px solid var(--color-border)',
+                      color: 'var(--color-text-muted)',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              {customTipError ? (
+                <span style={{ fontSize: '11px', color: 'var(--color-nonveg)', display: 'block', marginTop: '4px' }}>
+                  {customTipError}
+                </span>
+              ) : selectedTip > 0 && isCustomTipActive ? (
+                <span style={{ fontSize: '11px', color: 'var(--color-veg)', fontWeight: 700, display: 'block', marginTop: '4px' }}>
+                  ✓ ₹{selectedTip} rider tip will be added to Grand Total
+                </span>
+              ) : null}
+            </div>
+          )}
         </div>
 
         {/* Delivery Instructions Chips */}
@@ -596,7 +721,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onOpenPayment }) => {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--color-text-muted)' }}>
-              <span>Taxes & Restaurant Charges (5%)</span>
+              <span>Taxes & Restaurant Charges</span>
               <span style={{ color: 'var(--color-text-main)', fontWeight: 600 }}>₹{taxAmount}</span>
             </div>
 
@@ -692,8 +817,8 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onOpenPayment }) => {
         }}
       >
         <div>
-          <div style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--color-text-muted)', fontWeight: 700 }}>
-            Total Amount
+          <div style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--color-text-muted)', fontWeight: 800, letterSpacing: '0.05em' }}>
+            TO PAY
           </div>
           <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--color-primary)' }}>
             ₹{toPayTotal}

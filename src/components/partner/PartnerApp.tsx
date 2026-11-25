@@ -1,11 +1,36 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { useTomattto } from '../../context/TomatttoContext';
-import { Order } from '../../types';
+import { Restaurant, Order } from '../../types';
+import { PRICING_CONFIG } from '../../config/pricing';
+import { RouteLoadingFallback } from '../common/LoadingFallback';
+
+// Lazy-load the heavy onboarding wizard
+const RestaurantOnboardingWizard = lazy(() =>
+  import('./RestaurantOnboardingWizard').then((m) => ({ default: m.RestaurantOnboardingWizard }))
+);
+
+const DEFAULT_EMPTY_RESTAURANT: Restaurant = {
+  id: '',
+  name: 'Partner Kitchen',
+  slug: 'partner-kitchen',
+  tagline: 'Partner Order Management',
+  description: 'Verified partner kitchen',
+  coverImage: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&auto=format&fit=crop&q=80',
+  rating: 5.0,
+  ratingCount: 0,
+  prepTimeMinutes: 20,
+  costForTwo: 300,
+  isPureVeg: false,
+  isOpen: true,
+  address: 'Partner Outlet Location',
+  distanceKm: 0,
+  cuisines: ['Multi-cuisine'],
+  categories: []
+};
 import { AddDishModal } from './AddDishModal';
 import { KitchenTicketModal } from './KitchenTicketModal';
 import { RejectOrderModal } from './RejectOrderModal';
 import { OutletProfileModal } from './OutletProfileModal';
-import { RestaurantOnboardingWizard } from './RestaurantOnboardingWizard';
 import { PartnerApplicationStatus } from './PartnerApplicationStatus';
 import { UnifiedAuthModal } from '../auth/UnifiedAuthModal';
 import {
@@ -58,6 +83,7 @@ export const PartnerApp: React.FC = () => {
     restaurants,
     incomingOrder,
     partnerOrders,
+    allOrders,
     partnerAcceptOrder,
     partnerStartPreparing,
     partnerMarkReady,
@@ -72,7 +98,8 @@ export const PartnerApp: React.FC = () => {
     switchPartnerRestaurant,
     partnerRestaurants,
     selectedPartnerRestaurant,
-    allRestaurantApplications
+    allRestaurantApplications,
+    reviews
   } = useTomattto();
 
   const [activeTab, setActiveTab] = useState<'orders' | 'menu' | 'earnings' | 'reviews' | 'marketing' | 'analytics' | 'application_status'>('orders');
@@ -173,12 +200,155 @@ export const PartnerApp: React.FC = () => {
   const [newPromoMin, setNewPromoMin] = useState('349');
 
   // Partner reviews & replies state
-  const [merchantReplies, setMerchantReplies] = useState<Record<string, string>>({
-    'rev-1': 'Thank you Ananya! We slow-cook our gosht for 4 hours. Glad you loved the dum aroma!'
-  });
+  const [merchantReplies, setMerchantReplies] = useState<Record<string, string>>({});
   const [replyInput, setReplyInput] = useState<Record<string, string>>({});
 
-  const restaurant = selectedPartnerRestaurant || selectedRestaurant || restaurants[0];
+  const restaurant = selectedPartnerRestaurant || selectedRestaurant || (restaurants.length > 0 ? restaurants[0] : DEFAULT_EMPTY_RESTAURANT);
+
+  // Strict Restaurant-Level Data Isolation: isolate orders to authenticated restaurant
+  const restaurantOrders = React.useMemo(() => {
+    if (!restaurant?.id && !restaurant?.name) return [];
+    const combined = [...partnerOrders, ...(allOrders || [])];
+    const seen = new Set<string>();
+    return combined.filter((o) => {
+      if (!o || !o.id || seen.has(o.id)) return false;
+      seen.add(o.id);
+      const orderRestId = o.restaurant?.id || (o as any).restaurantId || (o as any).restaurant_id;
+      if (orderRestId && restaurant.id) {
+        return orderRestId === restaurant.id;
+      }
+      if (o.restaurant?.name && restaurant.name) {
+        return o.restaurant.name.toLowerCase() === restaurant.name.toLowerCase();
+      }
+      return false;
+    });
+  }, [partnerOrders, allOrders, restaurant?.id, restaurant?.name]);
+
+  // Isolate verified reviews to the current restaurant orders
+  const restaurantOrderIds = React.useMemo(
+    () => new Set(restaurantOrders.map((o) => o.id)),
+    [restaurantOrders]
+  );
+
+  const restaurantReviews = React.useMemo(() => {
+    return (reviews || []).filter((r) => restaurantOrderIds.has(r.orderId) && r.restaurantRating > 0);
+  }, [reviews, restaurantOrderIds]);
+
+  const averageRating = React.useMemo(() => {
+    if (restaurantReviews.length === 0) return null;
+    const sum = restaurantReviews.reduce((acc, r) => acc + r.restaurantRating, 0);
+    return Number((sum / restaurantReviews.length).toFixed(1));
+  }, [restaurantReviews]);
+
+  // Top selling dishes derived strictly from genuine orders
+  const topSellingDishes = React.useMemo(() => {
+    const itemMap = new Map<string, { name: string; qty: number; revenue: number }>();
+    restaurantOrders.forEach((order) => {
+      if (order.status === 'rejected' || order.status === 'cancelled') return;
+      (order.items || []).forEach((item) => {
+        const name = item.menuItem?.name || (item as any).name || 'Dish';
+        const qty = item.quantity || 1;
+        const price = item.itemTotal ? item.itemTotal / qty : (item.menuItem?.discountPrice || item.menuItem?.price || (item as any).price || 0);
+        const existing = itemMap.get(name) || { name, qty: 0, revenue: 0 };
+        existing.qty += qty;
+        existing.revenue += (item.itemTotal || price * qty);
+        itemMap.set(name, existing);
+      });
+    });
+    return Array.from(itemMap.values())
+      .sort((a, b) => b.qty - a.qty || b.revenue - a.revenue)
+      .slice(0, 5)
+      .map((dish, idx) => ({ rank: idx + 1, ...dish }));
+  }, [restaurantOrders]);
+
+  // Customer sentiment metrics derived strictly from genuine verified customer reviews
+  const sentimentMetrics = React.useMemo(() => {
+    if (restaurantReviews.length === 0) return [];
+    const total = restaurantReviews.length;
+    const highRatings = restaurantReviews.filter((r) => r.restaurantRating >= 4).length;
+    const satisfactionRate = Math.round((highRatings / total) * 100);
+
+    const fiveStars = restaurantReviews.filter((r) => r.restaurantRating === 5).length;
+    const fiveStarRate = Math.round((fiveStars / total) * 100);
+
+    const tasteTags = restaurantReviews.filter((r) => r.tags?.some((t) => t.toLowerCase().includes('taste') || t.toLowerCase().includes('delicious'))).length;
+    const packTags = restaurantReviews.filter((r) => r.tags?.some((t) => t.toLowerCase().includes('pack') || t.toLowerCase().includes('spill'))).length;
+    const hotTags = restaurantReviews.filter((r) => r.tags?.some((t) => t.toLowerCase().includes('hot') || t.toLowerCase().includes('steam'))).length;
+
+    const metrics: { label: string; score: string; val: number; color: string }[] = [
+      {
+        label: 'Overall Satisfaction (4★ & 5★ Ratings)',
+        score: `${satisfactionRate}% Positive`,
+        val: satisfactionRate,
+        color: satisfactionRate >= 80 ? 'var(--color-veg)' : satisfactionRate >= 60 ? '#F39C12' : '#E74C3C'
+      },
+      {
+        label: '5-Star Excellence Rating',
+        score: `${fiveStarRate}% of Reviews`,
+        val: fiveStarRate,
+        color: 'var(--color-veg)'
+      }
+    ];
+
+    if (tasteTags > 0) {
+      const tastePct = Math.round((tasteTags / total) * 100);
+      metrics.push({
+        label: 'Taste & Flavor Commendations',
+        score: `${tastePct}% of Reviews`,
+        val: tastePct,
+        color: 'var(--color-veg)'
+      });
+    }
+
+    if (packTags > 0) {
+      const packPct = Math.round((packTags / total) * 100);
+      metrics.push({
+        label: 'Packaging & Zero Spillage Commendations',
+        score: `${packPct}% of Reviews`,
+        val: packPct,
+        color: '#3498DB'
+      });
+    }
+
+    if (hotTags > 0) {
+      const hotPct = Math.round((hotTags / total) * 100);
+      metrics.push({
+        label: 'Food Temperature Commendations',
+        score: `${hotPct}% of Reviews`,
+        val: hotPct,
+        color: '#F39C12'
+      });
+    }
+
+    return metrics;
+  }, [restaurantReviews]);
+
+  // Hourly volume distribution derived strictly from genuine orders
+  const hourlyDistribution = React.useMemo(() => {
+    const slots = [
+      { time: '12 PM', hour: 12, orders: 0 },
+      { time: '1 PM', hour: 13, orders: 0 },
+      { time: '2 PM', hour: 14, orders: 0 },
+      { time: '5 PM', hour: 17, orders: 0 },
+      { time: '7 PM', hour: 19, orders: 0 },
+      { time: '8 PM', hour: 20, orders: 0 },
+      { time: '9 PM', hour: 21, orders: 0 }
+    ];
+    restaurantOrders.forEach((o) => {
+      if (o.createdAt) {
+        const h = new Date(o.createdAt).getHours();
+        const match = slots.find((s) => s.hour === h) || slots[slots.length - 1];
+        if (match) match.orders += 1;
+      }
+    });
+    const maxOrders = Math.max(...slots.map((s) => s.orders), 1);
+    return slots.map((s) => ({
+      time: s.time,
+      orders: s.orders,
+      height: s.orders > 0 ? `${Math.round((s.orders / maxOrders) * 100)}%` : '4px',
+      isPeak: s.orders > 0 && s.orders === maxOrders
+    }));
+  }, [restaurantOrders]);
 
   // Sound chime when incoming order arrives
   useEffect(() => {
@@ -204,7 +374,11 @@ export const PartnerApp: React.FC = () => {
 
   // If user opens the Become a Restaurant Partner Onboarding Wizard
   if (isOnboardingOpen) {
-    return <RestaurantOnboardingWizard onBack={() => setIsOnboardingOpen(false)} />;
+    return (
+      <Suspense fallback={<RouteLoadingFallback label="Loading Onboarding Wizard..." />}>
+        <RestaurantOnboardingWizard onBack={() => setIsOnboardingOpen(false)} />
+      </Suspense>
+    );
   }
 
   // 1. Unauthenticated or Not Registered: Render Partner Portal Gateway
@@ -240,10 +414,10 @@ export const PartnerApp: React.FC = () => {
                 boxShadow: '0 8px 24px rgba(255, 75, 58, 0.4)'
               }}
             >
-              <img src="/logo.png" alt="G1Bites" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <img src="/logo.png" alt="Tomattto" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
             <h1 style={{ fontSize: '30px', fontWeight: 900, margin: '0 0 10px', letterSpacing: '-0.5px' }}>
-              G1Bites Merchant Partner Portal
+              Tomattto Merchant Partner Portal
             </h1>
             <p style={{ fontSize: '15px', color: '#9CA3AF', margin: 0, maxWidth: '580px', marginInline: 'auto', lineHeight: 1.5 }}>
               Manage your live kitchen tickets, menu availability, multi-outlet analytics, and daily earnings on India’s fastest food delivery network.
@@ -311,7 +485,7 @@ export const PartnerApp: React.FC = () => {
                   Existing Restaurant Partner Login
                 </h2>
                 <p style={{ fontSize: '13px', color: '#9CA3AF', margin: '0 0 20px', lineHeight: 1.5 }}>
-                  Already registered your kitchen with G1Bites? Log in with your registered phone number, OTP, email, or Google to manage your store directly.
+                  Already registered your kitchen with Tomattto? Log in with your registered phone number, OTP, email, or Google to manage your store directly.
                 </p>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px' }}>
@@ -409,7 +583,7 @@ export const PartnerApp: React.FC = () => {
                   Become a Restaurant Partner
                 </h2>
                 <p style={{ fontSize: '13px', color: '#9CA3AF', margin: '0 0 20px', lineHeight: 1.5 }}>
-                  Expand your business reach. Partner with G1Bites to receive online orders, leverage our high-speed delivery fleet, and grow your brand.
+                  Expand your business reach. Partner with Tomattto to receive online orders, leverage our high-speed delivery fleet, and grow your brand.
                 </p>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px' }}>
@@ -571,7 +745,7 @@ export const PartnerApp: React.FC = () => {
             Application Under Review
           </h2>
           <p style={{ fontSize: '13px', color: '#9CA3AF', textAlign: 'center', margin: '0 0 24px', lineHeight: 1.5 }}>
-            Thank you for applying to partner with G1Bites. Your documents and FSSAI credentials are currently being verified by our compliance team.
+            Thank you for applying to partner with Tomattto. Your documents and FSSAI credentials are currently being verified by our compliance team.
           </p>
 
           <div style={{ backgroundColor: '#101014', borderRadius: '12px', padding: '16px', marginBottom: '24px' }}>
@@ -1045,7 +1219,7 @@ export const PartnerApp: React.FC = () => {
                 cursor: 'pointer',
                 boxShadow: '0 2px 8px var(--color-primary-glow)'
               }}
-              title="Register a new restaurant or outlet with G1Bites"
+              title="Register a new restaurant or outlet with Tomattto"
             >
               <Plus size={13} />
               <span>Become a Partner</span>
@@ -1152,21 +1326,21 @@ export const PartnerApp: React.FC = () => {
           <div>
             <span style={{ fontSize: '10px', color: '#A5A5B2', display: 'block' }}>Today's Orders</span>
             <span style={{ fontSize: '17px', fontWeight: 800, color: '#FFFFFF' }}>
-              {partnerOrders.length + 18}
+              {restaurantOrders.length}
             </span>
           </div>
 
           <div>
             <span style={{ fontSize: '10px', color: '#A5A5B2', display: 'block' }}>Revenue (Gross)</span>
             <span style={{ fontSize: '17px', fontWeight: 800, color: 'var(--color-veg)' }}>
-              ₹12,480
+              ₹{restaurantOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0).toLocaleString('en-IN')}
             </span>
           </div>
 
           <div>
             <span style={{ fontSize: '10px', color: '#A5A5B2', display: 'block' }}>Avg Prep Time</span>
             <span style={{ fontSize: '17px', fontWeight: 800, color: '#FFB400' }}>
-              19 mins
+              {restaurantOrders.length > 0 ? `${restaurant.prepTimeMinutes || 20} mins` : '--'}
             </span>
           </div>
         </div>
@@ -1188,7 +1362,7 @@ export const PartnerApp: React.FC = () => {
             { id: 'marketing', label: 'Promotions & Ads', icon: <Tag size={14} /> },
             { id: 'analytics', label: 'Live Analytics', icon: <BarChart2 size={14} /> },
             { id: 'earnings', label: 'Payouts', icon: <DollarSign size={14} /> },
-            { id: 'reviews', label: 'Reviews (4.7 ★)', icon: <MessageSquare size={14} /> },
+            { id: 'reviews', label: averageRating !== null ? `Reviews (${averageRating.toFixed(1)} ★)` : 'Reviews', icon: <MessageSquare size={14} /> },
             { id: 'application_status', label: 'Application Status', icon: <FileText size={14} /> }
           ].map((tab) => {
             const isActive = activeTab === tab.id;
@@ -1428,13 +1602,13 @@ export const PartnerApp: React.FC = () => {
         {/* Tab 1: Live Restaurant Partner Orders Dashboard */}
         {activeTab === 'orders' && (() => {
           const counts = {
-            all: partnerOrders.length,
-            placed: partnerOrders.filter((o) => o.status === 'placed').length,
-            accepted: partnerOrders.filter((o) => o.status === 'accepted').length,
-            preparing: partnerOrders.filter((o) => o.status === 'preparing').length,
-            ready: partnerOrders.filter((o) => o.status === 'ready' || o.status === 'rider_assigned').length,
-            delivered: partnerOrders.filter((o) => o.status === 'delivered' || o.status === 'picked_up' || o.status === 'out_for_delivery').length,
-            rejected: partnerOrders.filter((o) => o.status === 'rejected' || o.status === 'cancelled').length
+            all: restaurantOrders.length,
+            placed: restaurantOrders.filter((o) => o.status === 'placed').length,
+            accepted: restaurantOrders.filter((o) => o.status === 'accepted').length,
+            preparing: restaurantOrders.filter((o) => o.status === 'preparing').length,
+            ready: restaurantOrders.filter((o) => o.status === 'ready' || o.status === 'rider_assigned').length,
+            delivered: restaurantOrders.filter((o) => o.status === 'delivered' || o.status === 'picked_up' || o.status === 'out_for_delivery').length,
+            rejected: restaurantOrders.filter((o) => o.status === 'rejected' || o.status === 'cancelled').length
           };
 
           const filterOptions: { id: typeof orderFilter; label: string; count: number; badgeColor?: string }[] = [
@@ -1448,7 +1622,7 @@ export const PartnerApp: React.FC = () => {
           ];
 
           const getFilteredOrders = (statusCategory: typeof orderFilter) => {
-            let list = partnerOrders;
+            let list = restaurantOrders;
             if (statusCategory === 'placed') list = list.filter((o) => o.status === 'placed');
             else if (statusCategory === 'accepted') list = list.filter((o) => o.status === 'accepted');
             else if (statusCategory === 'preparing') list = list.filter((o) => o.status === 'preparing');
@@ -2368,36 +2542,119 @@ export const PartnerApp: React.FC = () => {
           </div>
         )}
 
-        {/* Tab 3: Payouts */}
-        {activeTab === 'earnings' && (
-          <div
-            style={{
-              backgroundColor: 'var(--color-surface)',
-              borderRadius: 'var(--radius-lg)',
-              padding: '24px',
-              border: '1px solid var(--color-border)'
-            }}
-          >
-            <h3 style={{ fontSize: '17px', fontWeight: 800, marginBottom: '6px' }}>Settlements & Payouts</h3>
-            <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '20px' }}>
-              Automatic daily settlements directly into HDFC Bank Account (ending in 8912)
-            </p>
+        {/* Tab 3: Payouts & Commission */}
+        {activeTab === 'earnings' && (() => {
+          const completedOrders = restaurantOrders.filter((o) => o.status === 'delivered');
+          const cancelledOrders = restaurantOrders.filter((o) => o.status === 'rejected' || o.status === 'cancelled');
+          const grossSales = completedOrders.reduce((sum, o) => sum + (o.itemTotal || 0), 0);
+          const totalCommission = completedOrders.length * PRICING_CONFIG.RESTAURANT_COMMISSION_PER_ORDER;
+          const netSettlement = Math.max(0, grossSales - totalCommission);
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
-              <div style={{ padding: '16px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-surface-muted)' }}>
-                <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Pending Settlement (Today)</span>
-                <h4 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--color-veg)', marginTop: '4px' }}>₹10,234</h4>
-                <p style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '2px' }}>Net of 18% G1Bites commission</p>
+          return (
+            <div
+              style={{
+                backgroundColor: 'var(--color-surface)',
+                borderRadius: 'var(--radius-lg)',
+                padding: '24px',
+                border: '1px solid var(--color-border)'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                <div>
+                  <h3 style={{ fontSize: '17px', fontWeight: 800, marginBottom: '4px' }}>Settlements & Commission Ledger</h3>
+                  <p style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                    Daily automated net settlements. Platform Commission: <b>₹{PRICING_CONFIG.RESTAURANT_COMMISSION_PER_ORDER} flat per completed order</b>.
+                  </p>
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--color-veg)', backgroundColor: 'rgba(46, 204, 113, 0.1)', padding: '6px 12px', borderRadius: 'var(--radius-full)', fontWeight: 700 }}>
+                  ₹0 Commission on Cancelled / Rejected Orders
+                </div>
               </div>
 
-              <div style={{ padding: '16px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-surface-muted)' }}>
-                <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Last Payout Dispatched</span>
-                <h4 style={{ fontSize: '20px', fontWeight: 800, marginTop: '4px' }}>₹18,450</h4>
-                <p style={{ fontSize: '10px', color: 'var(--color-veg)', marginTop: '2px' }}>✓ Settled yesterday at 11:30 PM</p>
+              {/* 4 Financial KPI Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '24px' }}>
+                <div style={{ padding: '16px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-surface-muted)', border: '1px solid var(--color-border)' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Gross Food Sales ({completedOrders.length} orders)</span>
+                  <h4 style={{ fontSize: '22px', fontWeight: 800, marginTop: '4px' }}>₹{grossSales}</h4>
+                  <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>Total item value before deductions</p>
+                </div>
+
+                <div style={{ padding: '16px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-surface-muted)', border: '1px solid var(--color-border)' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Platform Commission (@ ₹10/order)</span>
+                  <h4 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--color-primary)', marginTop: '4px' }}>-₹{totalCommission}</h4>
+                  <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>₹10 deducted per delivered order</p>
+                </div>
+
+                <div style={{ padding: '16px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-surface-muted)', border: '1px solid var(--color-border)' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Cancelled Orders (Zero Fee)</span>
+                  <h4 style={{ fontSize: '22px', fontWeight: 800, marginTop: '4px' }}>{cancelledOrders.length}</h4>
+                  <p style={{ fontSize: '11px', color: 'var(--color-veg)', marginTop: '2px' }}>✓ No commission charged</p>
+                </div>
+
+                <div style={{ padding: '16px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-surface-muted)', border: '1.5px solid var(--color-veg)' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--color-veg)', fontWeight: 700 }}>Net Payable Settlement</span>
+                  <h4 style={{ fontSize: '22px', fontWeight: 900, color: 'var(--color-veg)', marginTop: '4px' }}>₹{netSettlement}</h4>
+                  <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>Deposited directly into registered bank</p>
+                </div>
+              </div>
+
+              {/* Order-by-Order Settlement Passbook */}
+              <h4 style={{ fontSize: '14px', fontWeight: 800, marginBottom: '10px' }}>Order Settlement Passbook</h4>
+              <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: 'var(--color-surface-muted)', textAlign: 'left', borderBottom: '1px solid var(--color-border)' }}>
+                      <th style={{ padding: '10px 12px' }}>Order ID</th>
+                      <th style={{ padding: '10px 12px' }}>Status</th>
+                      <th style={{ padding: '10px 12px' }}>Item Total</th>
+                      <th style={{ padding: '10px 12px' }}>Tomattto Commission</th>
+                      <th style={{ padding: '10px 12px' }}>Net Merchant Payout</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {restaurantOrders.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
+                          No orders recorded yet. Completed orders will appear in your settlement passbook here.
+                        </td>
+                      </tr>
+                    ) : (
+                      restaurantOrders.map((ord) => {
+                        const isDelivered = ord.status === 'delivered';
+                        const commission = isDelivered ? PRICING_CONFIG.RESTAURANT_COMMISSION_PER_ORDER : 0;
+                        const netPay = isDelivered ? Math.max(0, ord.itemTotal - commission) : 0;
+                        return (
+                          <tr key={ord.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                            <td style={{ padding: '10px 12px', fontWeight: 700 }}>#{ord.id}</td>
+                            <td style={{ padding: '10px 12px' }}>
+                              <span style={{
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                backgroundColor: isDelivered ? 'rgba(46, 204, 113, 0.15)' : 'rgba(231, 76, 60, 0.1)',
+                                color: isDelivered ? 'var(--color-veg)' : 'var(--color-nonveg)'
+                              }}>
+                                {ord.status.toUpperCase()}
+                              </span>
+                            </td>
+                            <td style={{ padding: '10px 12px', fontWeight: 600 }}>₹{ord.itemTotal}</td>
+                            <td style={{ padding: '10px 12px', color: isDelivered ? 'var(--color-primary)' : 'var(--color-text-muted)', fontWeight: 600 }}>
+                              {isDelivered ? `-₹${commission}` : '₹0 (Waived)'}
+                            </td>
+                            <td style={{ padding: '10px 12px', fontWeight: 800, color: isDelivered ? 'var(--color-veg)' : 'var(--color-text-muted)' }}>
+                              ₹{netPay}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Tab 4: Customer Reviews & Merchant Reply */}
         {activeTab === 'reviews' && (
@@ -2417,135 +2674,142 @@ export const PartnerApp: React.FC = () => {
                 </p>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#27AE60', color: '#FFFFFF', padding: '6px 12px', borderRadius: 'var(--radius-md)', fontSize: '13px', fontWeight: 800 }}>
-                <span>4.7</span>
-                <Star size={13} fill="#FFFFFF" />
-                <span style={{ fontSize: '11px', opacity: 0.9 }}>(2,840 verified ratings)</span>
-              </div>
+              {restaurantReviews.length > 0 && averageRating !== null ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#27AE60', color: '#FFFFFF', padding: '6px 12px', borderRadius: 'var(--radius-md)', fontSize: '13px', fontWeight: 800 }}>
+                  <span>{averageRating.toFixed(1)}</span>
+                  <Star size={13} fill="#FFFFFF" />
+                  <span style={{ fontSize: '11px', opacity: 0.9 }}>({restaurantReviews.length} verified ratings)</span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-surface-muted)', color: 'var(--color-text-muted)', padding: '6px 12px', borderRadius: 'var(--radius-md)', fontSize: '12px', fontWeight: 700, border: '1px solid var(--color-border)' }}>
+                  <span>No ratings yet</span>
+                  <span style={{ fontSize: '11px', opacity: 0.8 }}>(0 verified ratings)</span>
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {[
-                {
-                  id: 'rev-1',
-                  customer: 'Ananya Roy',
-                  rating: 5,
-                  time: 'Yesterday at 8:45 PM',
-                  dish: 'Dum Gosht Biryani (Mutton)',
-                  review: 'Heavenly aroma! The meat literally melted in my mouth, authentic dum style spices. Packaging was neat and spill-proof.'
-                },
-                {
-                  id: 'rev-2',
-                  customer: 'Karthik Nair',
-                  rating: 5,
-                  time: '2 days ago',
-                  dish: 'Murgh Makhani Biryani + Kefta Kebab',
-                  review: 'Fastest delivery in Indiranagar! Food was steaming hot and kebabs were succulent.'
-                },
-                {
-                  id: 'rev-3',
-                  customer: 'Sneha Patel',
-                  rating: 4,
-                  time: '3 days ago',
-                  dish: 'Zaikedaar Paneer Biryani',
-                  review: 'Very good flavor, fresh paneer. Would love slightly more salan gravy with the portion!'
-                }
-              ].map((rev) => (
+              {restaurantReviews.length === 0 ? (
                 <div
-                  key={rev.id}
                   style={{
                     backgroundColor: 'var(--color-surface-muted)',
                     borderRadius: 'var(--radius-md)',
-                    padding: '16px',
+                    padding: '36px 20px',
+                    textAlign: 'center',
                     border: '1px solid var(--color-border)'
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '14px', fontWeight: 800 }}>{rev.customer}</span>
-                        <CheckCircle2 size={13} color="var(--color-veg)" />
-                      </div>
-                      <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{rev.time} • Ordered: {rev.dish}</span>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '2px', color: '#F39C12' }}>
-                      {[...Array(rev.rating)].map((_, i) => (
-                        <Star key={i} size={13} fill="#F39C12" />
-                      ))}
-                    </div>
-                  </div>
-
-                  <p style={{ fontSize: '13px', color: 'var(--color-text-main)', margin: '0 0 12px', lineHeight: 1.4 }}>
-                    "{rev.review}"
+                  <div style={{ fontSize: '28px', marginBottom: '8px' }}>💬</div>
+                  <h4 style={{ fontSize: '14px', fontWeight: 800, margin: 0, color: 'var(--color-text-main)' }}>
+                    No customer reviews yet
+                  </h4>
+                  <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', margin: '4px 0 0' }}>
+                    Reviews from verified customers will appear here once they complete and rate their orders.
                   </p>
-
-                  {/* Merchant Reply if exists */}
-                  {merchantReplies[rev.id] ? (
+                </div>
+              ) : (
+                restaurantReviews
+                  .map((rev) => (
                     <div
+                      key={rev.orderId}
                       style={{
-                        backgroundColor: 'rgba(255, 75, 58, 0.08)',
-                        borderRadius: 'var(--radius-sm)',
-                        padding: '10px 12px',
-                        borderLeft: '3px solid var(--color-primary)'
+                        backgroundColor: 'var(--color-surface-muted)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: '16px',
+                        border: '1px solid var(--color-border)'
                       }}
                     >
-                      <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--color-primary)', display: 'block' }}>
-                        Merchant Response:
-                      </span>
-                      <p style={{ fontSize: '12px', color: 'var(--color-text-main)', margin: '2px 0 0' }}>
-                        {merchantReplies[rev.id]}
-                      </p>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontSize: '14px', fontWeight: 800 }}>Customer (Order #{rev.orderId.slice(-6)})</span>
+                            <CheckCircle2 size={13} color="var(--color-veg)" />
+                          </div>
+                          <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                            {new Date(rev.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '2px', color: '#F39C12' }}>
+                          {[...Array(rev.restaurantRating)].map((_, i) => (
+                            <Star key={i} size={13} fill="#F39C12" />
+                          ))}
+                        </div>
+                      </div>
+
+                      {rev.comment && (
+                        <p style={{ fontSize: '13px', color: 'var(--color-text-main)', margin: '0 0 12px', lineHeight: 1.4 }}>
+                          "{rev.comment}"
+                        </p>
+                      )}
+
+                      {/* Merchant Reply if exists */}
+                      {merchantReplies[rev.orderId] ? (
+                        <div
+                          style={{
+                            backgroundColor: 'rgba(255, 75, 58, 0.08)',
+                            borderRadius: 'var(--radius-sm)',
+                            padding: '10px 12px',
+                            borderLeft: '3px solid var(--color-primary)'
+                          }}
+                        >
+                          <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--color-primary)', display: 'block' }}>
+                            Merchant Response:
+                          </span>
+                          <p style={{ fontSize: '12px', color: 'var(--color-text-main)', margin: '2px 0 0' }}>
+                            {merchantReplies[rev.orderId]}
+                          </p>
+                        </div>
+                      ) : (
+                        /* Reply Input Form */
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                          <input
+                            type="text"
+                            placeholder="Write a reply to this customer..."
+                            value={replyInput[rev.orderId] || ''}
+                            onChange={(e) => setReplyInput({ ...replyInput, [rev.orderId]: e.target.value })}
+                            style={{
+                              flex: 1,
+                              padding: '7px 12px',
+                              borderRadius: 'var(--radius-sm)',
+                              backgroundColor: 'var(--color-surface)',
+                              border: '1px solid var(--color-border)',
+                              fontSize: '12px',
+                              color: 'var(--color-text-main)'
+                            }}
+                          />
+                          <button
+                            onClick={() => {
+                              if (replyInput[rev.orderId]?.trim()) {
+                                setMerchantReplies({
+                                  ...merchantReplies,
+                                  [rev.orderId]: replyInput[rev.orderId].trim()
+                                });
+                                setReplyInput({ ...replyInput, [rev.orderId]: '' });
+                              }
+                            }}
+                            style={{
+                              padding: '7px 14px',
+                              borderRadius: 'var(--radius-sm)',
+                              backgroundColor: 'var(--color-primary)',
+                              color: '#FFFFFF',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              border: 'none',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <Send size={12} />
+                            <span>Reply</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    /* Reply Input Form */
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
-                      <input
-                        type="text"
-                        placeholder="Write a reply to this customer..."
-                        value={replyInput[rev.id] || ''}
-                        onChange={(e) => setReplyInput({ ...replyInput, [rev.id]: e.target.value })}
-                        style={{
-                          flex: 1,
-                          padding: '7px 12px',
-                          borderRadius: 'var(--radius-sm)',
-                          backgroundColor: 'var(--color-surface)',
-                          border: '1px solid var(--color-border)',
-                          fontSize: '12px',
-                          color: 'var(--color-text-main)'
-                        }}
-                      />
-                      <button
-                        onClick={() => {
-                          if (replyInput[rev.id]?.trim()) {
-                            setMerchantReplies({
-                              ...merchantReplies,
-                              [rev.id]: replyInput[rev.id].trim()
-                            });
-                            setReplyInput({ ...replyInput, [rev.id]: '' });
-                          }
-                        }}
-                        style={{
-                          padding: '7px 14px',
-                          borderRadius: 'var(--radius-sm)',
-                          backgroundColor: 'var(--color-primary)',
-                          color: '#FFFFFF',
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          border: 'none',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        <Send size={12} />
-                        <span>Reply</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
+                  ))
+              )}
             </div>
           </div>
         )}
@@ -2721,42 +2985,38 @@ export const PartnerApp: React.FC = () => {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                 <div>
-                  <h3 style={{ fontSize: '16px', fontWeight: 800 }}>Order Volume by Hour (Peak Times)</h3>
+                  <h3 style={{ fontSize: '16px', fontWeight: 800 }}>Order Volume by Hour</h3>
                   <p style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
-                    Busiest window: Dinner 8:00 PM - 10:30 PM (Indiranagar Delivery Zone)
+                    Hourly sales and peak rush distribution
                   </p>
                 </div>
-                <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--color-veg)' }}>
-                  +24% vs Last Thursday
-                </span>
               </div>
 
-              {/* Bar visualization */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '8px', alignItems: 'flex-end', height: '140px', paddingTop: '20px' }}>
-                {[
-                  { time: '12 PM', height: '55%', orders: 18 },
-                  { time: '1 PM', height: '80%', orders: 32 },
-                  { time: '2 PM', height: '65%', orders: 24 },
-                  { time: '5 PM', height: '30%', orders: 10 },
-                  { time: '7 PM', height: '70%', orders: 28 },
-                  { time: '8 PM', height: '100%', orders: 46 },
-                  { time: '9 PM', height: '90%', orders: 38 }
-                ].map((bar, idx) => (
-                  <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', height: '100%', justifyContent: 'flex-end' }}>
-                    <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-muted)' }}>{bar.orders}</span>
-                    <div
-                      style={{
-                        width: '100%',
-                        height: bar.height,
-                        backgroundColor: bar.height === '100%' ? 'var(--color-primary)' : 'var(--color-primary-light)',
-                        borderRadius: '4px',
-                        border: '1px solid var(--color-primary)'
-                      }}
-                    />
-                    <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>{bar.time}</span>
-                  </div>
-                ))}
-              </div>
+              {restaurantOrders.length === 0 ? (
+                <div style={{ padding: '36px 16px', textAlign: 'center', color: 'var(--color-text-muted)', backgroundColor: 'var(--color-surface-muted)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                  <Clock size={24} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
+                  <p style={{ fontSize: '13px', fontWeight: 700, margin: '0 0 4px', color: 'var(--color-text-main)' }}>No order volume data yet</p>
+                  <p style={{ fontSize: '11px', margin: 0 }}>Hourly volume trends will appear automatically as customer orders are placed.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '8px', alignItems: 'flex-end', height: '140px', paddingTop: '20px' }}>
+                  {hourlyDistribution.map((bar, idx) => (
+                    <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', height: '100%', justifyContent: 'flex-end' }}>
+                      <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-muted)' }}>{bar.orders}</span>
+                      <div
+                        style={{
+                          width: '100%',
+                          height: bar.height,
+                          backgroundColor: bar.isPeak ? 'var(--color-primary)' : 'var(--color-primary-light)',
+                          borderRadius: '4px',
+                          border: '1px solid var(--color-primary)'
+                        }}
+                      />
+                      <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>{bar.time}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Top Selling Items Leaderboard & Quality Sentiment */}
@@ -2777,39 +3037,66 @@ export const PartnerApp: React.FC = () => {
                   boxShadow: 'var(--shadow-sm)'
                 }}
               >
-                <h4 style={{ fontSize: '14px', fontWeight: 800, marginBottom: '12px' }}>🏆 Top Selling Dishes Today</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {[
-                    { rank: 1, name: 'Dum Gosht Biryani (Mutton)', qty: 48, revenue: 23952 },
-                    { rank: 2, name: 'Murgh Makhani Biryani', qty: 36, revenue: 14364 },
-                    { rank: 3, name: 'Zaikedaar Paneer Biryani', qty: 28, revenue: 9772 },
-                    { rank: 4, name: 'Kefta Chicken Kebab', qty: 22, revenue: 6578 }
-                  ].map((dish) => (
-                    <div
-                      key={dish.rank}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '8px 10px',
-                        borderRadius: 'var(--radius-sm)',
-                        backgroundColor: 'var(--color-surface-muted)',
-                        fontSize: '12px'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: 'var(--color-primary)', color: '#FFFFFF', fontSize: '10px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          {dish.rank}
-                        </span>
-                        <span style={{ fontWeight: 700 }}>{dish.name}</span>
+                <h4 style={{ fontSize: '14px', fontWeight: 800, marginBottom: '12px' }}>🏆 Top Selling Dishes</h4>
+                {topSellingDishes.length === 0 ? (
+                  <div
+                    style={{
+                      backgroundColor: 'var(--color-surface-muted)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '36px 16px',
+                      textAlign: 'center',
+                      border: '1px solid var(--color-border)'
+                    }}
+                  >
+                    <p style={{ fontSize: '13px', fontWeight: 700, margin: '0 0 4px', color: 'var(--color-text-main)' }}>
+                      No sales recorded yet
+                    </p>
+                    <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', margin: 0 }}>
+                      Top selling menu items will rank here automatically as orders are fulfilled.
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {topSellingDishes.map((dish) => (
+                      <div
+                        key={dish.rank}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '8px 10px',
+                          borderRadius: 'var(--radius-sm)',
+                          backgroundColor: 'var(--color-surface-muted)',
+                          fontSize: '12px'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span
+                            style={{
+                              width: '20px',
+                              height: '20px',
+                              borderRadius: '50%',
+                              backgroundColor: 'var(--color-primary)',
+                              color: '#FFFFFF',
+                              fontSize: '10px',
+                              fontWeight: 800,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                          >
+                            {dish.rank}
+                          </span>
+                          <span style={{ fontWeight: 700 }}>{dish.name}</span>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <span style={{ fontWeight: 800 }}>{dish.qty} {dish.qty === 1 ? 'order' : 'orders'}</span>
+                          <div style={{ fontSize: '10px', color: 'var(--color-veg)' }}>₹{dish.revenue.toLocaleString('en-IN')}</div>
+                        </div>
                       </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <span style={{ fontWeight: 800 }}>{dish.qty} orders</span>
-                        <div style={{ fontSize: '10px', color: 'var(--color-veg)' }}>₹{dish.revenue.toLocaleString('en-IN')}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Sentiment Score */}
@@ -2823,24 +3110,38 @@ export const PartnerApp: React.FC = () => {
                 }}
               >
                 <h4 style={{ fontSize: '14px', fontWeight: 800, marginBottom: '12px' }}>⭐ Customer Sentiment Metrics</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {[
-                    { label: 'Taste & Authentic Spice Balance', score: '96% Positive', val: 96, color: 'var(--color-veg)' },
-                    { label: 'Packaging & Zero Spillage', score: '94% Positive', val: 94, color: 'var(--color-veg)' },
-                    { label: 'Food Temperature on Delivery', score: '92% Steaming Hot', val: 92, color: '#F39C12' },
-                    { label: 'Portion Size Satisfaction', score: '89% Satisfied', val: 89, color: '#3498DB' }
-                  ].map((s, idx) => (
-                    <div key={idx}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px' }}>
-                        <span style={{ color: 'var(--color-text-main)', fontWeight: 600 }}>{s.label}</span>
-                        <b style={{ color: s.color }}>{s.score}</b>
+                {sentimentMetrics.length === 0 ? (
+                  <div
+                    style={{
+                      backgroundColor: 'var(--color-surface-muted)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '36px 16px',
+                      textAlign: 'center',
+                      border: '1px solid var(--color-border)'
+                    }}
+                  >
+                    <p style={{ fontSize: '13px', fontWeight: 700, margin: '0 0 4px', color: 'var(--color-text-main)' }}>
+                      No sentiment data available
+                    </p>
+                    <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', margin: 0 }}>
+                      Quality sentiment and customer satisfaction metrics will be calculated once verified reviews are submitted.
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {sentimentMetrics.map((s, idx) => (
+                      <div key={idx}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px' }}>
+                          <span style={{ color: 'var(--color-text-main)', fontWeight: 600 }}>{s.label}</span>
+                          <b style={{ color: s.color }}>{s.score}</b>
+                        </div>
+                        <div style={{ width: '100%', height: '6px', backgroundColor: 'var(--color-surface-muted)', borderRadius: '3px', overflow: 'hidden' }}>
+                          <div style={{ width: `${s.val}%`, height: '100%', backgroundColor: s.color, borderRadius: '3px' }} />
+                        </div>
                       </div>
-                      <div style={{ width: '100%', height: '6px', backgroundColor: 'var(--color-surface-muted)', borderRadius: '3px', overflow: 'hidden' }}>
-                        <div style={{ width: `${s.val}%`, height: '100%', backgroundColor: s.color, borderRadius: '3px' }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>

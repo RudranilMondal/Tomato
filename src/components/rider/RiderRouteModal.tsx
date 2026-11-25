@@ -39,8 +39,8 @@ export const RiderRouteModal: React.FC<RiderRouteModalProps> = ({
   const turns = isGoingToRest
     ? [
         { dist: '250m', text: 'Turn left onto 100ft Road' },
-        { dist: '800m', text: 'Continue straight past Indiranagar Metro' },
-        { dist: '50m', text: 'Arrive at Behrouz Biryani (on right)' }
+        { dist: '800m', text: 'Continue straight past Metro station' },
+        { dist: '50m', text: `Arrive at ${targetLocation} (on right)` }
       ]
     : [
         { dist: '400m', text: 'Head south on 12th Main Road' },
@@ -262,7 +262,7 @@ export const RiderRouteModal: React.FC<RiderRouteModalProps> = ({
               <Bike size={22} />
             </div>
             <span style={{ fontSize: '9px', fontWeight: 800, backgroundColor: 'rgba(0,0,0,0.8)', color: '#FFFFFF', padding: '1px 5px', borderRadius: '3px', marginTop: '2px' }}>
-              Vikram (You)
+              Delivery Partner (You)
             </span>
           </div>
         </div>

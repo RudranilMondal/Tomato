@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense, lazy } from 'react';
 import { useTomattto } from '../../context/TomatttoContext';
 import { SplashOnboarding } from './SplashOnboarding';
 import { HomeScreen } from './HomeScreen';
@@ -6,13 +6,26 @@ import { SearchScreen } from './SearchScreen';
 import { RestaurantDetailScreen } from './RestaurantDetailScreen';
 import { CartScreen } from './CartScreen';
 import { OrderSuccessScreen } from './OrderSuccessScreen';
-import { OrderTrackingScreen } from './OrderTrackingScreen';
-import { OrdersHistoryScreen } from './OrdersHistoryScreen';
-import { ProfileScreen } from './ProfileScreen';
 import { AuthScreen } from './AuthScreen';
-import { LocationModal } from './LocationModal';
 import { DishCustomizerModal } from './DishCustomizerModal';
-import { PaymentModal } from './PaymentModal';
+import { RouteLoadingFallback, ErrorBoundary } from '../common/LoadingFallback';
+
+// Lazy-loaded secondary screens and on-demand modals for customer viewport
+const OrderTrackingScreen = lazy(() =>
+  import('./OrderTrackingScreen').then((m) => ({ default: m.OrderTrackingScreen }))
+);
+const OrdersHistoryScreen = lazy(() =>
+  import('./OrdersHistoryScreen').then((m) => ({ default: m.OrdersHistoryScreen }))
+);
+const ProfileScreen = lazy(() =>
+  import('./ProfileScreen').then((m) => ({ default: m.ProfileScreen }))
+);
+const PaymentModal = lazy(() =>
+  import('./PaymentModal').then((m) => ({ default: m.PaymentModal }))
+);
+const LocationModal = lazy(() =>
+  import('./LocationModal').then((m) => ({ default: m.LocationModal }))
+);
 
 import {
   UtensilsCrossed,
@@ -24,18 +37,20 @@ import {
 } from 'lucide-react';
 
 export const CustomerApp: React.FC = () => {
-  const { customerScreen, setCustomerScreen, itemCount, cartTotal, selectedRestaurant } = useTomattto();
+  const { customerScreen, setCustomerScreen, itemCount, cartTotal, selectedRestaurant, isLoggedIn } = useTomattto();
 
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [startVoiceOnSearch, setStartVoiceOnSearch] = useState(false);
 
   // If splash / onboarding screen or auth
   if (customerScreen === 'splash' || customerScreen === 'onboarding') {
     return <SplashOnboarding />;
   }
 
-  if (customerScreen === 'auth') {
-    return <AuthScreen />;
+  // Mandatory Authentication before browsing restaurants, search, or cart
+  if (!isLoggedIn || customerScreen === 'auth') {
+    return <AuthScreen isMandatory={!isLoggedIn} />;
   }
 
   const renderActiveScreen = () => {
@@ -44,11 +59,14 @@ export const CustomerApp: React.FC = () => {
         return (
           <HomeScreen
             onOpenLocation={() => setIsLocationModalOpen(true)}
-            onOpenSearch={() => setCustomerScreen('search')}
+            onOpenSearch={(startVoice) => {
+              setStartVoiceOnSearch(Boolean(startVoice));
+              setCustomerScreen('search');
+            }}
           />
         );
       case 'search':
-        return <SearchScreen />;
+        return <SearchScreen autoStartVoice={startVoiceOnSearch} />;
       case 'restaurant':
         return <RestaurantDetailScreen />;
       case 'cart':
@@ -56,11 +74,29 @@ export const CustomerApp: React.FC = () => {
       case 'order_success':
         return <OrderSuccessScreen />;
       case 'order_tracking':
-        return <OrderTrackingScreen />;
+        return (
+          <ErrorBoundary fallbackTitle="Unable to load order tracking">
+            <Suspense fallback={<RouteLoadingFallback label="Loading live order tracking..." />}>
+              <OrderTrackingScreen />
+            </Suspense>
+          </ErrorBoundary>
+        );
       case 'orders_history':
-        return <OrdersHistoryScreen />;
+        return (
+          <ErrorBoundary fallbackTitle="Unable to load order history">
+            <Suspense fallback={<RouteLoadingFallback label="Loading past orders..." />}>
+              <OrdersHistoryScreen />
+            </Suspense>
+          </ErrorBoundary>
+        );
       case 'profile':
-        return <ProfileScreen />;
+        return (
+          <ErrorBoundary fallbackTitle="Unable to load customer profile">
+            <Suspense fallback={<RouteLoadingFallback label="Loading profile..." />}>
+              <ProfileScreen />
+            </Suspense>
+          </ErrorBoundary>
+        );
       default:
         return (
           <HomeScreen
@@ -317,18 +353,26 @@ export const CustomerApp: React.FC = () => {
         </nav>
       )}
 
-      {/* Floating Customer Modals */}
-      <LocationModal
-        isOpen={isLocationModalOpen}
-        onClose={() => setIsLocationModalOpen(false)}
-      />
+      {/* Floating Customer Modals - Lazy-loaded on demand */}
+      {isLocationModalOpen && (
+        <Suspense fallback={null}>
+          <LocationModal
+            isOpen={isLocationModalOpen}
+            onClose={() => setIsLocationModalOpen(false)}
+          />
+        </Suspense>
+      )}
 
       <DishCustomizerModal />
 
-      <PaymentModal
-        isOpen={isPaymentModalOpen}
-        onClose={() => setIsPaymentModalOpen(false)}
-      />
+      {isPaymentModalOpen && (
+        <Suspense fallback={null}>
+          <PaymentModal
+            isOpen={isPaymentModalOpen}
+            onClose={() => setIsPaymentModalOpen(false)}
+          />
+        </Suspense>
+      )}
     </div>
   );
 };

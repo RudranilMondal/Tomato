@@ -101,7 +101,7 @@ export const RiderChatModal: React.FC<RiderChatModalProps> = ({ isOpen, onClose,
 
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <h4 style={{ fontSize: '14px', fontWeight: 800 }}>{rider?.name || 'Vikram Singh'}</h4>
+                <h4 style={{ fontSize: '14px', fontWeight: 800 }}>{rider?.name || 'Delivery Partner'}</h4>
                 <span
                   style={{
                     fontSize: '9px',
@@ -116,7 +116,7 @@ export const RiderChatModal: React.FC<RiderChatModalProps> = ({ isOpen, onClose,
                 </span>
               </div>
               <p style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
-                {rider?.vehicleNumber || 'KA 03 EN 4592'} • G1Bites Delivery Partner
+                {rider?.vehicleNumber || 'Registered Vehicle'} • Delivery Partner
               </p>
             </div>
           </div>

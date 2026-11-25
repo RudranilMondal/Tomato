@@ -38,7 +38,7 @@ interface RiderProfileModalProps {
 }
 
 export const RiderProfileModal: React.FC<RiderProfileModalProps> = ({ isOpen, onClose }) => {
-  const { allRiderApplications, riderEarningsToday, riderTripsToday } = useTomattto();
+  const { allRiderApplications, riderEarningsToday, riderTripsToday, activeRiderApplicant, user } = useTomattto();
   const [activeTab, setActiveTab] = useState<'overview' | 'personal' | 'vehicle' | 'bank'>('overview');
   const [showAccNumber, setShowAccNumber] = useState(false);
   const [isEditingContact, setIsEditingContact] = useState(false);
@@ -49,9 +49,9 @@ export const RiderProfileModal: React.FC<RiderProfileModalProps> = ({ isOpen, on
   const activeApp = allRiderApplications.find((a) => a.status === 'approved') || allRiderApplications[0];
 
   // Editable fields state
-  const [emergencyName, setEmergencyName] = useState('Sunita Singh');
-  const [emergencyRelation, setEmergencyRelation] = useState('Spouse');
-  const [emergencyPhone, setEmergencyPhone] = useState('+91 97412 88419');
+  const [emergencyName, setEmergencyName] = useState('');
+  const [emergencyRelation, setEmergencyRelation] = useState('');
+  const [emergencyPhone, setEmergencyPhone] = useState('');
   const [savedSuccessMsg, setSavedSuccessMsg] = useState<string | null>(null);
 
   if (!isOpen) return null;
@@ -69,29 +69,29 @@ export const RiderProfileModal: React.FC<RiderProfileModalProps> = ({ isOpen, on
   };
 
   const applicant = {
-    name: activeApp?.fullName || 'Vikram Singh',
-    id: activeApp?.id ? activeApp.id.replace('APP-', 'TOM-') : 'TOM-RDR-8921',
-    avatar: activeApp?.profilePhoto || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80',
-    phone: activeApp?.phone || '+91 98451 92831',
-    email: activeApp?.email || 'vikram.singh@example.com',
-    dob: activeApp?.dob || '1998-05-14',
-    bloodGroup: activeApp?.bloodGroup || 'O+',
-    gender: activeApp?.gender || 'Male',
-    address: activeApp?.residentialAddress || '14/B, 2nd Cross, Old Airport Road, Kodihalli, Bengaluru, Karnataka 560008',
+    name: activeApp?.fullName || activeRiderApplicant?.fullName || user.name || 'Delivery Partner',
+    id: activeApp?.id ? activeApp.id.replace('APP-', 'TOM-') : (user.id || 'TOM-RDR-NEW'),
+    avatar: activeApp?.profilePhoto || user.avatarUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80',
+    phone: activeApp?.phone || activeRiderApplicant?.phone || user.phone || 'Not provided',
+    email: activeApp?.email || user.email || 'Not provided',
+    dob: activeApp?.dob || 'Not provided',
+    bloodGroup: activeApp?.bloodGroup || 'Not provided',
+    gender: activeApp?.gender || 'Not specified',
+    address: activeApp?.residentialAddress || 'Not provided',
     bank: activeApp?.bankDetails || {
-      accountHolderName: 'Vikram Singh',
-      bankName: 'HDFC Bank (Indiranagar 100ft Road)',
-      accountNumber: '50100482914821',
-      ifscCode: 'HDFC0000140',
-      upiId: 'vikram.singh@okhdfcbank'
+      accountHolderName: activeApp?.fullName || user.name || 'Not provided',
+      bankName: 'Pending Bank Setup',
+      accountNumber: '••••••••••••',
+      ifscCode: '•••••••••••',
+      upiId: 'Not configured'
     },
     docs: activeApp?.documents || {
-      aadhaarFront: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600&auto=format&fit=crop&q=80',
-      aadhaarBack: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600&auto=format&fit=crop&q=80',
-      panFront: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600&auto=format&fit=crop&q=80',
-      panBack: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600&auto=format&fit=crop&q=80',
-      drivingLicenseFront: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80',
-      drivingLicenseBack: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80'
+      aadhaarFront: '',
+      aadhaarBack: '',
+      panFront: '',
+      panBack: '',
+      drivingLicenseFront: '',
+      drivingLicenseBack: ''
     }
   };
 
@@ -456,7 +456,7 @@ export const RiderProfileModal: React.FC<RiderProfileModalProps> = ({ isOpen, on
                 </div>
                 <div>
                   <h4 style={{ fontSize: '13px', fontWeight: 800, color: 'var(--color-veg)' }}>
-                    G1Bites Shield Rider Insurance: ₹5,00,000
+                    Tomattto Shield Rider Insurance: ₹5,00,000
                   </h4>
                   <p style={{ fontSize: '11px', color: '#D1D5DB', marginTop: '2px', lineHeight: 1.5 }}>
                     Active 24/7 medical & accidental coverage while on shift. Policy #TS-99214 underwritten by ICICI Lombard.
@@ -487,7 +487,7 @@ export const RiderProfileModal: React.FC<RiderProfileModalProps> = ({ isOpen, on
                   <div style={{ fontWeight: 700, color: '#FFFFFF', marginTop: '2px' }}>Lunch (12-3 PM) & Dinner (7-11 PM)</div>
                 </div>
                 <div>
-                  <span style={{ color: '#A5A5B2' }}>G1Bites Bag & Gear:</span>
+                  <span style={{ color: '#A5A5B2' }}>Tomattto Bag & Gear:</span>
                   <div style={{ fontWeight: 700, color: 'var(--color-veg)', marginTop: '2px' }}>✓ Issued (Insulated Thermal Bag)</div>
                 </div>
                 <div>
@@ -989,7 +989,7 @@ export const RiderProfileModal: React.FC<RiderProfileModalProps> = ({ isOpen, on
           }}
         >
           <span style={{ fontSize: '11px', color: '#A5A5B2' }}>
-            G1Bites Delivery Fleet • Partner Portal v2.4
+            Tomattto Delivery Fleet • Partner Portal v2.4
           </span>
           <button
             onClick={onClose}

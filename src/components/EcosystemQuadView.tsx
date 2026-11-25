@@ -1,10 +1,18 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { CustomerApp } from './customer/CustomerApp';
-import { PartnerApp } from './partner/PartnerApp';
-import { RiderApp } from './rider/RiderApp';
-import { AdminApp } from './admin/AdminApp';
 import { Smartphone, Store, Bike, LayoutDashboard, Activity, Maximize2, Zap } from 'lucide-react';
 import { useTomattto } from '../context/TomatttoContext';
+import { RouteLoadingFallback, ErrorBoundary } from './common/LoadingFallback';
+
+const PartnerApp = lazy(() =>
+  import('./partner/PartnerApp').then((m) => ({ default: m.PartnerApp }))
+);
+const RiderApp = lazy(() =>
+  import('./rider/RiderApp').then((m) => ({ default: m.RiderApp }))
+);
+const AdminApp = lazy(() =>
+  import('./admin/AdminApp').then((m) => ({ default: m.AdminApp }))
+);
 
 export const EcosystemQuadView: React.FC = () => {
   const { setAppMode, incomingOrder, riderDeliveryRequest, currentOrder } = useTomattto();
@@ -46,8 +54,8 @@ export const EcosystemQuadView: React.FC = () => {
           />
           <div>
             <h3 style={{ fontSize: '15px', fontWeight: 900, color: '#FFFFFF', margin: 0, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <img src="/logo.png" alt="G1Bites" style={{ width: '20px', height: '20px', borderRadius: '4px', objectFit: 'contain' }} />
-              <span>G1Bites 360° Ecosystem Command Center (Quad-View Simulator)</span>
+              <img src="/logo.png" alt="Tomattto" style={{ width: '20px', height: '20px', borderRadius: '4px', objectFit: 'contain' }} />
+              <span>Tomattto 360° Ecosystem Command Center (Quad-View Simulator)</span>
             </h3>
             <p style={{ fontSize: '11px', color: '#A5A5B2', margin: 0 }}>
               All 4 applications running concurrently with real-time state synchronization
@@ -204,7 +212,11 @@ export const EcosystemQuadView: React.FC = () => {
             </button>
           </div>
           <div style={{ flex: 1, overflowY: 'auto' }} className="no-scrollbar">
-            <PartnerApp />
+            <ErrorBoundary fallbackTitle="Partner Kitchen unavailable">
+              <Suspense fallback={<RouteLoadingFallback label="Loading Kitchen App..." minHeight="200px" />}>
+                <PartnerApp />
+              </Suspense>
+            </ErrorBoundary>
           </div>
         </div>
 
@@ -272,7 +284,11 @@ export const EcosystemQuadView: React.FC = () => {
           </div>
           <div style={{ flex: 1, overflow: 'hidden', display: 'flex', justifyContent: 'center', backgroundColor: 'var(--color-bg)' }}>
             <div style={{ width: '100%', maxWidth: '420px', height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <RiderApp />
+              <ErrorBoundary fallbackTitle="Rider Portal unavailable">
+                <Suspense fallback={<RouteLoadingFallback label="Loading Rider App..." minHeight="200px" />}>
+                  <RiderApp />
+                </Suspense>
+              </ErrorBoundary>
             </div>
           </div>
         </div>
@@ -325,7 +341,11 @@ export const EcosystemQuadView: React.FC = () => {
             </button>
           </div>
           <div style={{ flex: 1, overflowY: 'auto' }} className="no-scrollbar">
-            <AdminApp />
+            <ErrorBoundary fallbackTitle="Admin HQ unavailable">
+              <Suspense fallback={<RouteLoadingFallback label="Loading Admin Console..." minHeight="200px" />}>
+                <AdminApp />
+              </Suspense>
+            </ErrorBoundary>
           </div>
         </div>
       </div>

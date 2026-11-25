@@ -1,6 +1,8 @@
 import React from 'react';
-import { X, DollarSign, TrendingUp, CheckCircle2, ArrowDownLeft, ShieldCheck, Award } from 'lucide-react';
+import { X, DollarSign, TrendingUp, CheckCircle2, ArrowDownLeft, ShieldCheck, Award, Bike } from 'lucide-react';
 import { RiderTier } from '../../types';
+import { useTomattto } from '../../context/TomatttoContext';
+import { PRICING_CONFIG } from '../../config/pricing';
 
 interface RiderEarningsModalProps {
   isOpen: boolean;
@@ -17,17 +19,14 @@ export const RiderEarningsModal: React.FC<RiderEarningsModalProps> = ({
   tripsToday,
   riderTier = 'bronze'
 }) => {
+  const { completedRiderTrips } = useTomattto();
   if (!isOpen) return null;
 
+  const totalDistanceKm = completedRiderTrips.reduce((acc, t) => acc + (t.distanceKm || 0), 0);
+  const totalDistancePay = Math.round(totalDistanceKm * PRICING_CONFIG.RIDER_PAYOUT_PER_KM);
+  const totalTips = completedRiderTrips.reduce((acc, t) => acc + (t.customerTip || 0), 0);
   const tierBonus = riderTier === 'gold' ? 30 : riderTier === 'silver' ? 15 : 0;
   const multiplier = riderTier === 'gold' ? '1.10x' : riderTier === 'silver' ? '1.05x' : '1.00x';
-
-  const trips = [
-    { id: 'TRIP-901', rest: 'Behrouz Biryani', fare: 65, tip: 30, surge: 15, time: '17:15', status: 'Delivered' },
-    { id: 'TRIP-894', rest: 'Toscano Pizzeria', fare: 55, tip: 20, surge: 10, time: '16:05', status: 'Delivered' },
-    { id: 'TRIP-882', rest: 'Burger Seigneur', fare: 70, tip: 0, surge: 25, time: '14:40', status: 'Delivered' },
-    { id: 'TRIP-870', rest: 'Meghana Foods', fare: 60, tip: 15, surge: 10, time: '13:10', status: 'Delivered' }
-  ];
 
   return (
     <div
@@ -125,20 +124,22 @@ export const RiderEarningsModal: React.FC<RiderEarningsModalProps> = ({
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginTop: '16px', paddingTop: '14px', borderTop: '1px solid rgba(255,255,255,0.15)' }}>
               <div>
-                <span style={{ fontSize: '10px', opacity: 0.8 }}>Base Pay</span>
-                <span style={{ fontSize: '13px', fontWeight: 800, display: 'block' }}>₹{tripsToday * 40}</span>
+                <span style={{ fontSize: '10px', opacity: 0.8 }}>Distance</span>
+                <span style={{ fontSize: '13px', fontWeight: 800, display: 'block' }}>{totalDistanceKm.toFixed(1)} km</span>
               </div>
               <div>
-                <span style={{ fontSize: '10px', opacity: 0.8 }}>Surge</span>
-                <span style={{ fontSize: '13px', fontWeight: 800, display: 'block' }}>₹{tripsToday * 15}</span>
+                <span style={{ fontSize: '10px', opacity: 0.8 }}>Distance Pay</span>
+                <span style={{ fontSize: '13px', fontWeight: 800, display: 'block' }}>₹{totalDistancePay} <span style={{ fontSize: '9px', opacity: 0.7 }}>(@₹12/km)</span></span>
               </div>
               <div>
-                <span style={{ fontSize: '10px', opacity: 0.8 }}>Tier Bonus</span>
-                <span style={{ fontSize: '13px', fontWeight: 800, display: 'block', color: '#6EE7B7' }}>+₹{tripsToday * tierBonus}</span>
+                <span style={{ fontSize: '10px', opacity: 0.8 }}>Tier & Surge</span>
+                <span style={{ fontSize: '13px', fontWeight: 800, display: 'block', color: '#6EE7B7' }}>+₹{tripsToday * (15 + tierBonus)}</span>
               </div>
               <div>
-                <span style={{ fontSize: '10px', opacity: 0.8 }}>Tips</span>
-                <span style={{ fontSize: '13px', fontWeight: 800, display: 'block', color: '#FFD700' }}>₹60</span>
+                <span style={{ fontSize: '10px', opacity: 0.8 }}>Tips (100%)</span>
+                <span style={{ fontSize: '13px', fontWeight: 800, display: 'block', color: '#FFD700' }}>
+                  ₹{totalTips}
+                </span>
               </div>
             </div>
           </div>
@@ -146,40 +147,46 @@ export const RiderEarningsModal: React.FC<RiderEarningsModalProps> = ({
           {/* Trip Passbook */}
           <div>
             <span style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--color-text-muted)', display: 'block', marginBottom: '10px' }}>
-              Today's Trips ({tripsToday} completed)
+              Today's Trips ({tripsToday} completed • Rate: ₹12/km)
             </span>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {trips.map((trip) => (
-                <div
-                  key={trip.id}
-                  style={{
-                    padding: '12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                    backgroundColor: 'var(--color-bg)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between'
-                  }}
-                >
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontSize: '13px', fontWeight: 800 }}>{trip.rest}</span>
-                      <span style={{ fontSize: '10px', color: 'var(--color-veg)', fontWeight: 700 }}>
-                        ✓ {trip.status}
+              {completedRiderTrips.length === 0 ? (
+                <div style={{ padding: '24px', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '13px', backgroundColor: 'var(--color-bg)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                  No trips completed today yet. Completed orders will appear in your passbook here.
+                </div>
+              ) : (
+                completedRiderTrips.map((trip) => (
+                  <div
+                    key={trip.id}
+                    style={{
+                      padding: '12px',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--color-border)',
+                      backgroundColor: 'var(--color-bg)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 800 }}>{trip.restaurantName}</span>
+                        <span style={{ fontSize: '10px', color: 'var(--color-veg)', fontWeight: 700 }}>
+                          ✓ Delivered ({trip.distanceKm} km)
+                        </span>
+                      </div>
+                      <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                        {trip.completedAt} • Distance @ ₹12/km: ₹{Math.round(trip.distanceKm * 12)} {trip.customerTip > 0 ? `• Tip: ₹${trip.customerTip}` : ''}
                       </span>
                     </div>
-                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
-                      {trip.time} • Base ₹{trip.fare} + Surge ₹{trip.surge} {trip.tip > 0 ? `+ Tip ₹${trip.tip}` : ''}
+
+                    <span style={{ fontSize: '15px', fontWeight: 900, color: 'var(--color-veg)' }}>
+                      ₹{trip.totalPayout}
                     </span>
                   </div>
-
-                  <span style={{ fontSize: '15px', fontWeight: 900, color: 'var(--color-veg)' }}>
-                    ₹{trip.fare + trip.surge + trip.tip}
-                  </span>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>

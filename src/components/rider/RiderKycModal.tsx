@@ -142,7 +142,7 @@ export const RiderKycModal: React.FC<RiderKycModalProps> = ({ isOpen, onClose })
         >
           <CheckCircle2 size={16} color="var(--color-veg)" />
           <span style={{ fontSize: '11px', color: '#D1D5DB' }}>
-            All mandatory transport & identity documents are active and approved by G1Bites Fleet Ops.
+            All mandatory transport & identity documents are active and approved by Tomattto Fleet Ops.
           </span>
         </div>
 
@@ -213,7 +213,7 @@ export const RiderKycModal: React.FC<RiderKycModalProps> = ({ isOpen, onClose })
               ACCIDENTAL INSURANCE BENEFIT
             </span>
             <p style={{ fontSize: '11px', color: '#A5A5B2', marginTop: '4px' }}>
-              Rider is covered up to ₹5,00,000 for on-duty medical and accidental events under G1Bites Shield Care policy #TS-99214.
+              Rider is covered up to ₹5,00,000 for on-duty medical and accidental events under Tomattto Shield Care policy #TS-99214.
             </p>
           </div>
         </div>

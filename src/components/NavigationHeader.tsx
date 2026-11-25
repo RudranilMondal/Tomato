@@ -114,7 +114,7 @@ export const NavigationHeader: React.FC = () => {
               boxShadow: '0 4px 12px var(--color-primary-glow)'
             }}
           >
-            <img src="/logo.png" alt="G1Bites" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <img src="/logo.png" alt="Tomattto" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
           <div>
             <h1
@@ -126,7 +126,7 @@ export const NavigationHeader: React.FC = () => {
                 lineHeight: 1
               }}
             >
-              G1Bites
+              Tomattto
             </h1>
             <span
               style={{

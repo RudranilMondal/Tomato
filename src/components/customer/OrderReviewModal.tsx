@@ -184,7 +184,7 @@ export const OrderReviewModal: React.FC<OrderReviewModalProps> = ({ isOpen, onCl
               <div>
                 <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Delivery Partner</span>
                 <h4 style={{ fontSize: '14px', fontWeight: 800 }}>
-                  {targetOrder.rider?.name || 'Vikram Singh'}
+                  {targetOrder.rider?.name || 'Delivery Partner'}
                 </h4>
               </div>
 
