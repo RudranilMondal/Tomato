@@ -78,6 +78,11 @@ function isIosDevice(): boolean {
   return /iphone|ipad|ipod/i.test(navigator.userAgent);
 }
 
+function isIosChrome(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /crios/i.test(navigator.userAgent);
+}
+
 // Capture beforeinstallprompt globally so it is never missed before React mounts
 let capturedPrompt: BeforeInstallPromptEvent | null = null;
 if (typeof window !== 'undefined') {
@@ -99,6 +104,7 @@ export const PwaInstallPrompt: React.FC = () => {
   );
   const [dismissed, setDismissed] = useState(false);
   const [showManualHint, setShowManualHint] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [visible, setVisible] = useState(false);
 
   // Keep manifest, apple-mobile-web-app-title, theme-color, and title synced to active portal
@@ -150,6 +156,17 @@ export const PwaInstallPrompt: React.FC = () => {
   }
 
   const ios = isIosDevice();
+  const iosChrome = isIosChrome();
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+    } catch {
+      // Ignore clipboard errors
+    }
+  };
 
   const handleInstallClick = async () => {
     if (deferredPrompt) {
@@ -295,26 +312,64 @@ export const PwaInstallPrompt: React.FC = () => {
               color: '#374151',
               backgroundColor: '#FFF8F5',
               border: '1px solid #F3E8E2',
-              borderRadius: '12px',
-              padding: '12px 14px',
+              borderRadius: '14px',
+              padding: '14px',
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              lineHeight: 1.4,
-              boxSizing: 'border-box'
+              flexDirection: 'column',
+              gap: '10px',
+              lineHeight: 1.45,
+              boxSizing: 'border-box',
+              textAlign: 'left'
             }}
           >
             {ios ? (
-              <Share size={16} color="#F04A00" style={{ flexShrink: 0 }} />
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, color: '#1E1E24' }}>
+                  <Share size={16} color="#F04A00" style={{ flexShrink: 0 }} />
+                  <span>
+                    {iosChrome
+                      ? 'Install directly from Chrome on iPhone:'
+                      : 'Install in 2 quick steps on iPhone:'}
+                  </span>
+                </div>
+                <ol style={{ margin: 0, paddingLeft: '18px', fontSize: '12.5px', color: '#4B5563' }}>
+                  <li>
+                    {iosChrome
+                      ? 'Tap the Share icon (top-right of Chrome address bar).'
+                      : 'Tap the Share icon at the bottom of Safari.'}
+                  </li>
+                  <li>
+                    Scroll down and tap <strong>&ldquo;Add to Home Screen&rdquo;</strong>.
+                  </li>
+                </ol>
+                {iosChrome && (
+                  <button
+                    type="button"
+                    onClick={handleCopyLink}
+                    style={{
+                      width: '100%',
+                      backgroundColor: '#1E1E24',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      borderRadius: '10px',
+                      padding: '9px 12px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {copiedLink ? 'Link Copied! Paste in Safari' : 'Or Copy Link to Open in Safari'}
+                  </button>
+                )}
+              </>
             ) : (
-              <Download size={16} color="#F04A00" style={{ flexShrink: 0 }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Download size={16} color="#F04A00" style={{ flexShrink: 0 }} />
+                <span>
+                  Open your browser menu (⋮) and tap &ldquo;Install app&rdquo; or &ldquo;Add to Home screen&rdquo;.
+                </span>
+              </div>
             )}
-            <span>
-              {ios
-                ? `Tap Share in Safari, then "Add to Home Screen" to install ${meta.name}.`
-                : `Open your browser menu (⋮) and tap "Install app" or "Add to Home screen".`}
-            </span>
           </div>
         )}
 

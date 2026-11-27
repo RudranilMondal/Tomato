@@ -39,6 +39,21 @@
   --font-body: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
+html,
+body {
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior-y: contain;
+}
+
+@supports (-webkit-touch-callout: none) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 [data-theme="dark"] {
   --color-bg: #0D0D11;
   --color-surface: #17171D;
