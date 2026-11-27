@@ -20,6 +20,35 @@ const AdminApp = lazy(() =>
 const EcosystemQuadView = lazy(() =>
   import('./components/EcosystemQuadView').then((m) => ({ default: m.EcosystemQuadView }))
 );
+const PrivacyPolicyPage = lazy(() =>
+  import('./components/legal/LegalPages').then((m) => ({ default: m.PrivacyPolicyPage }))
+);
+const AccountDeletionPage = lazy(() =>
+  import('./components/legal/LegalPages').then((m) => ({ default: m.AccountDeletionPage }))
+);
+const TermsPage = lazy(() =>
+  import('./components/legal/LegalPages').then((m) => ({ default: m.TermsPage }))
+);
+const SupportPage = lazy(() =>
+  import('./components/legal/LegalPages').then((m) => ({ default: m.SupportPage }))
+);
+
+const LEGAL_PATHS = new Set([
+  '/privacy-policy',
+  '/privacy',
+  '/delete-account',
+  '/account-deletion',
+  '/terms',
+  '/support',
+  '/contact'
+]);
+
+const LOCKED_PORTAL = (import.meta.env.VITE_APP_PORTAL || '').toLowerCase() as
+  | ''
+  | 'customer'
+  | 'partner'
+  | 'rider'
+  | 'admin';
 
 /**
  * RouteSync ensures the global TomatttoContext `appMode` state stays in
@@ -30,6 +59,10 @@ const RouteSync: React.FC = () => {
   const { setAppMode } = useTomattto();
 
   useEffect(() => {
+    if (LOCKED_PORTAL) {
+      setAppMode(LOCKED_PORTAL);
+      return;
+    }
     const path = location.pathname.toLowerCase();
     if (path.startsWith('/partner') || path.startsWith('/restaurant')) {
       setAppMode('partner');
@@ -47,7 +80,47 @@ const RouteSync: React.FC = () => {
   return null;
 };
 
+const PortalRoot: React.FC = () => {
+  if (LOCKED_PORTAL === 'partner') {
+    return (
+      <ErrorBoundary fallbackTitle="Unable to load Restaurant Partner Dashboard">
+        <Suspense fallback={<RouteLoadingFallback label="Loading Partner Dashboard..." />}>
+          <PartnerApp />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+  if (LOCKED_PORTAL === 'rider') {
+    return (
+      <DeviceFrame>
+        <ErrorBoundary fallbackTitle="Unable to load Delivery Rider Portal">
+          <Suspense fallback={<RouteLoadingFallback label="Loading Rider Portal..." />}>
+            <RiderApp />
+          </Suspense>
+        </ErrorBoundary>
+      </DeviceFrame>
+    );
+  }
+  if (LOCKED_PORTAL === 'admin') {
+    return (
+      <ErrorBoundary fallbackTitle="Unable to load Admin Operations Console">
+        <Suspense fallback={<RouteLoadingFallback label="Loading Admin Console..." />}>
+          <AdminApp />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+  return (
+    <DeviceFrame>
+      <CustomerApp />
+    </DeviceFrame>
+  );
+};
+
 export const AppContent: React.FC = () => {
+  const location = useLocation();
+  const isLegalRoute = LEGAL_PATHS.has(location.pathname.toLowerCase());
+
   return (
     <div
       style={{
@@ -61,21 +134,14 @@ export const AppContent: React.FC = () => {
       {/* Route Synchronization Helper */}
       <RouteSync />
 
-      {/* Modern Floating Desktop Ecosystem Switcher (Hidden on Mobile) */}
-      <EcosystemDock />
+      {/* Modern Floating Desktop Ecosystem Switcher (Hidden on Mobile, Legal Pages & Locked Portals) */}
+      {!LOCKED_PORTAL && !isLegalRoute && <EcosystemDock />}
 
       {/* Main Routed Viewport */}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>
         <Routes>
-          {/* Customer Interface (Clean, mobile-ready at root) */}
-          <Route
-            path="/"
-            element={
-              <DeviceFrame>
-                <CustomerApp />
-              </DeviceFrame>
-            }
-          />
+          {/* Customer / Locked Portal Interface */}
+          <Route path="/" element={<PortalRoot />} />
           <Route path="/customer" element={<Navigate to="/" replace />} />
 
           {/* Restaurant Partner Dashboard */}
@@ -130,6 +196,43 @@ export const AppContent: React.FC = () => {
             }
           />
           <Route path="/quad" element={<Navigate to="/ecosystem" replace />} />
+
+          {/* Google Play & Legal Compliance Pages */}
+          <Route
+            path="/privacy-policy"
+            element={
+              <Suspense fallback={<RouteLoadingFallback label="Loading Privacy Policy..." />}>
+                <PrivacyPolicyPage />
+              </Suspense>
+            }
+          />
+          <Route path="/privacy" element={<Navigate to="/privacy-policy" replace />} />
+          <Route
+            path="/delete-account"
+            element={
+              <Suspense fallback={<RouteLoadingFallback label="Loading Account Deletion..." />}>
+                <AccountDeletionPage />
+              </Suspense>
+            }
+          />
+          <Route path="/account-deletion" element={<Navigate to="/delete-account" replace />} />
+          <Route
+            path="/terms"
+            element={
+              <Suspense fallback={<RouteLoadingFallback label="Loading Terms of Service..." />}>
+                <TermsPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/support"
+            element={
+              <Suspense fallback={<RouteLoadingFallback label="Loading Support & Contact..." />}>
+                <SupportPage />
+              </Suspense>
+            }
+          />
+          <Route path="/contact" element={<Navigate to="/support" replace />} />
 
           {/* Fallback to Customer App */}
           <Route path="*" element={<Navigate to="/" replace />} />

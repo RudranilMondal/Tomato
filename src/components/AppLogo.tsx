@@ -31,7 +31,7 @@ export const AppLogo: React.FC<AppLogoProps> = ({
     >
       <img
         src="/logo.png"
-        alt="Tomattto"
+        alt="G1 Bites"
         style={{
           width: `${size}px`,
           height: `${size}px`,
@@ -51,7 +51,7 @@ export const AppLogo: React.FC<AppLogoProps> = ({
             lineHeight: 1
           }}
         >
-          Tomattto
+          G1 Bites
         </span>
       )}
     </div>
