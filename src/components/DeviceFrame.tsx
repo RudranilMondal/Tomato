@@ -169,8 +169,8 @@ export const DeviceFrame: React.FC<DeviceFrameProps> = ({ children }) => {
                 cursor: 'pointer'
               }}
             >
-              <img src="/logo.png" alt="Tomattto" style={{ width: '16px', height: '16px', borderRadius: '4px', objectFit: 'cover' }} />
-              <span style={{ fontSize: '10.5px', color: '#FF4B3A', fontWeight: 800 }}>Tomattto</span>
+              <img src="/logo.png" alt="G1 Bites" style={{ width: '16px', height: '16px', borderRadius: '4px', objectFit: 'cover' }} />
+              <span style={{ fontSize: '10.5px', color: '#FF4B3A', fontWeight: 800 }}>G1 Bites</span>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

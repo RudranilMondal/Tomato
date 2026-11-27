@@ -253,7 +253,7 @@ export const RestaurantDetailScreen: React.FC = () => {
           }}
         >
           <Sparkles size={13} />
-          <span>{selectedRestaurant.offerText} with code TOMATTTO50</span>
+          <span>{selectedRestaurant.offerText} with code G1BITES50</span>
         </div>
       )}
 

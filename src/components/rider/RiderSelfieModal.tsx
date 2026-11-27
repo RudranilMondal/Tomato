@@ -131,7 +131,7 @@ export const RiderSelfieModal: React.FC<RiderSelfieModalProps> = ({
   const getReasonDescription = () => {
     switch (prompt.triggerReason) {
       case 'duty_start':
-        return 'Please capture a clear live selfie with your delivery helmet and Tomattto jacket or t-shirt to begin receiving orders.';
+        return 'Please capture a clear live selfie with your delivery helmet and G1 Bites jacket or t-shirt to begin receiving orders.';
       case 'duty_end':
         return 'Confirm your physical presence and end your active duty shift safely.';
       case 'order_assignment':

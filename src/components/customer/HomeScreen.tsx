@@ -62,13 +62,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onOpenLocation, onOpenSe
       id: 1,
       tag: 'MEGA DEAL',
       title: '50% OFF up to ₹100',
-      subtitle: 'Use code TOMATTTO50 on your favorite meals',
+      subtitle: 'Use code G1BITES50 on your favorite meals',
       bg: 'linear-gradient(135deg, #FF4B3A 0%, #FF8A65 100%)',
       img: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=400&auto=format&fit=crop&q=80'
     },
     {
       id: 2,
-      tag: 'TOMATTTO GOLD',
+      tag: 'G1 BITES GOLD',
       title: 'Free Delivery Always',
       subtitle: 'Zero delivery fee on all orders above ₹249',
       bg: 'linear-gradient(135deg, #1E1E24 0%, #3A3A48 100%)',
@@ -207,7 +207,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onOpenLocation, onOpenSe
           >
             <img
               src="/logo.png"
-              alt="Tomattto"
+              alt="G1 Bites"
               style={{
                 width: '34px',
                 height: '34px',

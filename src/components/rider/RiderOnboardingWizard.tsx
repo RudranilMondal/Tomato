@@ -864,7 +864,7 @@ export const RiderOnboardingWizard: React.FC<RiderOnboardingWizardProps> = ({
       const res = await openRazorpayCheckout({
         amountInRupees: PRICING_CONFIG.RIDER_REGISTRATION_FEE,
         intent: 'rider_registration',
-        restaurantName: 'Tomattto Delivery Partner Registration',
+        restaurantName: 'G1 Bites Delivery Partner Registration',
         customerName: fullName || 'Delivery Partner',
         customerEmail: email,
         customerPhone: phone
@@ -1031,7 +1031,7 @@ export const RiderOnboardingWizard: React.FC<RiderOnboardingWizardProps> = ({
         </h2>
 
         <p style={{ fontSize: '13px', color: '#9CA3AF', maxWidth: '320px', lineHeight: 1.5, marginBottom: '20px' }}>
-          Thank you for applying to join the Tomattto Delivery Fleet. Our operations team is reviewing your KYC and vehicle documents.
+          Thank you for applying to join the G1 Bites Delivery Fleet. Our operations team is reviewing your KYC and vehicle documents.
         </p>
 
         {/* Application Ref Badge */}
@@ -2734,7 +2734,7 @@ export const RiderOnboardingWizard: React.FC<RiderOnboardingWizardProps> = ({
                 <Sparkles size={18} color="var(--color-primary, #FF4B3A)" />
                 <div>
                   <h3 style={{ fontSize: '14px', fontWeight: 800, margin: 0 }}>
-                    Tomattto Starter Kit & Registration Fee
+                    G1 Bites Starter Kit & Registration Fee
                   </h3>
                   <p style={{ fontSize: '11px', color: '#9CA3AF', margin: '2px 0 0' }}>
                     One-time activation fee: <b>₹{PRICING_CONFIG.RIDER_REGISTRATION_FEE}</b> (Includes Official Starter Kit)
@@ -2903,7 +2903,7 @@ export const RiderOnboardingWizard: React.FC<RiderOnboardingWizardProps> = ({
                 style={{ marginTop: '2px', accentColor: 'var(--color-primary, #FF4B3A)' }}
               />
               <span>
-                I agree to the Tomattto Fleet Partner Code of Conduct, safety policies, and background verification terms.
+                I agree to the G1 Bites Fleet Partner Code of Conduct, safety policies, and background verification terms.
               </span>
             </label>
           </div>

@@ -54,8 +54,8 @@ export const EcosystemQuadView: React.FC = () => {
           />
           <div>
             <h3 style={{ fontSize: '15px', fontWeight: 900, color: '#FFFFFF', margin: 0, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <img src="/logo.png" alt="Tomattto" style={{ width: '20px', height: '20px', borderRadius: '4px', objectFit: 'contain' }} />
-              <span>Tomattto 360° Ecosystem Command Center (Quad-View Simulator)</span>
+              <img src="/logo.png" alt="G1 Bites" style={{ width: '20px', height: '20px', borderRadius: '4px', objectFit: 'contain' }} />
+              <span>G1 Bites 360° Ecosystem Command Center (Quad-View Simulator)</span>
             </h3>
             <p style={{ fontSize: '11px', color: '#A5A5B2', margin: 0 }}>
               All 4 applications running concurrently with real-time state synchronization

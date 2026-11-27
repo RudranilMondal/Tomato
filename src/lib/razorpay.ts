@@ -98,7 +98,7 @@ export async function openRazorpayCheckout(
       key: keyId,
       amount: payablePaise,
       currency: 'INR',
-      name: 'Tomattto Food Delivery',
+      name: 'G1Bites Food Delivery',
       description: options.restaurantName
         ? `Order from ${options.restaurantName} (₹${options.amountInRupees})`
         : options.intent === 'partner_registration'
@@ -108,8 +108,8 @@ export async function openRazorpayCheckout(
         : `Order Payment (₹${options.amountInRupees})`,
       image: '/logo.png',
       prefill: {
-        name: options.customerName || 'Tomattto User',
-        email: options.customerEmail || 'user@tomattto.delivery',
+        name: options.customerName || 'G1Bites User',
+        email: options.customerEmail || 'user@g1bites.delivery',
         contact: options.customerPhone || '9876543210',
       },
       theme: {

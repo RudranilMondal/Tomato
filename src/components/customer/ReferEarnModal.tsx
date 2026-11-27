@@ -15,8 +15,8 @@ export const ReferEarnModal: React.FC<ReferEarnModalProps> = ({ isOpen, onClose 
 
   if (!isOpen) return null;
 
-  const referralCode = 'TOMATTTO-FOODIE100';
-  const shareText = `Order delicious food on Tomattto with my code ${referralCode} and get ₹100 off your first meal! https://tomattto.app/invite/${referralCode}`;
+  const referralCode = 'G1 BITES-FOODIE100';
+  const shareText = `Order delicious food on G1 Bites with my code ${referralCode} and get ₹100 off your first meal! https://g1bites.com/invite/${referralCode}`;
 
   const handleCopy = () => {
     navigator.clipboard?.writeText(referralCode);
@@ -128,7 +128,7 @@ export const ReferEarnModal: React.FC<ReferEarnModalProps> = ({ isOpen, onClose 
               Give ₹100, Get ₹100
             </h4>
             <p style={{ fontSize: '12px', opacity: 0.95, lineHeight: 1.4, maxWidth: '280px', margin: '0 auto' }}>
-              Invite foodies to Tomattto. When they place their first order, you both get ₹100 straight in your wallet!
+              Invite foodies to G1 Bites. When they place their first order, you both get ₹100 straight in your wallet!
             </p>
           </div>
 
@@ -287,7 +287,7 @@ export const ReferEarnModal: React.FC<ReferEarnModalProps> = ({ isOpen, onClose 
           >
             <p style={{ fontSize: '11px', color: 'var(--color-text-main)', fontWeight: 600, marginBottom: '8px' }}>
               {hasClaimedDemoBonus
-                ? '🎉 ₹100 Referral bonus added to your Tomattto Wallet!'
+                ? '🎉 ₹100 Referral bonus added to your G1 Bites Wallet!'
                 : 'Test the referral flow now:'}
             </p>
             <button

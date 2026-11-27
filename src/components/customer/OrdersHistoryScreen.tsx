@@ -35,7 +35,7 @@ export const OrdersHistoryScreen: React.FC = () => {
         >
           <ArrowLeft size={18} />
         </button>
-        <img src="/logo.png" alt="Tomattto" style={{ width: '24px', height: '24px', borderRadius: '6px', objectFit: 'contain' }} />
+        <img src="/logo.png" alt="G1 Bites" style={{ width: '24px', height: '24px', borderRadius: '6px', objectFit: 'contain' }} />
         <h3 style={{ fontSize: '15px', fontWeight: 800 }}>Your Orders</h3>
       </div>
 

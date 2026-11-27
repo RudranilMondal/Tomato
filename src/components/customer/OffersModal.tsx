@@ -161,7 +161,7 @@ export const OffersModal: React.FC<OffersModalProps> = ({ isOpen, onClose, onCou
 
         {/* Coupons List */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 18px' }} className="no-scrollbar">
-          {/* Tomattto Gold Promo Banner */}
+          {/* G1 Bites Gold Promo Banner */}
           <div
             style={{
               background: 'linear-gradient(135deg, #FFB400 0%, #E67E22 100%)',
@@ -177,7 +177,7 @@ export const OffersModal: React.FC<OffersModalProps> = ({ isOpen, onClose, onCou
             <Sparkles size={24} />
             <div>
               <span style={{ fontSize: '12px', fontWeight: 900, display: 'block' }}>
-                Tomattto Gold Privilege Active
+                G1 Bites Gold Privilege Active
               </span>
               <span style={{ fontSize: '10px', opacity: 0.95 }}>
                 Free delivery unlocked on all orders + extra ₹25 cash rebate!

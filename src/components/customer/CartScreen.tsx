@@ -124,7 +124,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onOpenPayment }) => {
     setCouponError('');
     const success = applyCoupon(code);
     if (!success) {
-      setCouponError('Invalid coupon code. Try TOMATTTO50');
+      setCouponError('Invalid coupon code. Try G1BITES50');
     }
   };
 

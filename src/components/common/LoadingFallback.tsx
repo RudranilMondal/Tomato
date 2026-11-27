@@ -65,7 +65,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('[Tomattto ErrorBoundary] Caught error:', error, errorInfo);
+    console.error('[G1 Bites ErrorBoundary] Caught error:', error, errorInfo);
   }
 
   handleRetry = () => {

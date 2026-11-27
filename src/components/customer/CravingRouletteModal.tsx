@@ -507,7 +507,7 @@ export const CravingRouletteModal: React.FC<CravingRouletteModalProps> = ({ isOp
               <circle cx="50" cy="50" r="14.5" fill="url(#hub-metallic)" stroke="#FFD700" strokeWidth="1.3" filter="url(#medallion-shadow)" />
               <circle cx="50" cy="50" r="11" fill="#FF4B3A" stroke="#FFFFFF" strokeWidth="0.6" strokeOpacity="0.6" />
               <text x="50" y="49" fontSize="3.5" fontWeight="900" fill="#FFFFFF" textAnchor="middle" letterSpacing="0.4">
-                TOMATTTO
+                G1 BITES
               </text>
               <text x="50" y="53.5" fontSize="2.8" fontWeight="800" fill="#FFE5B4" textAnchor="middle" letterSpacing="0.6">
                 ★ SPIN ★

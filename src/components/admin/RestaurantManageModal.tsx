@@ -955,7 +955,7 @@ export const RestaurantManageModal: React.FC<RestaurantManageModalProps> = ({
           }}
         >
           <span style={{ fontSize: '11px', color: '#A5A5B2' }}>
-            Outlet Management Console • Tomattto HQ Ops
+            Outlet Management Console • G1 Bites HQ Ops
           </span>
           <button
             onClick={onClose}

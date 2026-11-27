@@ -184,7 +184,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose }) =
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <img src="/logo.png" alt="Tomattto" style={{ width: '22px', height: '22px', borderRadius: '5px', objectFit: 'contain' }} />
+              <img src="/logo.png" alt="G1 Bites" style={{ width: '22px', height: '22px', borderRadius: '5px', objectFit: 'contain' }} />
               <h3 style={{ fontSize: '16px', fontWeight: 800 }}>Choose Payment Method</h3>
             </div>
             <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>

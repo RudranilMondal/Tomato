@@ -34,7 +34,7 @@ export const OrderSuccessScreen: React.FC = () => {
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <img
           src="/logo.png"
-          alt="Tomattto"
+          alt="G1 Bites"
           style={{
             width: '44px',
             height: '44px',

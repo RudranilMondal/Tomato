@@ -108,7 +108,7 @@ export const EcosystemDock: React.FC = () => {
           gap: '4px'
         }}
       >
-        {/* Tomattto Logo / Collapse toggle */}
+        {/* G1 Bites Logo / Collapse toggle */}
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
           style={{
@@ -125,8 +125,8 @@ export const EcosystemDock: React.FC = () => {
           }}
           title={isCollapsed ? 'Expand Ecosystem Switcher' : 'Collapse Ecosystem Switcher'}
         >
-          <img src="/logo.png" alt="Tomattto" style={{ width: '18px', height: '18px', borderRadius: '4px', objectFit: 'cover' }} />
-          <span style={{ color: 'var(--color-primary)', letterSpacing: '-0.02em', fontWeight: 800 }}>Tomattto</span>
+          <img src="/logo.png" alt="G1 Bites" style={{ width: '18px', height: '18px', borderRadius: '4px', objectFit: 'cover' }} />
+          <span style={{ color: 'var(--color-primary)', letterSpacing: '-0.02em', fontWeight: 800 }}>G1 Bites</span>
           {isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
         </button>
 

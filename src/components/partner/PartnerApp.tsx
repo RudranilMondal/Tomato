@@ -414,10 +414,10 @@ export const PartnerApp: React.FC = () => {
                 boxShadow: '0 8px 24px rgba(255, 75, 58, 0.4)'
               }}
             >
-              <img src="/logo.png" alt="Tomattto" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <img src="/logo.png" alt="G1 Bites" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
             <h1 style={{ fontSize: '30px', fontWeight: 900, margin: '0 0 10px', letterSpacing: '-0.5px' }}>
-              Tomattto Merchant Partner Portal
+              G1 Bites Merchant Partner Portal
             </h1>
             <p style={{ fontSize: '15px', color: '#9CA3AF', margin: 0, maxWidth: '580px', marginInline: 'auto', lineHeight: 1.5 }}>
               Manage your live kitchen tickets, menu availability, multi-outlet analytics, and daily earnings on India’s fastest food delivery network.
@@ -485,7 +485,7 @@ export const PartnerApp: React.FC = () => {
                   Existing Restaurant Partner Login
                 </h2>
                 <p style={{ fontSize: '13px', color: '#9CA3AF', margin: '0 0 20px', lineHeight: 1.5 }}>
-                  Already registered your kitchen with Tomattto? Log in with your registered phone number, OTP, email, or Google to manage your store directly.
+                  Already registered your kitchen with G1 Bites? Log in with your registered phone number, OTP, email, or Google to manage your store directly.
                 </p>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px' }}>
@@ -583,7 +583,7 @@ export const PartnerApp: React.FC = () => {
                   Become a Restaurant Partner
                 </h2>
                 <p style={{ fontSize: '13px', color: '#9CA3AF', margin: '0 0 20px', lineHeight: 1.5 }}>
-                  Expand your business reach. Partner with Tomattto to receive online orders, leverage our high-speed delivery fleet, and grow your brand.
+                  Expand your business reach. Partner with G1 Bites to receive online orders, leverage our high-speed delivery fleet, and grow your brand.
                 </p>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px' }}>
@@ -745,7 +745,7 @@ export const PartnerApp: React.FC = () => {
             Application Under Review
           </h2>
           <p style={{ fontSize: '13px', color: '#9CA3AF', textAlign: 'center', margin: '0 0 24px', lineHeight: 1.5 }}>
-            Thank you for applying to partner with Tomattto. Your documents and FSSAI credentials are currently being verified by our compliance team.
+            Thank you for applying to partner with G1 Bites. Your documents and FSSAI credentials are currently being verified by our compliance team.
           </p>
 
           <div style={{ backgroundColor: '#101014', borderRadius: '12px', padding: '16px', marginBottom: '24px' }}>
@@ -1219,7 +1219,7 @@ export const PartnerApp: React.FC = () => {
                 cursor: 'pointer',
                 boxShadow: '0 2px 8px var(--color-primary-glow)'
               }}
-              title="Register a new restaurant or outlet with Tomattto"
+              title="Register a new restaurant or outlet with G1 Bites"
             >
               <Plus size={13} />
               <span>Become a Partner</span>
@@ -2607,7 +2607,7 @@ export const PartnerApp: React.FC = () => {
                       <th style={{ padding: '10px 12px' }}>Order ID</th>
                       <th style={{ padding: '10px 12px' }}>Status</th>
                       <th style={{ padding: '10px 12px' }}>Item Total</th>
-                      <th style={{ padding: '10px 12px' }}>Tomattto Commission</th>
+                      <th style={{ padding: '10px 12px' }}>G1 Bites Commission</th>
                       <th style={{ padding: '10px 12px' }}>Net Merchant Payout</th>
                     </tr>
                   </thead>

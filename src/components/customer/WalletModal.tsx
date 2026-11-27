@@ -59,7 +59,7 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose }) => 
           }}
         >
           <div>
-            <h3 style={{ fontSize: '17px', fontWeight: 800 }}>Tomattto Credits & Wallet</h3>
+            <h3 style={{ fontSize: '17px', fontWeight: 800 }}>G1 Bites Credits & Wallet</h3>
             <p style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
               1-click instant checkout with zero payment drop-offs
             </p>
@@ -133,7 +133,7 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose }) => 
                 <span style={{ fontSize: '10px', opacity: 0.7, display: 'block' }}>ACCOUNT HOLDER</span>
                 <span style={{ fontSize: '13px', fontWeight: 800 }}>{user.name || 'Valued Customer'}</span>
               </div>
-              <span style={{ fontSize: '11px', fontWeight: 700, opacity: 0.85 }}>TOMATTTO PAY</span>
+              <span style={{ fontSize: '11px', fontWeight: 700, opacity: 0.85 }}>G1 BITES PAY</span>
             </div>
           </div>
 
