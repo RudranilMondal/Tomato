@@ -33,6 +33,11 @@ const TermsPage = lazy(() =>
 const SupportPage = lazy(() =>
   import('./components/legal/LegalPages').then((m) => ({ default: m.SupportPage }))
 );
+const GoogleMobileAuthBridge = lazy(() =>
+  import('./components/auth/GoogleMobileAuthBridge').then((m) => ({
+    default: m.GoogleMobileAuthBridge
+  }))
+);
 
 const LEGAL_PATHS = new Set([
   '/privacy-policy',
@@ -41,7 +46,8 @@ const LEGAL_PATHS = new Set([
   '/account-deletion',
   '/terms',
   '/support',
-  '/contact'
+  '/contact',
+  '/google-mobile-auth'
 ]);
 
 const LOCKED_PORTAL = (import.meta.env.VITE_APP_PORTAL || '').toLowerCase() as
@@ -234,6 +240,14 @@ export const AppContent: React.FC = () => {
             }
           />
           <Route path="/contact" element={<Navigate to="/support" replace />} />
+          <Route
+            path="/google-mobile-auth"
+            element={
+              <Suspense fallback={<RouteLoadingFallback label="Connecting to Google..." />}>
+                <GoogleMobileAuthBridge />
+              </Suspense>
+            }
+          />
 
           {/* Fallback to Customer App */}
           <Route path="*" element={<Navigate to="/" replace />} />

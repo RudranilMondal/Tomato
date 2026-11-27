@@ -48,7 +48,8 @@ const SKIP_ROUTES = [
   '/support',
   '/contact',
   '/ecosystem',
-  '/quad'
+  '/quad',
+  '/google-mobile-auth'
 ];
 
 function getPortalFromPath(pathname: string): PortalKey {

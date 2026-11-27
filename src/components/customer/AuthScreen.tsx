@@ -296,9 +296,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ isMandatory = false }) =
         </button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <img src="/logo.png" alt="Tomattto" style={{ width: '26px', height: '26px', borderRadius: '6px', objectFit: 'contain' }} />
+          <img src="/logo.png" alt="G1 Bites" style={{ width: '26px', height: '26px', borderRadius: '6px', objectFit: 'contain' }} />
           <span style={{ fontSize: '17px', fontWeight: 900, color: 'var(--color-primary)', letterSpacing: '-0.02em' }}>
-            Tomattto
+            G1 Bites
           </span>
         </div>
 
@@ -349,7 +349,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ isMandatory = false }) =
                 boxShadow: '0 8px 24px var(--color-primary-glow)'
               }}
             >
-              <img src="/logo.png" alt="Tomattto" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <img src="/logo.png" alt="G1 Bites" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
             <h2 style={{ fontSize: '22px', fontWeight: 900, color: 'var(--color-text-main)', lineHeight: 1.2 }}>
               {authStep === 'otp'
@@ -366,7 +366,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ isMandatory = false }) =
                 : authStep === 'details'
                 ? 'Welcome! Tell us your name and delivery address to start ordering'
                 : authStep === 'email'
-                ? 'Sign in or create your Tomattto account'
+                ? 'Sign in or create your G1 Bites account'
                 : 'Log in or sign up to unlock exclusive offers & live tracking'}
             </p>
           </div>
@@ -1020,7 +1020,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ isMandatory = false }) =
         {/* Footer Disclaimer */}
         <div style={{ textAlign: 'center', marginTop: '28px', borderTop: '1px solid var(--color-border-subtle)', paddingTop: '16px' }}>
           <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', lineHeight: 1.4 }}>
-            By continuing, you agree to Tomattto's{' '}
+            By continuing, you agree to G1 Bites&apos;{' '}
             <span style={{ color: 'var(--color-text-main)', fontWeight: 700, textDecoration: 'underline' }}>
               Terms of Service
             </span>{' '}
