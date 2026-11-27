@@ -3,8 +3,35 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="apple-touch-icon" href="/logo-192.png" />
+    <link id="app-manifest" rel="manifest" href="/manifest-customer.webmanifest" />
+    <meta name="theme-color" content="#F04A00" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="G1 Bites" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tomattto — Food Ordering & Delivery Ecosystem</title>
+    <title>G1 Bites — Food Ordering & Delivery Ecosystem</title>
+    <script>
+      (function () {
+        var p = window.location.pathname.toLowerCase();
+        var m = '/manifest-customer.webmanifest';
+        var t = 'G1 Bites';
+        if (p.indexOf('/partner') === 0 || p.indexOf('/restaurant') === 0) {
+          m = '/manifest-partner.webmanifest';
+          t = 'G1 Bites Partner';
+        } else if (p.indexOf('/rider') === 0 || p.indexOf('/delivery') === 0) {
+          m = '/manifest-rider.webmanifest';
+          t = 'G1 Bites Rider';
+        } else if (p.indexOf('/admin') === 0) {
+          m = '/manifest-admin.webmanifest';
+          t = 'G1 Bites Admin';
+        }
+        var link = document.getElementById('app-manifest');
+        if (link) link.setAttribute('href', m);
+        var apple = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+        if (apple) apple.setAttribute('content', t);
+      })();
+    </script>
     <meta name="description" content="Tomattto — A modern, blazing fast food delivery platform connecting Customers, Restaurant Partners, Delivery Riders, and Admin." />
     <!-- Google Fonts: Plus Jakarta Sans & Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">

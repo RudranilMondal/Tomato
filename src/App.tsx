@@ -5,6 +5,7 @@ import { DeviceFrame } from './components/DeviceFrame';
 import { CustomerApp } from './components/customer/CustomerApp';
 import { EcosystemDock } from './components/EcosystemDock';
 import { DemoWalkthroughBar } from './components/DemoWalkthroughBar';
+import { PwaInstallPrompt } from './components/common/PwaInstallPrompt';
 import { RouteLoadingFallback, ErrorBoundary } from './components/common/LoadingFallback';
 
 // Route-level code-splitting for dedicated non-customer application portals
@@ -241,6 +242,9 @@ export const AppContent: React.FC = () => {
 
       {/* Guided Interactive Demo Bar (Active only when demo is initiated) */}
       <DemoWalkthroughBar />
+
+      {/* Portal-Specific PWA Install Prompt (Hidden when running inside PWA or Native APK) */}
+      {!LOCKED_PORTAL && <PwaInstallPrompt />}
     </div>
   );
 };

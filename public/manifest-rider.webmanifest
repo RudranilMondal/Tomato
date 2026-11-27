@@ -1,0 +1,26 @@
+{
+  "id": "/rider?pwa=rider",
+  "name": "G1 Bites Rider",
+  "short_name": "G1 Rider",
+  "description": "Accept deliveries, navigate routes, and track earnings with G1 Bites.",
+  "start_url": "/rider",
+  "scope": "/rider",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#F04A00",
+  "background_color": "#FFF8F5",
+  "icons": [
+    {
+      "src": "/logo-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
