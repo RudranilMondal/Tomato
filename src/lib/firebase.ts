@@ -39,11 +39,12 @@ googleAuthProvider.setCustomParameters({ prompt: 'select_account' });
 const GOOGLE_BRIDGE_URL = 'https://tomato-iota-lemon.vercel.app/google-mobile-auth';
 
 function getMobileScheme(): string {
+  const prefix = import.meta.env.VITE_APP_SCHEME_PREFIX || 'com.g1bites';
   const portal = (import.meta.env.VITE_APP_PORTAL || 'customer').toLowerCase();
-  if (portal === 'partner') return 'com.g1bites.partner';
-  if (portal === 'rider') return 'com.g1bites.rider';
-  if (portal === 'admin') return 'com.g1bites.admin';
-  return 'com.g1bites.customer';
+  if (portal === 'partner') return `${prefix}.partner`;
+  if (portal === 'rider') return `${prefix}.rider`;
+  if (portal === 'admin') return `${prefix}.admin`;
+  return `${prefix}.customer`;
 }
 
 async function signInWithGoogleNativeBridge(): Promise<UserCredential> {

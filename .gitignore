@@ -17,6 +17,7 @@ supabase/.branches/
 .env*
 android/
 G1Bite Apps/
+G1Bitess Apps/
 *.apk
 *.aab
 *.keystore

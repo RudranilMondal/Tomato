@@ -168,44 +168,96 @@ export const PwaInstallPrompt: React.FC = () => {
   return (
     <div
       role="dialog"
+      aria-modal="true"
       aria-label={`Install ${meta.name}`}
       style={{
         position: 'fixed',
-        bottom: '16px',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        width: 'calc(100% - 24px)',
-        maxWidth: '420px',
+        inset: 0,
         zIndex: 9999,
-        backgroundColor: '#1E1E24',
-        color: '#FFFFFF',
-        borderRadius: '18px',
-        padding: '12px 14px',
-        boxShadow: '0 14px 36px rgba(0, 0, 0, 0.28)',
-        border: '1px solid rgba(255, 255, 255, 0.12)',
+        backgroundColor: 'rgba(15, 23, 42, 0.65)',
+        backdropFilter: 'blur(6px)',
         display: 'flex',
-        flexDirection: 'column',
-        gap: '8px'
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px'
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <div
+        style={{
+          position: 'relative',
+          width: '100%',
+          maxWidth: '420px',
+          backgroundColor: '#FFFFFF',
+          color: '#1E1E24',
+          borderRadius: '26px',
+          padding: '32px 24px 24px',
+          boxShadow: '0 24px 60px rgba(0, 0, 0, 0.32)',
+          border: '1px solid #F3E8E2',
+          textAlign: 'center',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '14px'
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setDismissed(true)}
+          aria-label="Close install prompt"
+          style={{
+            position: 'absolute',
+            top: '14px',
+            right: '14px',
+            width: '34px',
+            height: '34px',
+            borderRadius: '999px',
+            backgroundColor: '#F3F4F6',
+            border: 'none',
+            color: '#4B5563',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
+          <X size={18} />
+        </button>
+
         <img
           src="/logo-192.png"
           alt={meta.name}
           style={{
-            width: '44px',
-            height: '44px',
-            borderRadius: '12px',
+            width: '88px',
+            height: '88px',
+            borderRadius: '22px',
             objectFit: 'cover',
-            flexShrink: 0,
-            boxShadow: '0 2px 8px rgba(240, 74, 0, 0.35)'
+            boxShadow: '0 10px 26px rgba(240, 74, 0, 0.28)'
           }}
         />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 800, fontSize: '14px', lineHeight: 1.2 }}>{meta.name}</div>
-          <div style={{ fontSize: '12px', color: '#D1D5DB', lineHeight: 1.35, marginTop: '2px' }}>
-            {meta.subtitle}
+
+        <div>
+          <div
+            style={{
+              display: 'inline-block',
+              fontSize: '11px',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              color: '#F04A00',
+              backgroundColor: '#FFF1EB',
+              padding: '4px 10px',
+              borderRadius: '999px',
+              marginBottom: '8px'
+            }}
+          >
+            Official Web App
           </div>
+          <h2 style={{ fontSize: '22px', fontWeight: 900, margin: '0 0 6px', color: '#1E1E24' }}>
+            Install {meta.name}
+          </h2>
+          <p style={{ fontSize: '14px', color: '#4B5563', lineHeight: 1.5, margin: 0 }}>
+            {meta.subtitle}
+          </p>
         </div>
 
         {!ios && (
@@ -213,66 +265,75 @@ export const PwaInstallPrompt: React.FC = () => {
             type="button"
             onClick={handleInstallClick}
             style={{
+              width: '100%',
               backgroundColor: '#F04A00',
               color: '#FFFFFF',
               border: 'none',
-              borderRadius: '10px',
-              padding: '8px 12px',
-              fontSize: '12px',
-              fontWeight: 700,
+              borderRadius: '14px',
+              padding: '14px 20px',
+              fontSize: '15px',
+              fontWeight: 800,
               cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '5px',
-              flexShrink: 0
+              justifyContent: 'center',
+              gap: '8px',
+              boxShadow: '0 8px 20px rgba(240, 74, 0, 0.28)',
+              marginTop: '4px'
             }}
           >
-            <Download size={14} />
-            Install
+            <Download size={18} />
+            Install {meta.name}
           </button>
+        )}
+
+        {(ios || showManualHint) && (
+          <div
+            style={{
+              width: '100%',
+              fontSize: '13px',
+              color: '#374151',
+              backgroundColor: '#FFF8F5',
+              border: '1px solid #F3E8E2',
+              borderRadius: '12px',
+              padding: '12px 14px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              lineHeight: 1.4,
+              boxSizing: 'border-box'
+            }}
+          >
+            {ios ? (
+              <Share size={16} color="#F04A00" style={{ flexShrink: 0 }} />
+            ) : (
+              <Download size={16} color="#F04A00" style={{ flexShrink: 0 }} />
+            )}
+            <span>
+              {ios
+                ? `Tap Share in Safari, then "Add to Home Screen" to install ${meta.name}.`
+                : `Open your browser menu (⋮) and tap "Install app" or "Add to Home screen".`}
+            </span>
+          </div>
         )}
 
         <button
           type="button"
           onClick={() => setDismissed(true)}
-          aria-label="Dismiss install prompt"
           style={{
             background: 'transparent',
             border: 'none',
-            color: '#9CA3AF',
+            color: '#6B7280',
+            fontSize: '13px',
+            fontWeight: 600,
             cursor: 'pointer',
-            padding: '4px',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0
+            padding: '4px 8px'
           }}
         >
-          <X size={16} />
+          Continue in browser
         </button>
       </div>
-
-      {(ios || showManualHint) && (
-        <div
-          style={{
-            fontSize: '12px',
-            color: '#F3F4F6',
-            backgroundColor: 'rgba(255, 255, 255, 0.08)',
-            borderRadius: '10px',
-            padding: '8px 10px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
-        >
-          {ios ? <Share size={14} color="#FF7A45" style={{ flexShrink: 0 }} /> : <Download size={14} color="#FF7A45" style={{ flexShrink: 0 }} />}
-          <span>
-            {ios
-              ? `Tap Share in Safari, then "Add to Home Screen" to install ${meta.name}.`
-              : `Open your browser menu (⋮) and tap "Install app" or "Add to Home screen" to install ${meta.name}.`}
-          </span>
-        </div>
-      )}
     </div>
   );
 };
